@@ -4467,7 +4467,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "文档列表键盘选中后焦点保持与焦点轮廓已用 Playwright 验证；复核工作台完整键盘遍历和屏幕阅读器检查仍待完成。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md"
     },
     {
       "id": "FE-047",
@@ -4489,7 +4489,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、延迟字段决定隔离、检索/审计续页重试已验证；统计并发及其他写操作切换场景仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md"
+      "notes": "服务断线/恢复、复核重试、延迟字段决定隔离、检索/审计续页重试及质量统计并发已验证；其他写操作切换场景仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md"
     },
     {
       "id": "FE-048",

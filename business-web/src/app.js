@@ -23,6 +23,7 @@ const state = {
   polling: false,
   uploading: false,
   auditRequest: 0,
+  qualityRequest: 0,
   auditBefore: null,
   auditItems: [],
   sourcePageNo: 1,
@@ -94,11 +95,12 @@ function clearError() {
 }
 
 async function refreshQualityStats() {
+  const requestNumber = ++state.qualityRequest;
   const root = byId("quality-content");
   root.replaceChildren(element("p", "review-hint", "正在读取业务记录统计…"));
   try {
     const stats = await businessApi.qualityStats();
-    if (!byId("quality-panel").open) return;
+    if (requestNumber !== state.qualityRequest || !byId("quality-panel").open) return;
     const grid = element("div", "quality-grid");
     for (const [label, value] of [
       ["业务文档", stats.documents], ["解析待处理任务", stats.parse_pending],
@@ -114,6 +116,7 @@ async function refreshQualityStats() {
     }
     root.replaceChildren(grid, element("p", "review-hint", "按业务记录累计；任务、修订、运行和成果版本可一对多。未处理问题按问题条目计。统计不代表字段准确率或人工评估结果。"));
   } catch (error) {
+    if (requestNumber !== state.qualityRequest || !byId("quality-panel").open) return;
     root.replaceChildren(element("p", "error-banner", `统计不可用：${error.message}`));
   }
 }
@@ -276,6 +279,8 @@ async function openEvidenceLink() {
 
 function renderDocuments() {
   const container = byId("document-list");
+  const focusedDocumentId = container.contains(document.activeElement)
+    ? document.activeElement.dataset.documentId : null;
   container.replaceChildren();
   byId("total-count").textContent = `${state.total} 份文档`;
   if (!state.items.length) {
@@ -285,6 +290,8 @@ function renderDocuments() {
     const { document: record, task } = item;
     const card = element("button", `document-card ${record.id === state.selectedId ? "selected" : ""}`);
     card.type = "button";
+    card.dataset.documentId = record.id;
+    card.setAttribute("aria-current", record.id === state.selectedId ? "true" : "false");
     card.setAttribute("aria-label", `查看 ${record.original_name}，${task ? taskLabel(task.status) : "无任务"}`);
     const icon = element("span", "file-icon", extensionOf(record.original_name).slice(0, 4) || "FILE");
     icon.setAttribute("aria-hidden", "true");
@@ -296,6 +303,11 @@ function renderDocuments() {
     card.append(icon, body, badge);
     card.addEventListener("click", () => selectDocument(record.id));
     container.append(card);
+  }
+  if (focusedDocumentId) {
+    const restored = [...container.querySelectorAll("button[data-document-id]")]
+      .find((card) => card.dataset.documentId === focusedDocumentId);
+    restored?.focus({ preventScroll: true });
   }
   byId("previous-page").disabled = state.page === 0;
   byId("next-page").disabled = (state.page + 1) * state.limit >= state.total;
@@ -734,7 +746,10 @@ async function pollTasks() {
 byId("files").addEventListener("change", updateFileSelection);
 byId("upload-form").addEventListener("submit", submitFiles);
 byId("search-form").addEventListener("submit", searchDocuments);
-byId("quality-panel").addEventListener("toggle", () => { if (byId("quality-panel").open) refreshQualityStats(); });
+byId("quality-panel").addEventListener("toggle", () => {
+  if (byId("quality-panel").open) refreshQualityStats();
+  else state.qualityRequest += 1;
+});
 byId("quality-refresh").addEventListener("click", refreshQualityStats);
 byId("audit-panel").addEventListener("toggle", () => { if (byId("audit-panel").open) loadAudit(true); });
 byId("audit-refresh").addEventListener("click", () => loadAudit(true));
