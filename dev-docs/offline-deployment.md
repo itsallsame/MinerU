@@ -19,13 +19,14 @@
 5. 确保 Git 工作树干净后，执行 `python3 scripts/release_manifest.py --worker-image <worker镜像> --business-image <业务API镜像> --base-image <基础镜像> --wheelhouse wheelhouse --model-manifest /path/to/model-manifest.json --web-dist business-web/dist --output /path/to/release.json`。工具拒绝任一镜像非 `linux/amd64`、两个代码镜像源码/基础镜像标签不一致、镜像层不继承所检基础镜像、前端制品与业务镜像标签不一致、错误地复用同一镜像 ID 或缺少离线制品；回退发布可再传 `--previous-release`。当前只有纯函数和 CLI 模拟测试，尚无真实 amd64 镜像的发布清单。
 6. 在麒麟隔离区导入镜像与模型后、启动 Compose 前，从本 fork 的干净源码目录运行 `python3 -m scripts.verify_offline_release --release /受控发布目录/release.json --worker-image <已导入worker镜像> --business-image <已导入业务镜像> --base-image <已导入基础镜像> --wheelhouse /离线目录/wheelhouse --model-manifest /模型目录外/model-manifest.json --model-dir /模型目录 --web-dist business-web/dist --source-tree . --output /独立验收目录/artifact-verification.json`。存在前一发布清单时再传 `--previous-release`。该命令重新从已导入镜像读取不可变 ID、架构、标签和基础层链，逐文件复核 wheelhouse、Web 制品及真实模型目录，报告只记 ID、哈希和数量，不收录权重或业务正文。任何失败都不得进入部署；目前只有模拟 Docker inspect 的 Mac 单测，尚无目标机报告。
 7. 设置 `MINERU_WORKER_IMAGE`、`MINERU_BUSINESS_IMAGE`、`MINERU_MODELS_HOST_DIR`、`MINERU_MODEL_MANIFEST_HOST_FILE`、`MINERU_DOCLIB_HOST_DIR`、`MINERU_SHARED_DOCUMENTS_HOST_DIR`、`MINERU_BUSINESS_HOST_DIR`，并从**当前选定的** `release.json` 的 `model.manifest_sha256` 设置 `MINERU_EXPECTED_MODEL_MANIFEST_SHA256`，再运行 `docker compose -f docker/compose.business.yaml config` 检查配置。清单与发布记录摘要不一致时 worker 启动失败；Compose 配置通过也不替代第 6 步制品核验。可设置 `MINERU_BUSINESS_MAX_UPLOAD_BYTES`、`MINERU_BUSINESS_BIND_ADDRESS` 和 `MINERU_BUSINESS_PORT`；默认仅将开放业务 Web/API 绑定宿主 `127.0.0.1:8088`，Doclib 不发布宿主端口。系统没有登录、用户或权限层；改为内网 IP 之前必须确认物理隔离和可达范围。仅在目录和文件权限核对后启动。
-8. 在物理断网情况下启动容器，检查预检结果、Doclib 可用性、模型加载、解析真实 PDF/图片、服务重启与回退。第 6 步仅证明发布制品与权重文件一致，不证明 GPU/驱动/vLLM 兼容或真实解析质量。当前只验证了 Compose 语法和 Mac 单测，尚无此项结果。
+8. 在物理断网情况下启动容器，然后运行 `python3 -m scripts.verify_business_runtime --release /受控发布目录/release.json --model-dir /模型目录 --model-manifest /模型目录外/model-manifest.json --business-bind 127.0.0.1 --business-port 8088 --output /独立验收目录/runtime-preflight.json`。如果第 7 步改变了 `MINERU_BUSINESS_BIND_ADDRESS` 或端口，这里必须使用同一值；可用 `--compose-file` 指定非默认 Compose 文件。工具检查实际容器与所选镜像 ID、只读根文件系统、模型/数据挂载、单一内部网络、仅业务端口对外、离线环境变量、业务 API、内部 Doclib 状态、Docker GPU 请求、容器内 CUDA 与宿主 `nvidia-smi`。只允许私网或回环业务绑定，Doclib 不得发布宿主端口。失败返回非零且不写成功报告；报告不含模型路径或业务正文。运行前仍必须完成第 6 步的制品复核；此检查不证明物理断网、权重能被 vLLM 完整加载或解析质量。
+9. 继续验收模型加载、真实 PDF/图片和四类标注样本、服务重启、备份与回退。第 6 步只证明制品一致，第 8 步只证明启动时配置和基础 GPU/服务可用性，两者均不能替代端到端解析与目标机性能测试。目前只有 Mac 模拟单测，尚无麒麟/NVIDIA 现场结果。
 
 回退时须保留上一版的发布清单、基础/代码镜像、wheelhouse、模型目录和模型清单；先核对清单哈希，再切回上一版镜像与模型挂载并复测。业务数据库的 schema 回退策略将在 P3 持久化设计时确定，不能仅凭替换镜像宣称可回滚。
 
 ## 当前已知限制
 
 - Docker daemon 经授权后可访问；现有 `mineru:4.0.2` 是 **Linux arm64**，不能充当麒麟 amd64 基础镜像。没有真实 `docker build`/`up` 证据；amd64 wheelhouse、目标基础镜像和模型也尚未准备。
-- 当前 Compose 包含开放业务 Web/API 与内部 Doclib/GPU worker；业务 Web 已有复核/成果、模板管理、历史块树与块级候选检索，但仍缺四类真实样本验收。Mac 已做同源页面和 Playwright 合成数据回归，但 Compose 宿主端口映射、内部网络及跨容器 Doclib 通信仍须在目标环境实测。API 的 `UploadFile` 应用层限额不等于入口请求体限额；正式发布前需加反向代理或入口层体积限制，并测试超限行为。
+- 当前 Compose 包含开放业务 Web/API 与内部 Doclib/GPU worker；业务 Web 已有复核/成果、模板管理、历史块树与块级候选检索，但仍缺四类真实样本验收。Mac 已做同源页面和 Playwright 合成数据回归，运行态预检仅有模拟单测；Compose 宿主端口映射、内部网络及跨容器 Doclib 通信仍须在目标环境实测。API 的 `UploadFile` 应用层限额不等于入口请求体限额；正式发布前需加反向代理或入口层体积限制，并测试超限行为。
 - 上游本地模型读取路径原先会创建 `.locks`；fork 已加入不写锁的 `source=local` 分支，其相关单测已在 Mac 开发环境通过。只读挂载容器本身仍待实测。
 - 模型清单和必需仓库检查只证实文件一致及 MinerU 标记齐全，不证实权重与源码、GPU 驱动或 vLLM 兼容。生产验收必须覆盖这些组合。

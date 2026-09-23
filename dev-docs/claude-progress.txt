@@ -459,3 +459,12 @@ Changes:
 Verification: 8 targeted verifier tests and full business suite 130 passed/2 dependency warnings; new files Ruff check/format check passed. No real imported amd64 release is available in this environment.
 Evidence: dev-docs/evidence/2026-09-23-imported-release-verifier.md
 Next: Obtain four-class annotated samples and Linux amd64/NVIDIA offline artifacts for actual P1/P6 gates; continue remaining P4 recovery/accessibility work. Keep goal active.
+
+=== 2026-09-23 Session 44 (Isolated business runtime preflight) ===
+Status: In progress; P1/P6 target-machine gates remain open (54/241 passed)
+Changes:
+- Added read-only runtime preflight for selected image IDs, mounts, internal network, private business port, offline services and NVIDIA/CUDA visibility.
+- Documented the post-start preflight after imported-release verification; no authentication, user, role or permission layer added.
+Verification: 23 targeted tests passed; new files Ruff check/format and diff check passed. Full business suite before final two test cases: 150 passed, one existing Mac PDF/Doclib contract failed with `parse_batch_invalid`; isolated rerun failed likewise. No real Kylin/NVIDIA run.
+Evidence: dev-docs/evidence/2026-09-23-runtime-preflight.md
+Next: Diagnose the Mac PDF/Doclib regression, then obtain Linux amd64/NVIDIA offline artifacts and four-class annotated samples for actual P1/P6 gates. Keep goal active.
