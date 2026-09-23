@@ -660,3 +660,10 @@ Changes: Extended the opt-in real Web/API/Doclib Chromium test with temporary DO
 Verification: The four-format live integration test passed on Mac with real API/Doclib and no route mocks; Ruff/format and diff checks passed. Office fixtures are synthetic and do not establish real-sample quality.
 Evidence: dev-docs/evidence/2026-09-24-live-web-office-smoke.md
 Next: Controlled four-class annotated sources, model-backed image/advanced parsing and Kylin/NVIDIA validation remain necessary. Keep goal active.
+
+=== 2026-09-24 Session 63a (QA-001 test baseline) ===
+Status: In progress; QA-001 verified complete (65/241 passed); P6 remains incomplete
+Changes: Recorded the full fork upstream-unit and business-test Mac baseline at source commit 63b3e8ac.
+Verification: Exact feature commands passed: business 171 passed/1 skipped; upstream unittest 2798 passed/4 skipped. Both had 2 dependency deprecation warnings. No target-machine claim.
+Evidence: dev-docs/evidence/2026-09-24-test-baselines.md
+Next: Commit QA-001 separately, then record measured business module coverage for QA-002. Keep goal active.
