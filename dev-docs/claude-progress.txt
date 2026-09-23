@@ -344,3 +344,13 @@ Changes:
 Verification: 113 business tests/2 dependency warnings; 41 related Doclib tests; Web 9 tests/8 offline assets; Playwright candidate/read/freeze workflow; real HTML old/new parse and nested model block search; Skill quick validation and Ruff passed. Concurrent coverage report conflict was resolved by a separate clean Doclib test run.
 Evidence: dev-docs/evidence/2026-09-23-historical-block-search.md
 Next: Four-class annotated business acceptance, remaining P4 UX/quality work, and isolated Kylin/NVIDIA model/runtime validation. Keep goal active.
+
+=== 2026-09-23 Session 32 (Four-class real-sample acceptance preparation) ===
+Status: In progress; P6 real-sample quality and Kylin/NVIDIA gates remain open, feature count unchanged (48/241)
+Changes:
+- Added a GET-only four-class acceptance evaluator with external source SHA-256 and business document/revision/run binding, exact field/evidence/heading metrics, class/scenario breakdown, and redacted reports.
+- Added the external suite contract and updated deployment/phase docs to reflect current Web capability without claiming production validation.
+- Asked user for the controlled location of four de-identified source files and manual annotations; none were present in the repo at session start.
+Verification: Five synthetic evaluator tests and all 118 business tests passed (2 dependency warnings), including an in-process real business FastAPI/store extraction response; Ruff and CLI help passed. These are contract checks only, not real-sample accuracy.
+Evidence: dev-docs/evidence/2026-09-23-four-class-acceptance-harness.md
+Next: Run evaluator on approved four-class de-identified originals/annotations when supplied; continue P4 quality/UX and P1/P6 isolated Kylin/NVIDIA validation. Keep goal active.

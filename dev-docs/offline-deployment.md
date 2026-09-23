@@ -25,6 +25,6 @@
 ## 当前已知限制
 
 - Docker daemon 经授权后可访问；现有 `mineru:4.0.2` 是 **Linux arm64**，不能充当麒麟 amd64 基础镜像。没有真实 `docker build`/`up` 证据；amd64 wheelhouse、目标基础镜像和模型也尚未准备。
-- 当前 Compose 包含开放业务 Web/API 与内部 Doclib/GPU worker；业务 Web 已有复核/成果工作台、检索与渐进读取，但仍缺结构树、完整模板/质量运营页面和真实样本验收。Mac 已做同源页面和 Playwright 合成数据回归，但 Compose 宿主端口映射、内部网络及跨容器 Doclib 通信仍须在目标环境实测。API 的 `UploadFile` 应用层限额不等于入口请求体限额；正式发布前需加反向代理或入口层体积限制，并测试超限行为。
+- 当前 Compose 包含开放业务 Web/API 与内部 Doclib/GPU worker；业务 Web 已有复核/成果、模板管理、历史块树与块级候选检索，但仍缺质量运营页面和四类真实样本验收。Mac 已做同源页面和 Playwright 合成数据回归，但 Compose 宿主端口映射、内部网络及跨容器 Doclib 通信仍须在目标环境实测。API 的 `UploadFile` 应用层限额不等于入口请求体限额；正式发布前需加反向代理或入口层体积限制，并测试超限行为。
 - 上游本地模型读取路径原先会创建 `.locks`；fork 已加入不写锁的 `source=local` 分支，其相关单测已在 Mac 开发环境通过。只读挂载容器本身仍待实测。
 - 模型清单和必需仓库检查只证实文件一致及 MinerU 标记齐全，不证实权重与源码、GPU 驱动或 vLLM 兼容。生产验收必须覆盖这些组合。
