@@ -91,6 +91,22 @@ def preflight(root: Path, manifest_path: Path) -> int:
     return verify_manifest(root, manifest_path)
 
 
+def verify_mineru_repos(root: Path) -> None:
+    """Check the Torch and vLLM repositories required by this deployment."""
+    from mineru.config import config
+    from mineru.model.download import verify_model_repo
+    from mineru.model.registry import MINERU_2_5_PRO_2605_1_2B, MINERU_4_MODELS_TORCH
+
+    if Path(config.model.base_dir).resolve() != root.resolve():
+        raise ValueError("Effective MinerU model.base_dir differs from the mounted model directory")
+    if config.model.source != "local" or config.model.small_backend != "torch" or config.model.vlm.engine != "vllm":
+        raise ValueError("Effective MinerU model configuration is not local Torch + vLLM")
+    for repo in (MINERU_4_MODELS_TORCH, MINERU_2_5_PRO_2605_1_2B):
+        result = verify_model_repo(repo)
+        if not result.ready:
+            raise ValueError(f"Required MinerU model repo {repo.name} is incomplete: {result.missing_paths}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -98,6 +114,8 @@ def main() -> int:
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--model-dir", type=Path, required=True)
         command_parser.add_argument("--manifest", type=Path, required=True)
+        if command == "preflight":
+            command_parser.add_argument("--require-mineru-repos", action="store_true")
     args = parser.parse_args()
     try:
         if args.command == "create-manifest":
@@ -106,7 +124,10 @@ def main() -> int:
         elif args.command == "verify-manifest":
             print(f"Verified {verify_manifest(args.model_dir, args.manifest)} model files")
         else:
-            print(f"Offline preflight verified {preflight(args.model_dir, args.manifest)} model files")
+            count = preflight(args.model_dir, args.manifest)
+            if args.require_mineru_repos:
+                verify_mineru_repos(args.model_dir)
+            print(f"Offline preflight verified {count} model files")
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"Offline package error: {exc}", file=sys.stderr)
         return 1

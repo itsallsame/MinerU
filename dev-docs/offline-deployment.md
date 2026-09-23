@@ -5,7 +5,7 @@
 ## 制品边界
 
 - 代码镜像：从本 fork 的确定提交构建，`docker/worker/Dockerfile` 只复制源码和预先准备的 `wheelhouse/`。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。不在构建时下载权重。
-- 模型：在联网准备机按目标 Torch + vLLM 组合取得完整权重，生成 `model-manifest.json`，通过批准介质分别导入麒麟宿主目录。`compose.business.yaml` 将模型和清单只读挂载；启动时逐文件 SHA-256 验证。更换模型不需要重建代码镜像，但必须重新生成清单并做回归。
+- 模型：在联网准备机按目标 Torch + vLLM 组合取得完整权重，生成 `model-manifest.json`，通过批准介质分别导入麒麟宿主目录。`compose.business.yaml` 将模型和清单只读挂载；启动时逐文件 SHA-256 验证，并检查 Torch 与 vLLM 两个必需模型仓库的 MinerU 完整标记。更换模型不需要重建代码镜像，但必须重新生成清单并做回归。
 - 运行数据：Doclib 的 `MINERU_HOME` 持久挂载。将来的业务数据目录需单独挂载，不能跟模型或代码镜像混在一起。
 - `wheelhouse/`、模型权重、真实文件、数据库和私密配置不进 Git。实际交付要对基础镜像、wheelhouse、代码镜像和模型分别记录哈希。
 
@@ -22,4 +22,4 @@
 - Docker daemon 在当前会话不可访问；没有真实 `docker build`/`up` 证据。`wheelhouse/` 与基础镜像也尚未准备。
 - 当前 Compose 只包含内部 Doclib/GPU worker；业务 Web/API 尚未开发，内部 Doclib 客户端跨容器连接需在 P2 契约原型中验证。
 - 上游本地模型读取路径原先会创建 `.locks`；fork 已加入不写锁的 `source=local` 分支，但其上游单测尚未在安装完整 MinerU 依赖的环境执行。
-- 模型清单只证实文件字节一致，不证实权重与源码、GPU 驱动或 vLLM 兼容。生产验收必须覆盖这些组合。
+- 模型清单和必需仓库检查只证实文件一致及 MinerU 标记齐全，不证实权重与源码、GPU 驱动或 vLLM 兼容。生产验收必须覆盖这些组合。
