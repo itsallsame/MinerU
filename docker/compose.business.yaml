@@ -28,6 +28,7 @@ services:
       - "${MINERU_MODELS_HOST_DIR:?Set the model directory}:/opt/mineru-models:ro"
       - "${MINERU_MODEL_MANIFEST_HOST_FILE:?Set the model manifest file}:/etc/mineru/model-manifest.json:ro"
       - "${MINERU_DOCLIB_HOST_DIR:?Set the persistent Doclib directory}:/var/lib/mineru:rw"
+      - "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}:/srv/mineru-inbox:ro"
     gpus: all
     networks:
       - business-internal

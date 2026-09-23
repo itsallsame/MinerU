@@ -48,6 +48,16 @@ Verification: Mac development environment installed; 31 targeted tests pass; ful
 Limits: no Linux amd64 wheelhouse, model bundle or Kylin/NVIDIA runtime build yet.
 Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
 
+=== 2026-09-23 Session 4 (P2 Doclib contract prototype) ===
+Status: In progress; P1 target-hardware gates and P2 remaining gates both open
+Changes:
+- Added mineru.business.documents.DoclibGateway and live isolated Doclib contract tests.
+- Updated design and Compose for shared original-file directory and immutable evidence snapshots.
+Verification: 13 P2 tests and 48 related upstream tests pass; ruff checks pass.
+Findings: locator lacks parse_id; forget_path is re-ingestable while source remains; Flash PDF may require OCR model.
+Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
+Next: Define business identity/evidence persistence and continue P2 lifecycle/transport checks without claiming target deployment success.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
