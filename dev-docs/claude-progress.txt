@@ -688,3 +688,10 @@ Changes: Audited existing live Doclib/business gateway and upstream Doclib contr
 Verification: Business 175 passed/1 opt-in skipped; upstream unittest 2798 passed/4 skipped on Mac. Restricted first upstream run failed due local socket permission; authorized rerun of same test set with short traceback passed. No Kylin/GPU/air-gap claim.
 Evidence: dev-docs/evidence/2026-09-24-doclib-contract-regression.md
 Next: QA-004 business API contract regression, then real four-class annotated samples and target Kylin/NVIDIA deployment gates. Keep goal active.
+
+=== 2026-09-24 Session 66 (QA-004 business API contract regression) ===
+Status: In progress; QA-004 verified complete on Mac (68/241 passed); P6 remains incomplete
+Changes: Added an OpenAPI contract regression for required public business routes/methods, no auth declarations and no Doclib internal routes. Documented existing domain/API/Skill contract coverage; no production API behavior changed.
+Verification: Full business suite 176 passed/1 opt-in skipped; targeted API tests 5 passed after final top-level security assertion; Ruff check passed. Same-turn upstream unit run before the new business test was 2798 passed/4 skipped. Mac only.
+Evidence: dev-docs/evidence/2026-09-24-business-api-contract-regression.md
+Next: Continue P6 integration and failure/recovery gates; real four-class annotated samples and Kylin/NVIDIA air-gap acceptance remain outstanding. Keep goal active.

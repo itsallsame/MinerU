@@ -16,6 +16,46 @@ from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse
 
 
+def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    store = BusinessStore(tmp_path / "business.sqlite3")
+    store.initialize()
+    doclib = Mock(spec=DoclibInterface)
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024),
+        store=store,
+        gateway=DoclibGateway(doclib, shared_root=shared),
+        doclib=doclib,
+        producer_version="4.0.6",
+    )
+    app = create_app(
+        workflow=workflow,
+        store=store,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    )
+    schema = app.openapi()
+    paths = schema["paths"]
+    required = {
+        "/api/business/documents": {"get", "post"},
+        "/api/business/tasks/{task_id}": {"get"},
+        "/api/business/tasks/{task_id}/retry": {"post"},
+        "/api/business/revisions/{revision_id}/content": {"get"},
+        "/api/business/revisions/{revision_id}/extractions": {"get", "post"},
+        "/api/business/extractions/{run_id}/confirm": {"post"},
+        "/api/business/extractions/{run_id}/results": {"get"},
+        "/api/business/templates": {"get", "post"},
+    }
+    for path, methods in required.items():
+        assert path in paths
+        assert methods <= paths[path].keys()
+    assert all(path.startswith("/api/business/") for path in paths)
+    assert "security" not in schema
+    assert "securitySchemes" not in schema.get("components", {})
+    assert all("security" not in operation for operations in paths.values() for operation in operations.values())
+
+
 def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
     shared = tmp_path / "shared"
     shared.mkdir()

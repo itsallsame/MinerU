@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 67,
+  "completed_features": 68,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5129,9 +5129,9 @@
         "实现：业务API契约回归",
         "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Mac 开放业务 API 契约回归：新增 OpenAPI 路由/方法、无认证和 Doclib 路由隔离断言；完整业务测试 176 通过/1 个 opt-in 跳过，定向 5 通过；上游单测在同轮仅测试与文档变更前 2798 通过/4 跳过。麒麟/GPU、真实样本和 opt-in 浏览器仍待验收。证据：dev-docs/evidence/2026-09-24-business-api-contract-regression.md"
     },
     {
       "id": "QA-005",
