@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 
@@ -77,8 +78,18 @@ def test_preflight_rejects_remote_configuration(tmp_path: Path, monkeypatch: pyt
     for name, value in required.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("MINERU_MODEL_VLM_SERVER_URL", raising=False)
+    monkeypatch.delenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", raising=False)
 
     assert offline_package.preflight(model_dir, manifest_path) == 1
+    monkeypatch.setenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", hashlib.sha256(manifest_path.read_bytes()).hexdigest())
+    assert offline_package.preflight(model_dir, manifest_path) == 1
+    monkeypatch.setenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", "a" * 64)
+    with pytest.raises(ValueError, match="differs from the selected release"):
+        offline_package.preflight(model_dir, manifest_path)
+    monkeypatch.setenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", "not-a-digest")
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        offline_package.preflight(model_dir, manifest_path)
+    monkeypatch.delenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256")
     monkeypatch.setenv("MINERU_MODEL_SOURCE", "auto")
     with pytest.raises(ValueError, match="MINERU_MODEL_SOURCE"):
         offline_package.preflight(model_dir, manifest_path)
@@ -102,6 +113,8 @@ def test_business_worker_retains_parse_history_for_evidence() -> None:
     compose = (ROOT / "docker" / "compose.business.yaml").read_text()
     worker = compose.split("  doclib-worker:", 1)[1]
     assert 'MINERU_DOCLIB_COMPACTION_INTERVAL_SEC: "0"' in worker
+    assert "MINERU_EXPECTED_MODEL_MANIFEST_SHA256" in worker
+    assert "MINERU_EXPECTED_MODEL_MANIFEST_SHA256" in (ROOT / "docker" / "worker" / "entrypoint.sh").read_text()
 
 
 def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:

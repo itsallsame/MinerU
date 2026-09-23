@@ -57,6 +57,23 @@ def _validated_image_id(
     return image_id
 
 
+def _validated_base_layers(label: str, image: dict[str, Any], base: dict[str, Any]) -> None:
+    """A caller-supplied base ID label is not proof of the image's actual parent."""
+    base_root = base.get("RootFS") or {}
+    image_root = image.get("RootFS") or {}
+    base_layers = base_root.get("Layers")
+    image_layers = image_root.get("Layers")
+    if (
+        base_root.get("Type") != "layers" or image_root.get("Type") != "layers"
+        or not isinstance(base_layers, list) or not base_layers
+        or not isinstance(image_layers, list)
+        or any(not isinstance(layer, str) or not IMAGE_ID_RE.fullmatch(layer) for layer in base_layers + image_layers)
+    ):
+        raise ValueError(f"{label} image/base has no verifiable RootFS layer chain")
+    if image_layers[:len(base_layers)] != base_layers:
+        raise ValueError(f"{label} image is not built on the inspected base image layers")
+
+
 def _validated_web_assets(web_dist: Path) -> tuple[str, dict[str, str]]:
     if not web_dist.is_dir() or web_dist.is_symlink():
         raise ValueError("Business Web dist directory is missing or is a symlink")
@@ -96,10 +113,12 @@ def build_release_record(
         raise ValueError("Source revision must be a full lowercase Git commit SHA")
     base_id = _validated_image_id("base", base)
     worker_id = _validated_image_id("worker", worker, revision=revision, base_id=base_id)
+    _validated_base_layers("worker", worker, base)
     web_sha256, web_files = _validated_web_assets(web_dist)
     business_id = _validated_image_id(
         "business", business, revision=revision, base_id=base_id, web_manifest_sha256=web_sha256,
     )
+    _validated_base_layers("business", business, base)
     if worker_id == business_id:
         raise ValueError("Worker and business images must have distinct IDs")
     if not wheelhouse.is_dir() or wheelhouse.is_symlink():

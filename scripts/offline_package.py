@@ -88,6 +88,12 @@ def preflight(root: Path, manifest_path: Path) -> int:
             raise ValueError(f"{key} must be {expected!r} in offline production")
     if os.getenv("MINERU_MODEL_VLM_SERVER_URL"):
         raise ValueError("Remote VLM server is disabled in offline production")
+    expected_manifest_hash = os.getenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256")
+    if expected_manifest_hash is not None:
+        if len(expected_manifest_hash) != 64 or any(char not in "0123456789abcdef" for char in expected_manifest_hash):
+            raise ValueError("MINERU_EXPECTED_MODEL_MANIFEST_SHA256 must be a lowercase SHA-256")
+        if not manifest_path.is_file() or sha256_file(manifest_path) != expected_manifest_hash:
+            raise ValueError("Mounted model manifest differs from the selected release")
     return verify_manifest(root, manifest_path)
 
 

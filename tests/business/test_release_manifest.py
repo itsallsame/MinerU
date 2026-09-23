@@ -20,6 +20,7 @@ REVISION = "a" * 40
 IMAGE_ID = "sha256:" + "b" * 64
 BUSINESS_ID = "sha256:" + "d" * 64
 BASE_ID = "sha256:" + "c" * 64
+BASE_LAYER = "sha256:" + "1" * 64
 
 
 def _image(
@@ -30,7 +31,11 @@ def _image(
         labels["org.opencontainers.image.base.id"] = BASE_ID
     if web_sha256:
         labels["io.mineru.business.web.manifest.sha256"] = web_sha256
-    return {"Os": "linux", "Architecture": arch, "Id": image_id, "Config": {"Labels": labels}}
+    layers = [BASE_LAYER] if image_id == BASE_ID else [BASE_LAYER, image_id]
+    return {
+        "Os": "linux", "Architecture": arch, "Id": image_id,
+        "Config": {"Labels": labels}, "RootFS": {"Type": "layers", "Layers": layers},
+    }
 
 
 def _artifacts(tmp_path: Path) -> tuple[Path, Path, Path, str]:
@@ -102,6 +107,31 @@ def test_release_record_rejects_wrong_architecture_and_revision(tmp_path: Path) 
         release_manifest.build_release_record(**{
             **args, "business": _image(IMAGE_ID, revision=REVISION, web_sha256=web_sha256)
         })
+
+
+def test_release_record_rejects_forged_base_label_without_matching_layers(tmp_path: Path) -> None:
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    args = {
+        "revision": REVISION,
+        "worker": _image(IMAGE_ID, revision=REVISION),
+        "business": _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
+        "base": _image(BASE_ID),
+        "wheelhouse": wheelhouse,
+        "model_manifest": model_manifest,
+        "web_dist": web_dist,
+    }
+    wrong_worker = _image(IMAGE_ID, revision=REVISION)
+    wrong_worker["RootFS"]["Layers"][0] = "sha256:" + "2" * 64
+    with pytest.raises(ValueError, match="not built on the inspected base"):
+        release_manifest.build_release_record(**{**args, "worker": wrong_worker})
+    wrong_business = _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256)
+    wrong_business["RootFS"]["Layers"][0] = "sha256:" + "2" * 64
+    with pytest.raises(ValueError, match="not built on the inspected base"):
+        release_manifest.build_release_record(**{**args, "business": wrong_business})
+    missing_layers = _image(IMAGE_ID, revision=REVISION)
+    del missing_layers["RootFS"]
+    with pytest.raises(ValueError, match="no verifiable RootFS"):
+        release_manifest.build_release_record(**{**args, "worker": missing_layers})
 
 
 def test_release_record_rejects_unbound_or_changed_web_assets(tmp_path: Path) -> None:

@@ -35,6 +35,7 @@ services:
       MINERU_HOME: /var/lib/mineru
       MINERU_MODEL_BASE_DIR: /opt/mineru-models
       MINERU_MODEL_MANIFEST: /etc/mineru/model-manifest.json
+      MINERU_EXPECTED_MODEL_MANIFEST_SHA256: "${MINERU_EXPECTED_MODEL_MANIFEST_SHA256:?Set model.manifest_sha256 from the selected release record}"
       MINERU_MODEL_SOURCE: local
       MINERU_MODEL_SMALL_BACKEND: torch
       MINERU_MODEL_VLM_ENGINE: vllm
