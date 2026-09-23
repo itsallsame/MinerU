@@ -449,3 +449,13 @@ Changes:
 Verification: business suite 122 passed, Ruff check passed, Web 10 tests/8-asset build; Playwright source failure/recovery and review/evidence/outage regressions passed. Whole-file Ruff format check reflects pre-existing style drift, not a new formatting pass.
 Evidence: dev-docs/evidence/2026-09-23-original-availability.md
 Next: Finish FE-047 remaining races and FE-046 accessibility; then four-class annotated sample and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 43 (Imported offline release verifier) ===
+Status: In progress; P1/P6 target-machine gates remain open (54/241 passed)
+Changes:
+- Added read-only verifier that rechecks imported Linux amd64 images, base layer lineage, wheelhouse, Web dist and actual model files against the selected release record.
+- Added optional clean-source and previous-release binding checks and a content-free verification report outside artifact directories.
+- Updated the offline deployment order so artifact verification precedes Compose startup; did not claim Mac mocks are Kylin/NVIDIA acceptance.
+Verification: 8 targeted verifier tests and full business suite 130 passed/2 dependency warnings; new files Ruff check/format check passed. No real imported amd64 release is available in this environment.
+Evidence: dev-docs/evidence/2026-09-23-imported-release-verifier.md
+Next: Obtain four-class annotated samples and Linux amd64/NVIDIA offline artifacts for actual P1/P6 gates; continue remaining P4 recovery/accessibility work. Keep goal active.
