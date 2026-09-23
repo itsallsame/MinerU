@@ -48,6 +48,7 @@ services:
       MINERU_DOCLIB_TCP_ENABLED: "true"
       MINERU_DOCLIB_TCP_HOST: 0.0.0.0
       MINERU_DOCLIB_TCP_STRICT_PORT: "true"
+      MINERU_DOCLIB_COMPACTION_INTERVAL_SEC: "0"
     volumes:
       - "${MINERU_MODELS_HOST_DIR:?Set the model directory}:/opt/mineru-models:ro"
       - "${MINERU_MODEL_MANIFEST_HOST_FILE:?Set the model manifest file}:/etc/mineru/model-manifest.json:ro"

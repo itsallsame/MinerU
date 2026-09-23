@@ -5,12 +5,20 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ...types import Tier
 from ..documents import UploadError
 from ..domain import BusinessDocument, EvidenceSnapshot, IngestTask, ParseRevision
-from ..services import DocumentWorkflow, DocumentWorkflowError, EvidenceInspection, EvidenceReader, NavigationStatus
+from ..services import (
+    DocumentWorkflow,
+    DocumentWorkflowError,
+    EvidenceCaptureError,
+    EvidenceInspection,
+    EvidenceReader,
+    EvidenceWriter,
+    NavigationStatus,
+)
 from ..store import BusinessStore
 
 
@@ -106,7 +114,15 @@ class EvidenceInspectionView(EvidenceView):
         return cls(**vars(inspection.snapshot), navigation_status=inspection.navigation_status)
 
 
-def create_app(*, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader) -> FastAPI:
+class EvidenceCaptureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locator: str
+
+
+def create_app(
+    *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader, evidence_writer: EvidenceWriter
+) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     app = FastAPI(title="MinerU Business Documents", version="0.1.0")
 
@@ -144,6 +160,15 @@ def create_app(*, workflow: DocumentWorkflow, store: BusinessStore, evidence_rea
             raise HTTPException(status_code=404, detail="Revision not found")
         return [EvidenceView.from_record(evidence) for evidence in store.list_evidence(revision_id)]
 
+    @app.post("/api/business/revisions/{revision_id}/evidence", response_model=EvidenceView, status_code=201)
+    def capture_evidence(revision_id: str, request: EvidenceCaptureRequest) -> EvidenceView:
+        try:
+            evidence = evidence_writer.capture(revision_id, locator=request.locator)
+        except EvidenceCaptureError as exc:
+            status_code = 404 if exc.code == "revision_not_found" else 422 if exc.code == "invalid_evidence_locator" else 409
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+        return EvidenceView.from_record(evidence)
+
     @app.get("/api/business/evidence/{evidence_id}", response_model=EvidenceInspectionView)
     def inspect_evidence(evidence_id: str) -> EvidenceInspectionView:
         inspection = evidence_reader.inspect(evidence_id)
@@ -175,6 +200,7 @@ def create_app(*, workflow: DocumentWorkflow, store: BusinessStore, evidence_rea
 
 __all__ = [
     "DocumentView",
+    "EvidenceCaptureRequest",
     "EvidenceInspectionView",
     "EvidenceView",
     "RevisionView",

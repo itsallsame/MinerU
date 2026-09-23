@@ -133,6 +133,17 @@ Evidence: dev-docs/evidence/2026-09-23-p3-evidence-read.md
 Limits: no server-side authenticated-by-source evidence capture, no parse-ID-specific content API, no pagination/capacity proof, no target Kylin model-backed test.
 Next: Design and implement version-aware evidence capture/field candidates, with explicit treatment of Doclib locator's missing parse ID.
 
+=== 2026-09-23 Session 12 (Version-bound evidence capture) ===
+Status: In progress; P3 field/template/review/result workflows and target deployment remain open
+Changes:
+- Added Doclib public read_parse_content(parse_id, locator) that reads only one persisted batch; business EvidenceWriter now freezes server-read text via the revision's parse ID and open API accepts locator only.
+- Disabled Doclib automatic compaction in the business Compose to preserve referenced historical batches; made same-millisecond parse JSON writes non-overwriting.
+- Added live forced-reparse difference test, API spoofed-snippet rejection, zero-compaction startup test and batch-file collision test.
+Verification: 58 business tests, 251 related upstream tests, and full upstream unit suite 2798 passed/4 skipped on Mac with local socket permissions; ruff checks passed.
+Evidence: dev-docs/evidence/2026-09-23-p3-versioned-evidence.md
+Limits: no real target Linux/GPU/container test, no guaranteed retention under manual cleanup or storage loss, no business field generation or review/result workflow.
+Next: Build template/field candidate domain and extraction against versioned evidence; design consistent backup/restore and disk retention before production acceptance.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

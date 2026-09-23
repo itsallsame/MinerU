@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import DocumentWorkflow, EvidenceReader
+from mineru.business.services import DocumentWorkflow, EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse
 
@@ -44,7 +44,14 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
         doclib=doclib,
         producer_version="4.0.6",
     )
-    client = TestClient(create_app(workflow=workflow, store=store, evidence_reader=EvidenceReader(store=store, doclib=doclib)))
+    client = TestClient(
+        create_app(
+            workflow=workflow,
+            store=store,
+            evidence_reader=EvidenceReader(store=store, doclib=doclib),
+            evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+        )
+    )
 
     uploaded = client.post(
         "/api/business/documents",
@@ -94,7 +101,14 @@ def test_open_api_rejects_invalid_tier_before_writing_file(tmp_path: Path) -> No
         doclib=doclib,
         producer_version="4.0.6",
     )
-    client = TestClient(create_app(workflow=workflow, store=store, evidence_reader=EvidenceReader(store=store, doclib=doclib)))
+    client = TestClient(
+        create_app(
+            workflow=workflow,
+            store=store,
+            evidence_reader=EvidenceReader(store=store, doclib=doclib),
+            evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+        )
+    )
     rejected = client.post(
         "/api/business/documents",
         data={"tier": "advanced"},

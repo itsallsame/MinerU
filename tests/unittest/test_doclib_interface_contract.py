@@ -83,6 +83,7 @@ def test_doclib_interface_declares_expected_methods() -> None:
         "get_doc",
         "get_doc_content",
         "read_content",
+        "read_parse_content",
         "export_doc_content",
         "search",
         "find",
@@ -120,9 +121,9 @@ def test_sync_and_async_doclib_interfaces_stay_aligned() -> None:
         sync_method = getattr(DoclibInterface, method_name)
         async_method = getattr(AsyncDoclibInterface, method_name)
 
-    assert inspect.signature(async_method) == inspect.signature(sync_method), method_name
-    assert not inspect.iscoroutinefunction(sync_method), method_name
-    assert inspect.iscoroutinefunction(async_method), method_name
+        assert inspect.signature(async_method) == inspect.signature(sync_method), method_name
+        assert not inspect.iscoroutinefunction(sync_method), method_name
+        assert inspect.iscoroutinefunction(async_method), method_name
 
 
 def test_doclib_server_implements_async_interface_with_route_metadata() -> None:
@@ -190,7 +191,7 @@ def _iter_effective_routes(app: Any) -> Any:
             yield route
 
 
-def test_interface_app_uses_doclib_server_routes(tmp_path) -> None:
+def test_interface_app_uses_doclib_server_routes(tmp_path: Path) -> None:
     cfg = PatchedConfig(doclib={"log": {"dir": str(tmp_path / "logs")}})
 
     app = create_app(cfg)
@@ -232,7 +233,7 @@ def test_interface_app_uses_doclib_server_routes(tmp_path) -> None:
     assert "parse_content" not in route_names
 
 
-def test_add_watch_rejects_missing_directory(tmp_path) -> None:
+def test_add_watch_rejects_missing_directory(tmp_path: Path) -> None:
     async def _run() -> None:
         db = DatabaseManager(str(tmp_path / "doclib.db"))
         await db.initialize()
@@ -244,7 +245,7 @@ def test_add_watch_rejects_missing_directory(tmp_path) -> None:
     asyncio.run(_run())
 
 
-def test_add_watch_normalizes_user_path_before_storing(tmp_path) -> None:
+def test_add_watch_normalizes_user_path_before_storing(tmp_path: Path) -> None:
     async def _run() -> None:
         db = DatabaseManager(str(tmp_path / "doclib.db"))
         await db.initialize()
@@ -326,7 +327,7 @@ def test_add_watch_allows_same_path_upsert(tmp_path: Path) -> None:
     asyncio.run(_run())
 
 
-def test_config_service_rejects_unsupported_rule_type_with_structured_error(tmp_path) -> None:
+def test_config_service_rejects_unsupported_rule_type_with_structured_error(tmp_path: Path) -> None:
     async def _run() -> None:
         db = DatabaseManager(str(tmp_path / "doclib.db"))
         await db.initialize()
@@ -341,7 +342,7 @@ def test_config_service_rejects_unsupported_rule_type_with_structured_error(tmp_
     asyncio.run(_run())
 
 
-def test_forget_watch_root_is_allowed_with_warning(tmp_path) -> None:
+def test_forget_watch_root_is_allowed_with_warning(tmp_path: Path) -> None:
     async def _run() -> None:
         db = DatabaseManager(str(tmp_path / "doclib.db"))
         await db.initialize()
@@ -360,7 +361,7 @@ def test_forget_watch_root_is_allowed_with_warning(tmp_path) -> None:
     asyncio.run(_run())
 
 
-def test_cleanup_temp_rejects_negative_older_than(tmp_path) -> None:
+def test_cleanup_temp_rejects_negative_older_than(tmp_path: Path) -> None:
     async def _run() -> None:
         db = DatabaseManager(str(tmp_path / "doclib.db"))
         await db.initialize()

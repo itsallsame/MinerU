@@ -61,6 +61,29 @@ def test_doclib_runtime_dependencies_are_in_base_install() -> None:
     assert "watchfiles" in dependency_names
 
 
+def test_zero_compaction_interval_skips_history_destructive_background_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scheduled: list[str] = []
+
+    def record_task(_state: object, name: str, _factory: object) -> None:
+        scheduled.append(name)
+
+    monkeypatch.setattr(doclib_app, "_create_background_task", record_task)
+    cfg = PatchedConfig(
+        doclib={
+            "data_dir": str(tmp_path / "data"),
+            "sqlite": {"path": str(tmp_path / "data" / "doclib.db")},
+            "log": {"dir": str(tmp_path / "logs")},
+            "compaction_interval_sec": 0,
+        }
+    )
+    with TestClient(doclib_app.create_app(cfg)) as client:
+        assert client.get("/api/v1/server/status").status_code == 200
+        assert client.app.state.doclib_state.compaction is None
+    assert "compaction" not in scheduled
+
+
 def test_huggingface_hub_base_dependency_enables_xet() -> None:
     pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
     pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))

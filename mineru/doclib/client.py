@@ -277,6 +277,14 @@ class DoclibClient(DoclibInterface):
             },
         )
 
+    @route("GET", "/parses/{parse_id}/content", tags=("parse",))
+    def read_parse_content(self, parse_id: int, locator: str, *, limit: int = 30000) -> DocContentResponse:
+        return self._request_model(
+            DocContentResponse,
+            path_params={"parse_id": parse_id},
+            params={"locator": locator, "limit": limit},
+        )
+
     @route("POST", "/docs/{doc_ref}/exports", tags=("docs",))
     def export_doc_content(self, doc_ref: str, request: DocContentExportRequest) -> DocContentExportResponse:
         request = request.model_copy(update={"page_range": normalize_page_range_input(request.page_range) or None})

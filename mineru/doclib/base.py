@@ -302,6 +302,15 @@ class DoclibInterface(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def read_parse_content(self, parse_id: int, locator: str, *, limit: int = 30000) -> DocContentResponse:
+        """Read a locator from one completed parse batch, including a retained superseded batch.
+
+        Unlike ``read_content``, this never substitutes newer batches for the
+        requested parse ID. Missing or unreadable historical artifacts fail.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def export_doc_content(self, doc_ref: str, request: DocContentExportRequest) -> DocContentExportResponse:
         """Render stored doc content and write it to a server-visible output path.
 
@@ -683,6 +692,11 @@ class AsyncDoclibInterface(ABC):
         no_marker: bool = False,
     ) -> DocContentResponse:
         """Async version of ``DoclibInterface.read_content``."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def read_parse_content(self, parse_id: int, locator: str, *, limit: int = 30000) -> DocContentResponse:
+        """Async version of ``DoclibInterface.read_parse_content``."""
         raise NotImplementedError()
 
     @abstractmethod

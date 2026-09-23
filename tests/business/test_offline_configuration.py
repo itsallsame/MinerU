@@ -98,6 +98,12 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "COPY models/" not in dockerfile
 
 
+def test_business_worker_retains_parse_history_for_evidence() -> None:
+    compose = (ROOT / "docker" / "compose.business.yaml").read_text()
+    worker = compose.split("  doclib-worker:", 1)[1]
+    assert 'MINERU_DOCLIB_COMPACTION_INTERVAL_SEC: "0"' in worker
+
+
 def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:
     script = (ROOT / "scripts" / "prepare-worker-wheelhouse.sh").read_text()
     assert "MINERU_BASE_CONSTRAINTS" in script

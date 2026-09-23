@@ -661,6 +661,19 @@ class DoclibServer(AsyncDoclibInterface):
             await _record_telemetry_duration(self.state, "content.duration_bucket.count", start_ms, dimensions=finished_dims)
             raise
 
+    @route("GET", "/parses/{parse_id}/content", tags=("parse",))
+    async def read_parse_content(self, parse_id: int, locator: str, *, limit: int = 30000) -> DocContentResponse:
+        """Render only the persisted output of the requested parse batch."""
+        plan = await self._build_read_plan_from_locator(
+            locator,
+            context=0,
+            limit=limit,
+            format="markdown",
+            image_format="jpeg",
+            no_marker=False,
+        )
+        return await self._execute_read_plan(plan, parse_id=parse_id)
+
     async def _build_read_plan_from_parse(
         self,
         doc_ref: str,
@@ -1267,12 +1280,22 @@ class DoclibServer(AsyncDoclibInterface):
             )
         return "\n\n".join(output)
 
-    async def _execute_read_plan(self, plan: _ReadPlan) -> DocContentResponse:
+    async def _execute_read_plan(self, plan: _ReadPlan, *, parse_id: int | None = None) -> DocContentResponse:
         data_dir = _effective_data_dir(self.state)
-        rows = await self.state.db.fetchall(
-            "SELECT page_range, done_at FROM parses WHERE sha256=? AND tier=? AND status=? ORDER BY done_at DESC",
-            (plan.sha256, plan.tier, PARSE_STATUS_DONE),
-        )
+        if parse_id is None:
+            rows = await self.state.db.fetchall(
+                "SELECT page_range, done_at FROM parses WHERE sha256=? AND tier=? AND status=? ORDER BY done_at DESC",
+                (plan.sha256, plan.tier, PARSE_STATUS_DONE),
+            )
+        else:
+            row = await self.state.db.fetchone(
+                "SELECT sha256, tier, page_range, done_at, status FROM parses WHERE id=?", (parse_id,)
+            )
+            if row is None or row["status"] not in (PARSE_STATUS_DONE, PARSE_STATUS_SUPERSEDED) or row["done_at"] is None:
+                raise NotFoundError("not_cached", f"Completed parse {parse_id} is not cached.", "parse_id")
+            if row["sha256"] != plan.sha256 or row["tier"] != plan.tier:
+                raise InvalidRequestError("invalid_locator", "Locator does not belong to the requested parse.", "locator")
+            rows = [row]
         loaded_pages = load_pages_from_done_batches(
             data_dir,
             plan.sha256,

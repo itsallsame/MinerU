@@ -20,10 +20,11 @@ from pptx import Presentation
 from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import EvidenceReader
+from mineru.business.services import EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
+from mineru.doclib.services.parse_svc import parse_batch_json_path
 from mineru.doclib.types import ForgetPathRequest
 from mineru.errors import MineruError, ServerNotRunningError
 
@@ -133,6 +134,55 @@ def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Pa
 
     search = client.search("Lantern", tier="flash")
     assert any(result.sha256 == doc.sha256 for result in search.results)
+
+
+def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, home = live_doclib
+    source = root / "revision.html"
+    source.write_text("<h1>Historical Lantern</h1>")
+    first = DoclibGateway(client, shared_root=root).submit(source)
+    _wait_for_parse(client, list(first.parse_ids))
+    first_id = first.parse_ids[0]
+    locator = client.get_doc_content(first.sha256, tier="flash").content_ranges[0].start
+    assert "Historical Lantern" in client.read_parse_content(first_id, locator).content
+
+    time.sleep(0.02)
+    second = client.ensure_parse(ParseRequest(path=str(source), tier="flash", force=True, remote=False))
+    _wait_for_parse(client, second.created_parse_ids)
+    second_id = second.created_parse_ids[0]
+    first_info = client.get_parse(first_id)
+    second_info = client.get_parse(second_id)
+    first_path = Path(
+        parse_batch_json_path(str(home / "doclib"), first.sha256, "flash", first_info.page_range, first_info.done_at)
+    )
+    second_path = Path(
+        parse_batch_json_path(str(home / "doclib"), first.sha256, "flash", second_info.page_range, second_info.done_at)
+    )
+    assert first_path != second_path
+    assert first_path.is_file() and second_path.is_file()
+    payload = second_path.read_text()
+    assert "Historical Lantern" in payload
+    second_path.write_text(payload.replace("Historical Lantern", "Current Lantern"))
+
+    assert "Historical Lantern" in client.read_parse_content(first_id, locator).content
+    assert "Current Lantern" in client.read_parse_content(second_id, locator).content
+    assert "Current Lantern" in client.read_content(locator).content
+
+    business_dir = root / "business-revisions"
+    business_dir.mkdir()
+    business = BusinessStore(business_dir / "business.sqlite3")
+    business.initialize()
+    upload = ImmutableUploadStore(root, max_bytes=1024).store(io.BytesIO(source.read_bytes()), filename="revision.html")
+    document = business.create_document(upload, original_name="revision.html")
+    revision = business.add_completed_revision(document.id, parse=first_info, producer_version="4.0.6")
+    evidence = EvidenceWriter(store=business, doclib=client).capture(revision.id, locator=locator)
+    assert "Historical Lantern" in evidence.snippet
+    assert "Current Lantern" not in evidence.snippet
+
+    with pytest.raises(MineruError, match="cached"):
+        client.read_parse_content(999999, locator)
+    with pytest.raises(MineruError, match="does not belong"):
+        client.read_parse_content(first_id, f"doc:{first_info.short_id}/tier:basic/page:1/block:1")
 
 
 def test_published_upload_can_be_submitted_to_doclib(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

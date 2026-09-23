@@ -166,7 +166,11 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             interval_sec=cfg.doclib.device_check_interval_sec,
             scan_svc=state.scan_svc,
         )
-        state.compaction = Compaction(state.db, interval_sec=cfg.doclib.compaction_interval_sec, data_dir=data_dir)
+        state.compaction = (
+            Compaction(state.db, interval_sec=cfg.doclib.compaction_interval_sec, data_dir=data_dir)
+            if cfg.doclib.compaction_interval_sec > 0
+            else None
+        )
         state.health_check = ParseServerHealthCheck(
             state.config_svc,
             interval_sec=cfg.doclib.parse_server_health_check_interval_sec,
@@ -184,7 +188,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         _create_background_task(state, "ingest_workers", state.ingest_workers.run)
         _create_background_task(state, "parse_workers", state.parse_workers.run)
         _create_background_task(state, "device_monitor", state.device_monitor.run)
-        _create_background_task(state, "compaction", state.compaction.run)
+        if state.compaction is not None:
+            _create_background_task(state, "compaction", state.compaction.run)
         _create_background_task(state, "health_check", state.health_check.run)
         _create_background_task(state, "telemetry_flush", state.telemetry_flush.run)
 

@@ -10,7 +10,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 from ...errors import InvalidRequestError, MineruError
@@ -997,13 +997,11 @@ class ParseService:
             full_document_page_count = max(actual_page_numbers)
 
         # save per-batch JSON (markdown is generated on read from /docs/{doc_ref}/content)
-        done_at_ms = _now_ms()
-        json_path = os.path.join(output_dir, _safe_filename(persisted_page_range, done_at_ms))
         write_start_ms = _now_ms()
         try:
-            os.makedirs(output_dir, exist_ok=True)
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(export_payload, f, ensure_ascii=False, indent=2)
+            done_at_ms = write_unique_parse_batch_json(
+                output_dir, persisted_page_range, export_payload, start_ms=write_start_ms
+            )
         except Exception as exc:
             logger.error(
                 "Parse post-write finalization failed for task_id=%s path=%s tier=%s page_range=%s: %s",
@@ -1549,6 +1547,27 @@ def parse_batch_json_path(data_dir: str, sha256: str, tier: Tier, page_range: st
     """Return the persisted Middle JSON path for one parse batch."""
     filename = _safe_filename(page_range, done_at or 0)
     return os.path.join(os.path.expanduser(data_dir), "parsed", sha256[:2], sha256, tier, filename)
+
+
+def write_unique_parse_batch_json(output_dir: str, page_range: str, payload: dict[str, Any], *, start_ms: int) -> int:
+    """Reserve a per-batch filename without overwriting a historical parse."""
+    os.makedirs(output_dir, exist_ok=True)
+    for offset in range(1000):
+        candidate_ms = start_ms + offset
+        json_path = os.path.join(output_dir, _safe_filename(page_range, candidate_ms))
+        created = False
+        try:
+            with open(json_path, "x", encoding="utf-8") as stream:
+                created = True
+                json.dump(payload, stream, ensure_ascii=False, indent=2)
+            return candidate_ms
+        except FileExistsError:
+            continue
+        except Exception:
+            if created:
+                os.unlink(json_path)
+            raise
+    raise FileExistsError("No unique parse batch filename could be reserved")
 
 
 def load_pages_from_done_batches(
