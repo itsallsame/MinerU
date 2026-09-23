@@ -399,3 +399,13 @@ Changes:
 Verification: Web 10 tests/8-asset build; Playwright PDF page/no-evidence/field lookup, image lookup/back navigation, review and evidence-link regressions passed. Initial browser failure was an ambiguous test locator, fixed with exact matching.
 Evidence: dev-docs/evidence/2026-09-23-source-field-links.md
 Next: P4 async error recovery/accessibility and more complete regression, then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 38 (Web service outage recovery) ===
+Status: In progress; FE-047 partially advanced, still 53/241 passed; FE-048 and wider P4/P6 gates remain open
+Changes:
+- Confirmed user constraint remains open system: no login, user, role or permission management; recovery adds no identity or token model.
+- Reloaded capabilities/templates with the document library on explicit refresh and retry; failure disables upload rather than reusing stale service metadata.
+- On library outage, cleared old task badges, count, selection and detail/review state; added explicit reconnect action and recovery path.
+Verification: Web 10 tests/8-asset build, Playwright outage/recovery and quality/audit/template regressions passed; git diff check passed.
+Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
+Next: Finish FE-047 panel-level retry/race handling and FE-048 missing-resource feedback; then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.

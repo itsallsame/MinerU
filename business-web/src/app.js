@@ -15,6 +15,7 @@ const state = {
   selectedSearchDocument: null,
   revisions: [],
   listRequest: 0,
+  workspaceRequest: 0,
   searchRequest: 0,
   polling: false,
   uploading: false,
@@ -206,8 +207,11 @@ function populateTemplateSelects() {
   }
 }
 
-async function bootstrap() {
+async function refreshWorkspace() {
+  const requestNumber = ++state.workspaceRequest;
   const [capabilities, templates] = await Promise.allSettled([businessApi.capabilities(), businessApi.templates()]);
+  if (requestNumber !== state.workspaceRequest) return;
+  const failures = [];
   if (capabilities.status === "fulfilled") {
     state.capabilities = capabilities.value;
     const cap = state.capabilities;
@@ -215,18 +219,27 @@ async function bootstrap() {
       `当前服务支持 ${cap.parseable_extensions.length} 种扩展名，单文件上限 ${formatBytes(cap.max_upload_bytes)}；` +
       "PDF / 图片提供四档解析。";
   } else {
+    state.capabilities = null;
     byId("capability-note").textContent = "服务能力不可用，上传已暂停。";
-    showError(capabilities.reason.message);
+    failures.push(`服务能力不可用：${capabilities.reason.message}`);
   }
   if (templates.status === "fulfilled") {
     state.templates = templates.value;
     populateTemplateSelects();
     templateManager.setTemplates(state.templates);
   } else {
-    showError(`模板列表暂不可用：${templates.reason.message}`);
+    state.templates = [];
+    populateTemplateSelects();
+    templateManager.setTemplates(state.templates);
+    failures.push(`模板列表暂不可用：${templates.reason.message}`);
   }
   updateFileSelection();
-  await refreshDocuments();
+  const listLoaded = await refreshDocuments();
+  if (requestNumber === state.workspaceRequest && listLoaded && failures.length) showError(failures.join("；"));
+}
+
+async function bootstrap() {
+  await refreshWorkspace();
   await openEvidenceLink();
 }
 
@@ -282,7 +295,7 @@ async function refreshDocuments() {
       status: byId("status-filter").value,
       templateCode: byId("template-filter").value,
     });
-    if (requestNumber !== state.listRequest) return;
+    if (requestNumber !== state.listRequest) return false;
     state.items = page.items;
     state.total = page.total;
     setConnection(true, "业务服务已连接");
@@ -300,11 +313,35 @@ async function refreshDocuments() {
     }
     renderDocuments();
     if (state.selectedId) renderDetail();
+    return true;
   } catch (error) {
-    if (requestNumber !== state.listRequest) return;
+    if (requestNumber !== state.listRequest) return false;
     setConnection(false, "业务服务不可用");
     showError(error.message);
-    byId("document-list").replaceChildren(element("div", "empty-state", "无法读取文档。请检查服务并重试。"));
+    state.capabilities = null;
+    byId("capability-note").textContent = "文档库不可用，上传已暂停；重新连接后会再次读取服务能力。";
+    updateFileSelection();
+    state.items = [];
+    state.total = 0;
+    state.selectedId = null;
+    state.selectedSearchDocument = null;
+    state.revisions = [];
+    review.clear();
+    byId("total-count").textContent = "文档数量未知";
+    byId("previous-page").disabled = true;
+    byId("next-page").disabled = true;
+    byId("detail-content").className = "detail-empty";
+    byId("detail-content").replaceChildren(
+      element("h2", "", "文档状态暂不可用"),
+      element("p", "", "连接恢复后重新读取文档，旧状态不会作为当前结果展示。"),
+    );
+    const retry = element("button", "secondary-button", "重新连接并刷新");
+    retry.type = "button";
+    retry.addEventListener("click", refreshWorkspace);
+    byId("document-list").replaceChildren(
+      element("div", "empty-state", "无法读取文档。请检查业务服务或内网地址。"), retry,
+    );
+    return false;
   }
 }
 
@@ -604,7 +641,7 @@ byId("audit-panel").addEventListener("toggle", () => { if (byId("audit-panel").o
 byId("audit-refresh").addEventListener("click", () => loadAudit(true));
 byId("audit-more").addEventListener("click", () => loadAudit());
 window.addEventListener("hashchange", openEvidenceLink);
-byId("refresh").addEventListener("click", refreshDocuments);
+byId("refresh").addEventListener("click", refreshWorkspace);
 for (const id of ["status-filter", "template-filter"]) {
   byId(id).addEventListener("change", () => { state.page = 0; refreshDocuments(); });
 }
