@@ -24,6 +24,7 @@ const state = {
   uploading: false,
   auditRequest: 0,
   qualityRequest: 0,
+  evidenceLinkRequest: 0,
   auditBefore: null,
   auditItems: [],
   sourcePageNo: 1,
@@ -146,14 +147,20 @@ function renderAudit() {
     open.type = "button";
     open.addEventListener("click", async () => {
       open.disabled = true;
+      const selectionRequest = state.selectionRequest;
       try {
         const documentRecord = await businessApi.document(record.document_id);
+        if (selectionRequest !== state.selectionRequest) return;
         await selectDocument(record.document_id, documentRecord, {
           revisionId: record.revision_id, runId: event.run_id,
         });
+        if (state.selectionRequest !== selectionRequest + 1 || state.selectedId !== record.document_id) return;
         byId("workbench").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (error) {
-        showError(`审计记录无法打开：${error.message}`);
+        if (selectionRequest === state.selectionRequest
+          || (state.selectionRequest === selectionRequest + 1 && state.selectedId === record.document_id)) {
+          showError(`审计记录无法打开：${error.message}`);
+        }
       } finally {
         open.disabled = false;
       }
@@ -202,6 +209,9 @@ function updateFileSelection() {
     ? `${files.length} 个文件 · ${files.map((file) => file.name).join("、")}`
     : "尚未选择文件";
   byId("upload-submit").disabled = !state.capabilities || !files.length || state.uploading;
+  byId("files").disabled = state.uploading;
+  byId("upload-template").disabled = state.uploading;
+  byId("upload-tier").disabled = state.uploading;
 }
 
 function feedback(file, message, kind = "") {
@@ -263,17 +273,29 @@ async function bootstrap() {
 }
 
 async function openEvidenceLink() {
+  const requestNumber = ++state.evidenceLinkRequest;
+  const selectionRequest = state.selectionRequest;
   const match = /^#evidence=([A-Za-z0-9_-]{1,100})$/.exec(window.location.hash);
   if (!match) return;
+  let targetDocumentId = null;
   try {
     const evidence = await businessApi.inspectEvidence(match[1]);
+    if (requestNumber !== state.evidenceLinkRequest || selectionRequest !== state.selectionRequest) return;
+    targetDocumentId = evidence.document_id;
     const record = await businessApi.document(evidence.document_id);
+    if (requestNumber !== state.evidenceLinkRequest || selectionRequest !== state.selectionRequest) return;
     await selectDocument(record.id, record, { revisionId: evidence.revision_id, evidenceId: evidence.id });
+    if (requestNumber !== state.evidenceLinkRequest || state.selectionRequest !== selectionRequest + 1
+      || state.selectedId !== record.id) return;
     state.sourcePageNo = evidence.page_no;
     renderDetail();
     review.showSourcePage(evidence.page_no);
   } catch (error) {
-    showError(`证据链接不可用：${error.message}`);
+    if (requestNumber === state.evidenceLinkRequest
+      && (selectionRequest === state.selectionRequest
+        || (state.selectionRequest === selectionRequest + 1 && state.selectedId === targetDocumentId))) {
+      showError(`证据链接不可用：${error.message}`);
+    }
   }
 }
 
@@ -438,12 +460,13 @@ function renderDetail() {
     retry.type = "button";
     retry.addEventListener("click", async () => {
       retry.disabled = true;
+      const selectionRequest = state.selectionRequest;
       try {
         await businessApi.retry(task.id);
-        clearError();
+        if (selectionRequest === state.selectionRequest) clearError();
         await refreshDocuments();
       } catch (error) {
-        showError(`重试失败：${error.message}`);
+        if (selectionRequest === state.selectionRequest) showError(`重试失败：${error.message}`);
         retry.disabled = false;
       }
     });
@@ -699,21 +722,29 @@ async function searchDocuments(event, retryQuery = null) {
 async function submitFiles(event) {
   event.preventDefault();
   if (state.uploading) return;
+  const capabilities = state.capabilities;
+  if (!capabilities) {
+    showError("服务能力不可用，上传已暂停；请重新连接并刷新。");
+    return;
+  }
   const files = [...byId("files").files];
+  const selectedTier = byId("upload-tier").value;
+  const templateCode = byId("upload-template").value;
+  const listRequest = state.listRequest;
   state.uploading = true;
   updateFileSelection();
   byId("upload-feedback").replaceChildren();
   let accepted = 0;
   for (const file of files) {
-    const classification = classifyFile(file, state.capabilities);
+    const classification = classifyFile(file, capabilities);
     if (!classification.ok) {
       feedback(file, classification.message, "error");
       continue;
     }
     const resultNode = feedback(file, "正在上传…");
     try {
-      const tier = tierForFile(file, state.capabilities, byId("upload-tier").value);
-      const result = await businessApi.upload(file, { tier, templateCode: byId("upload-template").value });
+      const tier = tierForFile(file, capabilities, selectedTier);
+      const result = await businessApi.upload(file, { tier, templateCode });
       resultNode.textContent = `${file.name} · 已受理 · ${taskLabel(result.task.status)}`;
       resultNode.className = "feedback-item success";
       accepted += 1;
@@ -726,7 +757,7 @@ async function submitFiles(event) {
   byId("files").value = "";
   updateFileSelection();
   if (accepted) {
-    state.page = 0;
+    if (state.listRequest === listRequest) state.page = 0;
     await refreshDocuments();
   }
 }

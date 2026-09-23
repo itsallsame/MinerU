@@ -505,3 +505,13 @@ Changes:
 Verification: Web 10 unit tests/8-asset offline build; Playwright five review writes, template delayed writes and normal template workflow passed with simulated API. No target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-review-template-write-races.md
 Next: Check task retry/upload asynchronous feedback and P4 keyboard traversal; obtain real samples and Kylin/NVIDIA artifacts for P1/P6. Keep goal active.
+
+=== 2026-09-23 Session 49 (Upload, retry and navigation races) ===
+Status: In progress; FE-047 advanced but remains incomplete (54/241 passed)
+Changes:
+- Frozen batch upload settings and prevented old upload/retry completions from resetting a newer list page or document view.
+- Guarded delayed Skill evidence links and audit navigation against newer hash or document selection.
+- Reaffirmed the user's open-system constraint: no login, user, role, token or permission layer; review is a content workflow, not authorization.
+Verification: Web 10 unit tests/8-asset offline build; Playwright upload/retry, navigation-race, normal evidence-link and audit-feed scenarios passed with simulated API. Existing audit test source-check mock repaired. No real samples or target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-upload-navigation-races.md
+Next: Continue FE-047/FE-046 browser recovery and keyboard checks; obtain four-class samples and isolated Kylin/NVIDIA artifacts for P1/P6. Keep goal active.
