@@ -646,3 +646,10 @@ Changes: Tightened runtime preflight to reject any extra, missing or duplicate c
 Verification: Targeted 39 tests and full 171-test business suite passed on Mac; Ruff check/format and diff check passed. Tests use simulated Docker inspect, not a Kylin/NVIDIA container.
 Evidence: dev-docs/evidence/2026-09-24-runtime-mount-allowlist.md
 Next: Target-machine Compose inspect and release verification; continue Linux amd64 wheelhouse/image, real model and sample gates. Keep goal active.
+
+=== 2026-09-24 Session 61 (Live local Web/PDF integration) ===
+Status: In progress; 64/241 passed; P6 four-class samples and target-machine gates remain incomplete
+Changes: Added an opt-in Chromium test using real same-origin Web, business API and local TCP Doclib with the repository public 13-page PDF. Services bind loopback and are terminated after the test; API routes are not simulated.
+Verification: Public sample SHA-256 pinned; Flash upload, completed revision and historical first-page read passed on Mac. No model/GPU/four-class quality claim. First test-selector ambiguity was corrected and rerun.
+Evidence: dev-docs/evidence/2026-09-24-live-web-pdf-smoke.md
+Next: Obtain controlled four-class annotated business samples; run their read-only evaluator and target Kylin/NVIDIA acceptance separately. Keep goal active.
