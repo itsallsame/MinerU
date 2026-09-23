@@ -632,3 +632,10 @@ Changes: Scoped failed diff and two-version page-read requests to their original
 Verification: Web 11 Node tests/8-asset build, 19 Chromium scenarios, Ruff and diff checks passed on Mac using synthetic browser API responses. No real sample or Kylin target claim.
 Evidence: dev-docs/evidence/2026-09-24-revision-diff-race.md
 Next: Continue FE-047 asynchronous path audit; FE-033 awaits chosen edit scope; FE-016 needs true Doclib cancellation semantics. Keep goal active.
+
+=== 2026-09-24 Session 59 (Offline host mount separation) ===
+Status: In progress; 64/241 passed; P1 target-machine gates remain incomplete
+Changes: Added pre-start host layout validation and runtime recheck to prevent writable business/Doclib/upload mounts from overlapping the read-only model mount or model manifest. Updated deployment procedure and evidence.
+Verification: Targeted host-layout/runtime tests and full 166-test business suite passed on Mac; full suite required local socket permission after sandbox-only bind errors. Ruff and diff check passed. No Kylin/NVIDIA/air-gap claim.
+Evidence: dev-docs/evidence/2026-09-24-host-mount-separation.md
+Next: Verify the host-layout CLI and Compose binding on target Kylin; continue Linux amd64 wheelhouse/image, real model and sample gates. Keep goal active.

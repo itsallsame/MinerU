@@ -126,6 +126,17 @@ def test_runtime_preflight_accepts_isolated_local_deployment(tmp_path: Path) -> 
         (lambda x: x["worker"]["HostConfig"].update(ReadonlyRootfs=False), "read-only"),
         (lambda x: x["worker"]["Mounts"][0].update(RW=True), "read/write mode"),
         (lambda x: x["worker"]["Mounts"][2].update(Source="/tmp/other"), "model mounts differ"),
+        (
+            lambda x: (
+                x["business"]["Mounts"][0].update(Source=str(x["model_dir"])),
+                x["worker"]["Mounts"][0].update(Source=str(x["model_dir"])),
+            ),
+            "directories overlap",
+        ),
+        (
+            lambda x: x["worker"]["Mounts"][1].update(Source=str(x["model_dir"] / "doclib")),
+            "directories overlap",
+        ),
         (lambda x: x["business"]["Mounts"].append({"Destination": "/opt/mineru-models"}), "mounts model"),
         (lambda x: x["network"].update(Internal=False), "internal network"),
         (lambda x: x["worker"]["NetworkSettings"]["Ports"].update({"15980/tcp": [{}]}), "published host port"),

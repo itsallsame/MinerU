@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from scripts.verify_host_layout import check_host_separation
+
 
 def _command(*args: str) -> str:
     return subprocess.run(args, capture_output=True, text=True, check=True, timeout=40).stdout.strip()
@@ -93,12 +95,19 @@ def check_runtime(
     worker_shared = _mount(worker, "/srv/mineru-inbox", writable=False)
     if Path(business_shared).resolve() != Path(worker_shared).resolve():
         raise ValueError("Business and worker do not share the same original-file directory")
-    _mount(business, "/var/lib/mineru-business", writable=True)
-    _mount(worker, "/var/lib/mineru", writable=True)
+    business_data = _mount(business, "/var/lib/mineru-business", writable=True)
+    doclib_data = _mount(worker, "/var/lib/mineru", writable=True)
     mounted_models = _mount(worker, "/opt/mineru-models", writable=False)
     mounted_manifest = _mount(worker, "/etc/mineru/model-manifest.json", writable=False)
     if Path(mounted_models).resolve() != model_dir.resolve() or Path(mounted_manifest).resolve() != model_manifest.resolve():
         raise ValueError("Worker model mounts differ from the verified release artifacts")
+    check_host_separation(
+        model_dir=model_dir,
+        model_manifest=model_manifest,
+        doclib_dir=Path(doclib_data),
+        shared_documents_dir=Path(business_shared),
+        business_dir=Path(business_data),
+    )
     if any(
         item.get("Destination") in ("/opt/mineru-models", "/etc/mineru/model-manifest.json")
         for item in business.get("Mounts", [])
