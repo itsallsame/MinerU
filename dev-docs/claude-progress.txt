@@ -304,3 +304,13 @@ Changes:
 Verification: Web 9 tests, 8-asset offline build, Playwright template CRUD/field order/narrow-width plus discovery/evidence-link/review regressions, 5 existing backend template tests, feature-count consistency and diff checks passed. Two dependency deprecation warnings remain.
 Evidence: dev-docs/evidence/2026-09-23-template-management-web.md
 Next: P4 structure/block-level evidence, quality statistics and real four-class samples; then isolated Kylin/NVIDIA target checks. Do not mark P4 or production complete.
+
+=== 2026-09-23 Session 28 (Historical heading outline, not native block tree) ===
+Status: In progress; FE-023/P4 native structure and P1/P6 target gates remain open
+Changes:
+- Added bounded, revision-bound outline derived from historical Markdown headings with code-fence exclusion, 25-page continuation and fail-closed truncated-page handling.
+- Connected the business API to Web review navigation and the fork-owned Skill; maintained machine-unconfirmed/page-only labeling.
+- Kept FE-023 false: a heading outline is not a verified MinerU model-block structure tree.
+Verification: 110 business tests passed/2 dependency warnings, including live HTML heading and 13-page PDF outline API; Web 9 tests/8 offline assets; Playwright review and discovery flows; Skill quick validation, Ruff and diff checks passed.
+Evidence: dev-docs/evidence/2026-09-23-historical-heading-outline.md
+Next: Implement historical native block structure/locator mapping, block-level evidence search, four-class annotated samples and isolated Kylin/NVIDIA acceptance. Goal remains active.

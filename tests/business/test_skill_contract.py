@@ -287,6 +287,14 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     assert page_result["items"][0]["locator"] == locator
     assert page_result["items"][0]["state"] == "historical_parse_unconfirmed"
     assert page_result["next_page"] is None
+    doclib.read_parse_content.return_value = DocContentResponse(
+        sha256=digest, short_id=digest[:12], tier="flash", content="# Notice historical text",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    outline_args = script.parser().parse_args(["outline", overview["revision"]["id"]])
+    outline_result = script.run(outline_args, client)
+    assert outline_result["items"][0]["title"] == "Notice historical text"
+    assert outline_result["items"][0]["state"] == "historical_parse_unconfirmed"
     with pytest.raises(script.BusinessAPIError) as missing:
         client.overview("missing")
     assert missing.value.status == 404

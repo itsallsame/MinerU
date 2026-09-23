@@ -62,11 +62,28 @@ class RevisionSearchPage:
     scanned_pages: int
 
 
+@dataclass(frozen=True)
+class RevisionHeading:
+    level: int
+    title: str
+    page_no: int
+    locator: str
+
+
+@dataclass(frozen=True)
+class RevisionOutlinePage:
+    revision_id: str
+    items: tuple[RevisionHeading, ...]
+    next_page: int | None
+    scanned_pages: int
+
+
 class BusinessDiscovery:
     """Never expose Doclib-only documents, paths, parse IDs, or mutable hits as reviewed evidence."""
 
     _MAX_SCAN = 500
     _REVISION_SCAN_PAGES = 25
+    _HEADING_RE = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.+?)\s*$")
 
     def __init__(self, *, store: BusinessStore, doclib: DoclibInterface) -> None:
         self._store = store
@@ -188,8 +205,51 @@ class BusinessDiscovery:
             scanned_pages=len(window),
         )
 
+    def outline(self, revision_id: str, *, start_page: int | None = None) -> RevisionOutlinePage:
+        revision = self._store.get_revision(revision_id)
+        if revision is None:
+            raise DiscoveryError("revision_not_found")
+        pages = sorted(parse_page_range_set(revision.page_range))
+        if start_page is not None and start_page not in pages:
+            raise DiscoveryError("invalid_outline_request")
+        start = pages.index(start_page) if start_page is not None else 0
+        window = pages[start:start + self._REVISION_SCAN_PAGES]
+        headings: list[RevisionHeading] = []
+        for page_no in window:
+            locator = page_ref(revision.short_id, revision.tier, page_no)
+            content = self.read(revision_id, locator, limit=30000)
+            if content.truncated:
+                raise DiscoveryError("historical_content_truncated")
+            fence: str | None = None
+            for line in content.content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(("```", "~~~")):
+                    marker = stripped[:3]
+                    if fence is None:
+                        fence = marker
+                    elif marker == fence:
+                        fence = None
+                    continue
+                if fence is not None:
+                    continue
+                match = self._HEADING_RE.fullmatch(line)
+                if match is None:
+                    continue
+                title = match.group(2).strip().rstrip("#").strip()
+                if title:
+                    headings.append(RevisionHeading(len(match.group(1)), title[:200], page_no, locator))
+                    if len(headings) > 200:
+                        raise DiscoveryError("outline_too_many_headings")
+        next_index = start + len(window)
+        return RevisionOutlinePage(
+            revision_id=revision_id, items=tuple(headings),
+            next_page=pages[next_index] if next_index < len(pages) else None,
+            scanned_pages=len(window),
+        )
+
 
 __all__ = [
     "BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead",
     "RevisionSearchHit", "RevisionSearchPage",
+    "RevisionHeading", "RevisionOutlinePage",
 ]

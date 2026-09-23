@@ -143,7 +143,7 @@ def test_business_discovery_uses_real_local_doclib_without_exposing_paths(
 ) -> None:
     client, root, _home = live_doclib
     source = root / "business-lantern.html"
-    source.write_text("<html><body><p>DistinctiveLanternProject</p></body></html>", encoding="utf-8")
+    source.write_text("<html><body><h1>DistinctiveLanternProject</h1></body></html>", encoding="utf-8")
     submitted = DoclibGateway(client, shared_root=root).submit(source)
     _wait_for_parse(client, list(submitted.parse_ids))
     business_dir = root / "business-discovery"
@@ -166,6 +166,10 @@ def test_business_discovery_uses_real_local_doclib_without_exposing_paths(
     historical = discovery.read(revision.id, locator)
     assert historical.document_id == document.id
     assert "DistinctiveLanternProject" in historical.content
+    outline = discovery.outline(revision.id)
+    assert outline.scanned_pages == 1 and outline.next_page is None
+    assert any(item.title == "DistinctiveLanternProject" and item.level == 1 for item in outline.items)
+    assert all(item.locator.startswith(f"doc:{revision.short_id}/tier:flash/page:") for item in outline.items)
 
 
 def test_business_field_candidate_uses_historical_doclib_page(
@@ -416,6 +420,11 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
     assert all(item["locator"].startswith(f"doc:{revisions[0]['short_id']}/tier:flash/page:")
                for item in page_matches.json()["items"])
     assert page_matches.json()["next_page"] is None
+    outline = client.get(f"/api/business/revisions/{revisions[0]['id']}/outline")
+    assert outline.status_code == 200, outline.text
+    assert outline.json()["scanned_pages"] == 13 and outline.json()["next_page"] is None
+    assert all(item["locator"].startswith(f"doc:{revisions[0]['short_id']}/tier:flash/page:")
+               for item in outline.json()["items"])
 
     captured = client.post(f"/api/business/revisions/{revisions[0]['id']}/evidence", json={"locator": locator})
     assert captured.status_code == 201, captured.text

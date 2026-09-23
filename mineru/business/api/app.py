@@ -56,6 +56,7 @@ from ..services import (
     HistoricalRead,
     NavigationStatus,
     RevisionSearchPage,
+    RevisionOutlinePage,
 )
 from ..store import BusinessStore, BusinessStoreError
 
@@ -415,6 +416,29 @@ class RevisionSearchView(BaseModel):
         )
 
 
+class RevisionHeadingView(BaseModel):
+    level: int
+    title: str
+    page_no: int
+    locator: str
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+
+class RevisionOutlineView(BaseModel):
+    revision_id: str
+    items: list[RevisionHeadingView]
+    next_page: int | None
+    scanned_pages: int
+
+    @classmethod
+    def from_page(cls, page: RevisionOutlinePage) -> RevisionOutlineView:
+        return cls(
+            revision_id=page.revision_id,
+            items=[RevisionHeadingView(**vars(item)) for item in page.items],
+            next_page=page.next_page, scanned_pages=page.scanned_pages,
+        )
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -519,6 +543,22 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return RevisionSearchView.from_page(discovery.search_revision(revision_id, query, start_page=start_page))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/outline", response_model=RevisionOutlineView)
+    def get_revision_outline(
+        revision_id: str, start_page: Annotated[int | None, Query(ge=1)] = None,
+    ) -> RevisionOutlineView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return RevisionOutlineView.from_page(discovery.outline(revision_id, start_page=start_page))
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else
@@ -806,6 +846,8 @@ __all__ = [
     "RevisionView",
     "RevisionSearchHitView",
     "RevisionSearchView",
+    "RevisionHeadingView",
+    "RevisionOutlineView",
     "SubmissionView",
     "TaskView",
     "TemplateCreateRequest",

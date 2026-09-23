@@ -184,6 +184,82 @@ def test_revision_search_returns_bounded_page_locators_from_historical_batches(t
     assert incomplete.status_code == 409 and incomplete.json()["detail"] == "historical_content_truncated"
 
 
+def test_outline_extracts_only_historical_markdown_headings_with_page_locations(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=sha, short_id=short_id, tier="flash", page_range=str(page_no),
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((8, 1), (9, 2)))
+    revision = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.6")
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        assert parse_id == (8 if "/page:1" in locator else 9)
+        content = "# Project Lantern\n```python\n# Not a heading\n```\n## Results" if parse_id == 8 else "### Conclusion"
+        return DocContentResponse(
+            sha256=sha, short_id=short_id, tier="flash", content=content,
+            request_scope=ContentRequestScope(locator=locator),
+        )
+
+    doclib.read_parse_content.side_effect = read
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    outline = discovery.outline(revision.id)
+    assert [(item.level, item.title, item.page_no) for item in outline.items] == [
+        (1, "Project Lantern", 1), (2, "Results", 1), (3, "Conclusion", 2),
+    ]
+    assert outline.items[-1].locator == f"doc:{short_id}/tier:flash/page:2"
+    assert discovery.outline(revision.id, start_page=2).scanned_pages == 1
+    with pytest.raises(DiscoveryError, match="invalid_outline_request"):
+        discovery.outline(revision.id, start_page=3)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{revision.id}/outline")
+    assert response.status_code == 200
+    assert response.json()["items"][0]["state"] == "historical_parse_unconfirmed"
+    assert "/private/" not in response.text and "parse_id" not in response.text
+    assert api.get("/api/business/revisions/missing/outline").status_code == 404
+
+
+def test_outline_requires_continuation_and_rejects_truncated_pages(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parse = ParseInfo(
+        id=8, sha256=sha, short_id=short_id, tier="flash", page_range="1-27",
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    )
+    revision = store.add_completed_revision(document_id, parse=parse, producer_version="4.0.6")
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        page_no = int(locator.rsplit("page:", 1)[1])
+        return DocContentResponse(
+            sha256=sha, short_id=short_id, tier="flash",
+            content="## Later heading" if page_no == 26 else "No heading",
+            request_scope=ContentRequestScope(locator=locator),
+            truncated=page_no == 27,
+        )
+
+    doclib.read_parse_content.side_effect = read
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    first = discovery.outline(revision.id)
+    assert first.items == () and first.scanned_pages == 25 and first.next_page == 26
+    with pytest.raises(DiscoveryError, match="historical_content_truncated"):
+        discovery.outline(revision.id, start_page=first.next_page)
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: DocContentResponse(
+        sha256=sha, short_id=short_id, tier="flash",
+        content="## Later heading" if locator.endswith("page:26") else "No heading",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    last = discovery.outline(revision.id, start_page=26)
+    assert [(item.title, item.page_no) for item in last.items] == [("Later heading", 26)]
+    assert last.scanned_pages == 2 and last.next_page is None
+
+
 def test_revision_read_rejects_identity_drift_and_worker_outage(tmp_path: Path) -> None:
     store, doclib, document_a, _document_b, revision_a, _revision_b = _fixture(tmp_path)
     sha = store.get_document(document_a).sha256

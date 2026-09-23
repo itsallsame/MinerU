@@ -23,6 +23,7 @@ python3 skills/business-documents/scripts/business_documents.py extract REVISION
 python3 skills/business-documents/scripts/business_documents.py extraction RUN_ID
 python3 skills/business-documents/scripts/business_documents.py search "年度通知" --limit 20
 python3 skills/business-documents/scripts/business_documents.py search-pages REVISION_ID "年度通知"
+python3 skills/business-documents/scripts/business_documents.py outline REVISION_ID
 python3 skills/business-documents/scripts/business_documents.py read REVISION_ID 'doc:SHORT_ID/tier:flash/page:1'
 python3 skills/business-documents/scripts/business_documents.py evidence EVIDENCE_ID
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
@@ -36,6 +37,8 @@ Upload requires an explicit local file and uses the business service's advertise
 
 `search` is business-scoped discovery: returned snippets are **current index previews, unconfirmed**, not frozen evidence or citation-ready text. Only hits mapped to a business document with a completed matching-tier revision are returned; `scan_complete` concerns the Doclib-reported result window, not guaranteed full-corpus recall. `search-pages` scans at most 25 pages of a **specified historical business revision** per call and returns page locators with `historical_parse_unconfirmed` snippets. Continue from `next_page` with `--start-page` to cover a longer document; a missing hit in one window is not a full-document negative result. A truncated page fails instead of silently claiming no match. Page hits are machine text, not frozen evidence or block-level citations. `read` takes a **business revision ID and its matching locator**; it reads that historical parse batch, returns `next_locator` for bounded continuation, and labels the text `historical_parse_unconfirmed`. It is not an immutable evidence snapshot or human-confirmed field. For a final citation, use a frozen evidence ID or confirmed field evidence, not a search preview.
 
-Current boundary: the unified business API has no parsed structure tree or block-level search evidence list yet. Do not silently fall back to Doclib/official Skill; tell the user these operations are pending.
+`outline` derives a heading outline from the specified historical revision's parsed Markdown, scanning at most 25 pages per call. Use `--start-page` with `next_page` until the needed range is covered. Heading level and page locator are machine-derived, unconfirmed, and only page-precise; absence of headings does not mean the source has no semantic structure. Do not cite outline labels as frozen evidence.
+
+Current boundary: the unified business API has no authoritative model-block structure tree or block-level search evidence list yet. Do not silently fall back to Doclib/official Skill; tell the user these operations are pending.
 
 HTTP errors print their actual status and business-service detail. On 404, recheck the business ID; on 409, report the conflict or stale source; on 503, report the unavailable business/Doclib worker. Do not hide errors or infer a successful parse/result from a successful upload.

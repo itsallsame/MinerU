@@ -48,7 +48,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   const state = {
     document: null, revisions: [], revisionId: null, runs: [], runId: null,
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
-    inspection: null, reading: null, error: "", busy: false, generation: 0,
+    inspection: null, reading: null, outline: null, error: "", busy: false, generation: 0,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -61,6 +61,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.extraction = null;
     state.inspection = null;
     state.reading = null;
+    state.outline = null;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -115,6 +116,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.extraction = null;
     state.inspection = null;
     state.reading = null;
+    state.outline = null;
     state.runs = [];
     state.template = null;
     state.decisions = [];
@@ -157,6 +159,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.audit = [];
     state.inspection = null;
     state.reading = null;
+    state.outline = null;
     state.error = "";
     root.hidden = false;
     render();
@@ -216,6 +219,41 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       const reading = await businessApi.readRevision(revisionId, locator);
       if (revisionId === state.revisionId) state.reading = reading;
     });
+  }
+
+  async function loadOutline(startPage = null) {
+    await perform(async () => {
+      const revisionId = state.revisionId;
+      const page = await businessApi.outline(revisionId, startPage);
+      if (revisionId !== state.revisionId) return;
+      state.outline = {
+        items: startPage === null ? page.items : [...(state.outline?.items || []), ...page.items],
+        nextPage: page.next_page,
+        scannedPages: (startPage === null ? 0 : state.outline?.scannedPages || 0) + page.scanned_pages,
+      };
+    });
+  }
+
+  function renderOutline() {
+    const box = section("解析标题目录");
+    box.append(element("p", "review-hint", "根据历史解析 Markdown 标题生成，机器结果未人工确认；仅支持页级定位，每次最多扫描 25 页。"));
+    if (!state.outline) {
+      box.append(button("读取标题目录", () => loadOutline(), state.busy));
+      return box;
+    }
+    if (!state.outline.items.length) box.append(element("p", "review-hint", "已扫描页面尚未识别标题。"));
+    for (const heading of state.outline.items) {
+      const row = element("div", "outline-item");
+      row.style.marginLeft = `${Math.min(heading.level - 1, 5) * 18}px`;
+      row.append(element("span", "", `${heading.title} · 第 ${heading.page_no} 页`));
+      row.append(button("读取所在页", () => readHistorical(heading.locator), state.busy));
+      box.append(row);
+    }
+    box.append(element("p", "review-hint", `已扫描 ${state.outline.scannedPages} 页${state.outline.nextPage === null ? " · 已到末页" : " · 后续仍有页面"}。`));
+    if (state.outline.nextPage !== null) {
+      box.append(button("继续扫描目录", () => loadOutline(state.outline.nextPage), state.busy));
+    }
+    return box;
   }
 
   function renderReading() {
@@ -517,7 +555,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
-    root.append(renderReading(), renderEvidence());
+    root.append(renderOutline(), renderReading(), renderEvidence());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;

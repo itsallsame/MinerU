@@ -68,6 +68,16 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             ))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, [run]))
             page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, [evidence]))
+            page.route("**/api/business/revisions/rev-1/outline", lambda route: fulfill(route, {
+                "revision_id": "rev-1", "scanned_pages": 1, "next_page": None,
+                "items": [{"level": 1, "title": "年度通知目录", "page_no": 1,
+                           "locator": evidence["locator"], "state": "historical_parse_unconfirmed"}],
+            }))
+            page.route("**/api/business/revisions/rev-1/content?*", lambda route: fulfill(route, {
+                "document_id": document["id"], "revision_id": "rev-1", "locator": evidence["locator"],
+                "tier": "basic", "content": "# 年度通知目录", "truncated": False, "next_locator": None,
+                "state": "historical_parse_unconfirmed",
+            }))
             page.route("**/api/business/evidence/evidence-1", lambda route: fulfill(route, {
                 **evidence, "navigation_status": navigation_status,
             }))
@@ -131,6 +141,10 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 notice.pdf，已解析").click()
             page.get_by_text("机器候选 · 未确认").wait_for()
+            page.get_by_role("button", name="读取标题目录").click()
+            page.get_by_text("年度通知目录 · 第 1 页").wait_for()
+            page.get_by_role("button", name="读取所在页").click()
+            page.get_by_text("# 年度通知目录").wait_for()
             confirm_button = page.get_by_role("button", name="确认并生成不可变成果版本")
             assert confirm_button.is_disabled()
             assert page.get_by_text("必填字段「标题」尚未作出复核决定").count() == 1

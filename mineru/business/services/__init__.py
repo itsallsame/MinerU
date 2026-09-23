@@ -3,7 +3,7 @@
 from .documents import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
 from .discovery import (
     BusinessDiscovery, BusinessSearchHit, BusinessSearchPage, DiscoveryError, HistoricalRead,
-    RevisionSearchHit, RevisionSearchPage,
+    RevisionSearchHit, RevisionSearchPage, RevisionHeading, RevisionOutlinePage,
 )
 from .evidence import EvidenceCaptureError, EvidenceInspection, EvidenceReader, EvidenceWriter, NavigationStatus
 from .extractions import FieldExtraction
@@ -20,6 +20,8 @@ __all__ = [
     "HistoricalRead",
     "RevisionSearchHit",
     "RevisionSearchPage",
+    "RevisionHeading",
+    "RevisionOutlinePage",
     "EvidenceCaptureError",
     "EvidenceInspection",
     "EvidenceReader",
