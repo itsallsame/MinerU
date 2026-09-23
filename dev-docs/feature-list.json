@@ -4489,7 +4489,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、延迟字段决定隔离、检索/审计续页重试及质量统计并发已验证；其他写操作切换场景仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md"
+      "notes": "服务断线/恢复、复核重试、延迟字段决定、检索结果冻结/块读取上下文隔离、检索/审计续页重试及质量统计并发已验证；其他写操作切换场景仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-search-action-context.md"
     },
     {
       "id": "FE-048",

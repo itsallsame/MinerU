@@ -487,3 +487,12 @@ Changes:
 Verification: Web 10 unit tests/8-asset offline build; Playwright keyboard focus, delayed-stat race/narrow-screen, outage recovery and review workflow passed against static bundle with mocked API. No target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md
 Next: Continue P4 keyboard traversal and write-race recovery; obtain real samples and Kylin/NVIDIA artifacts for P1/P6. Keep goal active.
+
+=== 2026-09-23 Session 47 (Search-result action context isolation) ===
+Status: In progress; FE-047 advanced but remains incomplete (54/241 passed)
+Changes:
+- Guarded delayed block-evidence freeze against a later document or search selection; accepted writes do not navigate the user back to stale content.
+- Guarded delayed search-result block reading against a later document switch.
+Verification: Web 10 unit tests/8-asset offline build; Playwright delayed search-action race, existing review-write race and search/audit recovery passed with simulated API. No target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-search-action-context.md
+Next: Cover remaining P4 write races and keyboard traversal; obtain real samples and Kylin/NVIDIA artifacts for P1/P6. Keep goal active.

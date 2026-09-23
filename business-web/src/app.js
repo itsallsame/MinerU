@@ -620,19 +620,31 @@ async function searchDocuments(event, retryQuery = null) {
             const read = element("button", "secondary-button", "打开并读取此块");
             read.type = "button";
             read.addEventListener("click", async () => {
+              const selectionRequest = state.selectionRequest + 1;
               await selectDocument(hit.document.id, hit.document, { revisionId: hit.revision_id });
+              if (selectionRequest !== state.selectionRequest || state.selectedId !== hit.document.id) return;
               await review.readHistorical(match.locator);
             });
             const freeze = element("button", "secondary-button", "冻结此块原文");
             freeze.type = "button";
             freeze.addEventListener("click", async () => {
               freeze.disabled = true;
+              const selectionRequest = state.selectionRequest;
+              const searchRequest = state.searchRequest;
               try {
                 const evidence = await businessApi.captureEvidence(hit.revision_id, match.locator);
+                if (selectionRequest !== state.selectionRequest || searchRequest !== state.searchRequest) {
+                  if (result.isConnected) result.append(element("p", "review-hint", "原文已冻结到原解析修订；当前文档保持不变。"));
+                  return;
+                }
                 await selectDocument(hit.document.id, hit.document, {
                   revisionId: hit.revision_id, evidenceId: evidence.id,
                 });
               } catch (error) {
+                if (selectionRequest !== state.selectionRequest || searchRequest !== state.searchRequest) {
+                  freeze.disabled = false;
+                  return;
+                }
                 result.append(element("p", "error-banner", `证据冻结失败：${error.message}`));
                 freeze.disabled = false;
               }
