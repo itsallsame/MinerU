@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -164,3 +165,64 @@ def test_upload_rejects_unknown_template_and_discards_source(tmp_path: Path) -> 
     assert rejected.status_code == 422
     assert list(shared.iterdir()) == []
     doclib.ensure_parse.assert_not_called()
+
+
+def test_open_document_library_capabilities_and_source(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    database_dir = tmp_path / "business"
+    database_dir.mkdir()
+    store = BusinessStore(database_dir / "business.sqlite3")
+    store.initialize()
+    uploads = ImmutableUploadStore(shared, max_bytes=1024)
+    doclib = Mock(spec=DoclibInterface)
+    workflow = DocumentWorkflow(
+        uploads=uploads, store=store, gateway=DoclibGateway(doclib, shared_root=shared),
+        doclib=doclib, producer_version="4.0.6",
+    )
+    client = TestClient(create_app(
+        workflow=workflow, store=store,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib), uploads=uploads,
+    ))
+    capabilities = client.get("/api/business/capabilities")
+    assert capabilities.status_code == 200
+    assert capabilities.json()["max_upload_bytes"] == 1024
+    assert "pdf" in capabilities.json()["tiered_extensions"]
+    assert "docx" in capabilities.json()["flash_only_extensions"]
+
+    html = uploads.store(io.BytesIO(b"<script>alert(1)</script>"), filename="untrusted.html")
+    pdf = uploads.store(io.BytesIO(b"%PDF-1.4\nmock"), filename="report.pdf")
+    first, first_task = store.create_document_with_task(html, original_name="untrusted.html", requested_tier=None)
+    second, second_task = store.create_document_with_task(pdf, original_name="report.pdf", requested_tier="basic")
+    page = client.get("/api/business/documents?limit=1")
+    assert page.status_code == 200
+    assert page.json()["total"] == 2
+    assert page.json()["items"][0]["document"]["id"] == second.id
+    assert page.json()["items"][0]["task"]["id"] == second_task.id
+    assert "storage_key" not in page.text
+    next_page = client.get("/api/business/documents?limit=1&offset=1")
+    assert next_page.json()["items"][0]["document"]["id"] == first.id
+    assert client.get("/api/business/documents?template_code=unknown").json()["total"] == 0
+    assert client.get("/api/business/documents?status=done").json()["total"] == 0
+    store.mark_task_failed(first_task.id, error_code="parse_unavailable")
+    failed = client.get("/api/business/documents?status=failed")
+    assert failed.json()["total"] == 1
+    assert failed.json()["items"][0]["document"]["id"] == first.id
+    assert client.get("/api/business/documents?limit=0").status_code == 422
+    assert client.get("/api/business/documents?offset=-1").status_code == 422
+    assert client.get("/api/business/documents?status=invalid").status_code == 422
+
+    html_source = client.get(f"/api/business/documents/{first.id}/source")
+    assert html_source.status_code == 200
+    assert html_source.content == b"<script>alert(1)</script>"
+    assert html_source.headers["content-disposition"].startswith("attachment;")
+    assert html_source.headers["x-content-type-options"] == "nosniff"
+    pdf_source = client.get(f"/api/business/documents/{second.id}/source")
+    assert pdf_source.status_code == 200
+    assert pdf_source.headers["content-disposition"].startswith("inline;")
+    assert client.get("/api/business/documents/unknown/source").status_code == 404
+    assert first_task.document_id == first.id
+    html.path.chmod(0o644)
+    html.path.write_bytes(b"changed")
+    assert client.get(f"/api/business/documents/{first.id}/source").status_code == 409

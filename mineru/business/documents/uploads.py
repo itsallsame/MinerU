@@ -44,6 +44,10 @@ class ImmutableUploadStore:
         self._root = resolved_root
         self._max_bytes = max_bytes
 
+    @property
+    def max_bytes(self) -> int:
+        return self._max_bytes
+
     def store(self, source: BinaryIO, *, filename: str) -> StoredUpload:
         """Copy a stream and publish it only after its bytes are synced.
 

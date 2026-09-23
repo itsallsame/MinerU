@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
+from ...filetypes import (
+    FLASH_ONLY_PARSE_EXTENSIONS,
+    IMAGE_EXTENSIONS,
+    MIME_TYPE_BY_EXTENSION,
+    PARSEABLE_EXTENSIONS,
+    TIERED_PARSE_EXTENSIONS,
+)
 from ...types import Tier
-from ..documents import UploadError
+from ..documents import ImmutableUploadStore, UploadError
 from ..domain import (
     AuditEvent,
     BusinessDocument,
@@ -28,6 +38,7 @@ from ..domain import (
     ReviewSource,
     TemplateField,
     TemplateVersion,
+    TaskStatus,
 )
 from ..services import (
     DocumentWorkflow,
@@ -293,6 +304,26 @@ class SubmissionView(BaseModel):
     task: TaskView
 
 
+class DocumentListItemView(BaseModel):
+    document: DocumentView
+    task: TaskView | None
+
+
+class DocumentListView(BaseModel):
+    items: list[DocumentListItemView]
+    total: int
+    limit: int
+    offset: int
+
+
+class CapabilitiesView(BaseModel):
+    max_upload_bytes: int
+    tiered_extensions: tuple[str, ...]
+    flash_only_extensions: tuple[str, ...]
+    parseable_extensions: tuple[str, ...]
+    tiers: tuple[Tier, ...]
+
+
 class RevisionView(BaseModel):
     id: str
     document_id: str
@@ -348,6 +379,7 @@ def create_app(
     *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader,
     evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
     extraction_worker: ExtractionWorker | None = None,
+    uploads: ImmutableUploadStore | None = None,
 ) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     @asynccontextmanager
@@ -361,6 +393,18 @@ def create_app(
                 extraction_worker.stop()
 
     app = FastAPI(title="MinerU Business Documents", version="0.1.0", lifespan=lifespan)
+
+    @app.get("/api/business/capabilities", response_model=CapabilitiesView)
+    def get_capabilities() -> CapabilitiesView:
+        if uploads is None:
+            raise HTTPException(status_code=503, detail="Upload store is not configured")
+        return CapabilitiesView(
+            max_upload_bytes=uploads.max_bytes,
+            tiered_extensions=tuple(sorted(TIERED_PARSE_EXTENSIONS)),
+            flash_only_extensions=tuple(sorted(FLASH_ONLY_PARSE_EXTENSIONS)),
+            parseable_extensions=tuple(sorted(PARSEABLE_EXTENSIONS)),
+            tiers=("flash", "basic", "standard", "advanced"),
+        )
 
     @app.post(
         "/api/business/extractions/{run_id}/fields/{field_code}/decisions",
@@ -512,12 +556,55 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return SubmissionView(document=DocumentView.from_record(result.document), task=TaskView.from_record(result.task))
 
+    @app.get("/api/business/documents", response_model=DocumentListView)
+    def list_documents(
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        template_code: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> DocumentListView:
+        items, total = store.list_documents(limit=limit, offset=offset, template_code=template_code, status=status)
+        return DocumentListView(
+            items=[DocumentListItemView(
+                document=DocumentView.from_record(document),
+                task=TaskView.from_record(task) if task is not None else None,
+            ) for document, task in items],
+            total=total, limit=limit, offset=offset,
+        )
+
     @app.get("/api/business/documents/{document_id}", response_model=DocumentView)
     def get_document(document_id: str) -> DocumentView:
         document = store.get_document(document_id)
         if document is None:
             raise HTTPException(status_code=404, detail="Document not found")
         return DocumentView.from_record(document)
+
+    @app.get("/api/business/documents/{document_id}/source", response_class=FileResponse)
+    def get_document_source(document_id: str) -> FileResponse:
+        document = store.get_document(document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if uploads is None:
+            raise HTTPException(status_code=503, detail="Upload store is not configured")
+        try:
+            path = uploads.source_path(document.storage_key)
+        except UploadError as exc:
+            raise HTTPException(status_code=409, detail="Document source is unavailable") from exc
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                size += len(chunk)
+                digest.update(chunk)
+        if size != document.size or digest.hexdigest() != document.sha256:
+            raise HTTPException(status_code=409, detail="Document source no longer matches its recorded identity")
+        extension = Path(document.storage_key).suffix.removeprefix(".")
+        disposition = "inline" if extension == "pdf" or extension in IMAGE_EXTENSIONS else "attachment"
+        return FileResponse(
+            path, media_type=MIME_TYPE_BY_EXTENSION.get(extension, "application/octet-stream"),
+            filename=document.original_name, content_disposition_type=disposition,
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox"},
+        )
 
     @app.get("/api/business/documents/{document_id}/revisions", response_model=list[RevisionView])
     def list_revisions(document_id: str) -> list[RevisionView]:
@@ -574,6 +661,9 @@ __all__ = [
     "ConfirmationRequest",
     "ConfirmedFieldView",
     "ConfirmedResultView",
+    "CapabilitiesView",
+    "DocumentListItemView",
+    "DocumentListView",
     "DocumentView",
     "EvidenceCaptureRequest",
     "EvidenceInspectionView",

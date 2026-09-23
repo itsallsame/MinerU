@@ -207,3 +207,13 @@ Next: Business Web and own Skill against the unified API; richer extraction, rea
 2. Complete remaining P1 gates: source-based Linux amd64 offline builds, external model mount, no-network runtime checks, dual-image release manifest and relevant tests.
 3. Run project-appropriate tests, document actual results and limitations; review changes and report phase completion.
 4. Stop at phase boundary for user confirmation. Never mark target hardware acceptance passed from Mac tests.
+
+=== 2026-09-23 Session 18 (Business Web read contracts) ===
+Status: In progress; P4 frontend and P1/P6 target gates remain open
+Changes:
+- Added persistent paginated business document listing with latest task and optional template/status filters.
+- Added server-derived upload/format/tier capabilities and an ID-only source endpoint with hash check; HTML/Office download only, PDF/image inline.
+- Kept every endpoint open, with no user/role/token/permission model.
+Verification: Ruff passed; full business suite 85 passed/2 dependency warnings on Mac when local Doclib Unix/TCP sockets were permitted. A restricted run failed solely on socket.bind permissions; targeted API/store tests passed 11/11 in the restricted sandbox.
+Evidence: dev-docs/evidence/2026-09-23-p4-web-read-contracts.md
+Next: Build and browser-test the business Web against these real APIs, then own Skill. No Mac result proves Kylin offline/GPU acceptance.

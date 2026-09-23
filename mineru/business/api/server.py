@@ -82,6 +82,7 @@ def build_app(config: ServerConfig) -> FastAPI:
         evidence_writer=evidence_writer,
         field_extraction=extraction,
         extraction_worker=ExtractionWorker(extraction),
+        uploads=uploads,
     )
 
 

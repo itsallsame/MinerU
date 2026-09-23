@@ -34,6 +34,7 @@ from ..domain import (
     ReviewSource,
     TemplateField,
     TemplateVersion,
+    TaskStatus,
     validate_template,
 )
 
@@ -885,6 +886,47 @@ class BusinessStore:
         with closing(self._connect()) as database:
             row = database.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
         return BusinessDocument(**dict(row)) if row is not None else None
+
+    def list_documents(
+        self, *, limit: int = 20, offset: int = 0, template_code: str | None = None,
+        status: TaskStatus | None = None,
+    ) -> tuple[tuple[tuple[BusinessDocument, IngestTask | None], ...], int]:
+        """Page business documents with their latest ingest task, without user scoping."""
+        if not 1 <= limit <= 100 or offset < 0:
+            raise BusinessStoreError("Document page is out of range")
+        filters: list[str] = []
+        parameters: list[str] = []
+        if template_code is not None:
+            filters.append("d.template_code=?")
+            parameters.append(template_code)
+        if status is not None:
+            filters.append("t.status=?")
+            parameters.append(status)
+        source = (
+            " FROM documents d LEFT JOIN tasks t ON t.id=("
+            "SELECT newest.id FROM tasks newest WHERE newest.document_id=d.id "
+            "ORDER BY newest.created_at_ms DESC, newest.rowid DESC LIMIT 1)"
+        )
+        where = " WHERE " + " AND ".join(filters) if filters else ""
+        with closing(self._connect()) as database:
+            database.execute("BEGIN")
+            total = int(database.execute("SELECT COUNT(*)" + source + where, parameters).fetchone()[0])
+            rows = database.execute(
+                "SELECT d.*, t.id AS task_id" + source + where + " ORDER BY d.created_at_ms DESC, d.rowid DESC "
+                "LIMIT ? OFFSET ?", (*parameters, limit, offset),
+            ).fetchall()
+            items = []
+            for row in rows:
+                document = BusinessDocument(
+                    id=row["id"], original_name=row["original_name"], storage_key=row["storage_key"],
+                    sha256=row["sha256"], size=row["size"], created_at_ms=row["created_at_ms"],
+                    template_code=row["template_code"], template_version=row["template_version"],
+                )
+                task_row = None
+                if row["task_id"]:
+                    task_row = database.execute("SELECT * FROM tasks WHERE id=?", (row["task_id"],)).fetchone()
+                items.append((document, self._task_from_row(task_row) if task_row is not None else None))
+        return tuple(items), total
 
     def get_task(self, task_id: str) -> IngestTask | None:
         with closing(self._connect()) as database:
