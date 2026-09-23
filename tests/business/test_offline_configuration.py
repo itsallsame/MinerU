@@ -91,7 +91,16 @@ def test_preflight_rejects_remote_configuration(tmp_path: Path, monkeypatch: pyt
 def test_worker_build_uses_local_source_only() -> None:
     dockerfile = (ROOT / "docker" / "worker" / "Dockerfile").read_text()
     assert "--no-index" in dockerfile
-    assert "'/opt/mineru[full]'" in dockerfile
+    assert "--require-hashes -r /opt/wheelhouse/requirements.lock" in dockerfile
+    assert "--no-deps --no-build-isolation /opt/mineru" in dockerfile
     assert "models download" not in dockerfile
     assert "COPY mineru/" in dockerfile
     assert "COPY models/" not in dockerfile
+
+
+def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:
+    script = (ROOT / "scripts" / "prepare-worker-wheelhouse.sh").read_text()
+    assert "MINERU_BASE_CONSTRAINTS" in script
+    assert "for dependency in torch torchvision vllm" in script
+    assert "--generate-hashes" in script
+    assert "--require-hashes --only-binary=:all:" in script

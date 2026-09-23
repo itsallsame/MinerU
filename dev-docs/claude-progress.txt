@@ -39,6 +39,15 @@ Limits: Docker daemon unavailable; full MinerU dependencies and target model/whe
 Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
 Next: Complete P1 package and target build checks; leave all INF features false until individually verified.
 
+=== 2026-09-23 Session 3 (P1 dependency and test validation) ===
+Status: In progress; phase not complete
+Changes:
+- Added hash-locked Linux wheelhouse preparation path constrained to base Torch/Torchvision/vLLM versions.
+- Added release manifest generator for source/image/wheelhouse/model identities and rollback linkage.
+Verification: Mac development environment installed; 31 targeted tests pass; full upstream unit suite 2796 passed, 4 skipped with local loopback permission.
+Limits: no Linux amd64 wheelhouse, model bundle or Kylin/NVIDIA runtime build yet.
+Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

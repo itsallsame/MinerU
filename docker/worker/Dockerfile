@@ -3,8 +3,11 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_REVISION
+ARG BASE_IMAGE_ID
+RUN test -n "${SOURCE_REVISION}" && test -n "${BASE_IMAGE_ID}"
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
 LABEL org.opencontainers.image.source="https://github.com/itsallsame/MinerU"
+LABEL org.opencontainers.image.base.id="${BASE_IMAGE_ID}"
 
 WORKDIR /opt/mineru
 COPY wheelhouse/ /opt/wheelhouse/
@@ -14,8 +17,11 @@ COPY scripts/offline_package.py /opt/mineru/scripts/offline_package.py
 COPY docker/worker/entrypoint.sh /opt/mineru/entrypoint.sh
 RUN chmod 0755 /opt/mineru/entrypoint.sh
 
-# No index access, no build-time model download, and the package comes from this fork.
-RUN python3 -m pip install --no-index --find-links=/opt/wheelhouse '/opt/mineru[full]' \
+# Install the exact offline dependency closure before the fork source package.
+# The wheelhouse and lock are produced together on a matching Linux amd64 Python.
+RUN python3 -m pip install --break-system-packages --no-index --find-links=/opt/wheelhouse \
+        --require-hashes -r /opt/wheelhouse/requirements.lock \
+    && python3 -m pip install --break-system-packages --no-index --no-deps --no-build-isolation /opt/mineru \
     && rm -rf /opt/wheelhouse
 
 ENV MINERU_HOME=/var/lib/mineru \
