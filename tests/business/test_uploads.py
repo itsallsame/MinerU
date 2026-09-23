@@ -91,3 +91,18 @@ def test_generated_name_collision_never_removes_existing_file(tmp_path: Path, mo
         ImmutableUploadStore(root, max_bytes=100).store(io.BytesIO(b"new"), filename="report.html")
     assert existing.read_bytes() == b"original"
     assert sorted(root.iterdir()) == [existing]
+
+
+def test_only_matching_unregistered_upload_can_be_rolled_back(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir()
+    store = ImmutableUploadStore(root, max_bytes=100)
+    uploaded = store.store(io.BytesIO(b"<h1>Accepted</h1>"), filename="report.html")
+    uploaded.path.chmod(0o600)
+    uploaded.path.write_bytes(b"changed")
+    with pytest.raises(UploadError, match="changed"):
+        store.discard_unregistered(uploaded)
+    assert uploaded.path.exists()
+    uploaded.path.write_bytes(b"<h1>Accepted</h1>")
+    store.discard_unregistered(uploaded)
+    assert not uploaded.path.exists()

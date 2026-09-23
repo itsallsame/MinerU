@@ -1624,8 +1624,8 @@
       "phase": "P2",
       "category": "doclib",
       "priority": "P0",
-      "name": "Doclib接口权限代理验证",
-      "description": "完成并验证：Doclib接口权限代理验证",
+      "name": "Doclib内部接口网络隔离验证",
+      "description": "完成并验证：Doclib内部接口网络隔离验证",
       "dependencies": [
         "INF-001"
       ],
@@ -1634,7 +1634,7 @@
         "tests/business/test_doclib_contract.py"
       ],
       "steps": [
-        "实现：Doclib接口权限代理验证",
+        "实现：Doclib内部接口网络隔离验证",
         "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
       ],
       "passes": false,
@@ -3137,8 +3137,8 @@
       "phase": "P3",
       "category": "backend",
       "priority": "P1",
-      "name": "按权限读取原文证据",
-      "description": "完成并验证：按权限读取原文证据",
+      "name": "统一业务API读取原文证据",
+      "description": "完成并验证：统一业务API读取原文证据",
       "dependencies": [
         "DOC-001"
       ],
@@ -3150,7 +3150,7 @@
         "tests/business"
       ],
       "steps": [
-        "实现：按权限读取原文证据",
+        "实现：统一业务API读取原文证据",
         "验证：.venv/bin/python -m pytest tests/business"
       ],
       "passes": false,
@@ -3162,8 +3162,8 @@
       "phase": "P3",
       "category": "backend",
       "priority": "P1",
-      "name": "用户身份验证",
-      "description": "完成并验证：用户身份验证",
+      "name": "开放业务API无登录验证",
+      "description": "完成并验证：开放业务API无登录验证",
       "dependencies": [
         "DOC-001"
       ],
@@ -3175,7 +3175,7 @@
         "tests/business"
       ],
       "steps": [
-        "实现：用户身份验证",
+        "实现：开放业务API无登录验证",
         "验证：.venv/bin/python -m pytest tests/business"
       ],
       "passes": false,
@@ -3187,8 +3187,8 @@
       "phase": "P3",
       "category": "backend",
       "priority": "P1",
-      "name": "角色与文档授权",
-      "description": "完成并验证：角色与文档授权",
+      "name": "业务API与Doclib接口边界验证",
+      "description": "完成并验证：业务API与Doclib接口边界验证",
       "dependencies": [
         "DOC-001"
       ],
@@ -3200,7 +3200,7 @@
         "tests/business"
       ],
       "steps": [
-        "实现：角色与文档授权",
+        "实现：业务API与Doclib接口边界验证",
         "验证：.venv/bin/python -m pytest tests/business"
       ],
       "passes": false,
@@ -3212,8 +3212,8 @@
       "phase": "P3",
       "category": "backend",
       "priority": "P1",
-      "name": "Skill令牌权限范围",
-      "description": "完成并验证：Skill令牌权限范围",
+      "name": "前端与Skill统一开放API契约",
+      "description": "完成并验证：前端与Skill统一开放API契约",
       "dependencies": [
         "DOC-001"
       ],
@@ -3225,7 +3225,7 @@
         "tests/business"
       ],
       "steps": [
-        "实现：Skill令牌权限范围",
+        "实现：前端与Skill统一开放API契约",
         "验证：.venv/bin/python -m pytest tests/business"
       ],
       "passes": false,
@@ -3484,8 +3484,8 @@
       "phase": "P4",
       "category": "frontend",
       "priority": "P1",
-      "name": "登录状态与权限提示",
-      "description": "完成并验证：登录状态与权限提示",
+      "name": "开放系统入口与服务状态提示",
+      "description": "完成并验证：开放系统入口与服务状态提示",
       "dependencies": [
         "BE-001"
       ],
@@ -3494,7 +3494,7 @@
         "business-web/tests"
       ],
       "steps": [
-        "实现：登录状态与权限提示",
+        "实现：开放系统入口与服务状态提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
       "passes": false,
@@ -4496,8 +4496,8 @@
       "phase": "P4",
       "category": "frontend",
       "priority": "P1",
-      "name": "未授权资源反馈",
-      "description": "完成并验证：未授权资源反馈",
+      "name": "服务不可用与资源缺失反馈",
+      "description": "完成并验证：服务不可用与资源缺失反馈",
       "dependencies": [
         "BE-001"
       ],
@@ -4506,7 +4506,7 @@
         "business-web/tests"
       ],
       "steps": [
-        "实现：未授权资源反馈",
+        "实现：服务不可用与资源缺失反馈",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
       "passes": false,
@@ -4628,8 +4628,8 @@
       "phase": "P5",
       "category": "skill",
       "priority": "P1",
-      "name": "Skill令牌最小权限说明",
-      "description": "完成并验证：Skill令牌最小权限说明",
+      "name": "Skill开放API地址与隔离边界说明",
+      "description": "完成并验证：Skill开放API地址与隔离边界说明",
       "dependencies": [
         "FE-001"
       ],
@@ -4638,7 +4638,7 @@
         "tests/business/test_skill_contract.py"
       ],
       "steps": [
-        "实现：Skill令牌最小权限说明",
+        "实现：Skill开放API地址与隔离边界说明",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
       "passes": false,
@@ -4738,8 +4738,8 @@
       "phase": "P5",
       "category": "skill",
       "priority": "P1",
-      "name": "Skill授权文档搜索命令",
-      "description": "完成并验证：Skill授权文档搜索命令",
+      "name": "Skill文档搜索命令",
+      "description": "完成并验证：Skill文档搜索命令",
       "dependencies": [
         "FE-001"
       ],
@@ -4748,7 +4748,7 @@
         "tests/business/test_skill_contract.py"
       ],
       "steps": [
-        "实现：Skill授权文档搜索命令",
+        "实现：Skill文档搜索命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
       "passes": false,
@@ -4914,8 +4914,8 @@
       "phase": "P5",
       "category": "skill",
       "priority": "P1",
-      "name": "Skill写操作授权检查",
-      "description": "完成并验证：Skill写操作授权检查",
+      "name": "Skill写操作流程确认检查",
+      "description": "完成并验证：Skill写操作流程确认检查",
       "dependencies": [
         "FE-001"
       ],
@@ -4924,7 +4924,7 @@
         "tests/business/test_skill_contract.py"
       ],
       "steps": [
-        "实现：Skill写操作授权检查",
+        "实现：Skill写操作流程确认检查",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
       "passes": false,

@@ -15,8 +15,9 @@ from pathlib import Path
 
 from ...doclib.locators import parse_content_cursor
 from ...doclib.types import ParseInfo
+from ...types import Tier
 from ..documents.uploads import StoredUpload
-from ..domain import BusinessDocument, EvidenceSnapshot, ParseRevision
+from ..domain import BusinessDocument, EvidenceSnapshot, IngestTask, ParseRevision
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SCHEMA_VERSION = 1
@@ -67,7 +68,7 @@ class BusinessStore:
                         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                     )
                 }
-                if tables != {"documents", "revisions", "evidence"}:
+                if tables != {"documents", "tasks", "revisions", "evidence"}:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
             if version != 0:
@@ -84,14 +85,25 @@ class BusinessStore:
                     BEGIN IMMEDIATE;
                     CREATE TABLE documents (
                         id TEXT PRIMARY KEY,
-                        owner_id TEXT NOT NULL,
                         original_name TEXT NOT NULL,
                         storage_key TEXT NOT NULL UNIQUE,
                         sha256 TEXT NOT NULL,
                         size INTEGER NOT NULL CHECK(size > 0),
                         created_at_ms INTEGER NOT NULL
                     );
-                    CREATE INDEX documents_owner_created ON documents(owner_id, created_at_ms);
+                    CREATE INDEX documents_created ON documents(created_at_ms);
+                    CREATE TABLE tasks (
+                        id TEXT PRIMARY KEY,
+                        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE RESTRICT,
+                        requested_tier TEXT CHECK(requested_tier IN ('flash', 'basic', 'standard', 'advanced')),
+                        actual_tier TEXT CHECK(actual_tier IN ('flash', 'basic', 'standard', 'advanced')),
+                        status TEXT NOT NULL CHECK(status IN ('uploaded', 'submitted', 'done', 'failed')),
+                        parse_ids_json TEXT NOT NULL,
+                        error_code TEXT,
+                        created_at_ms INTEGER NOT NULL,
+                        updated_at_ms INTEGER NOT NULL
+                    );
+                    CREATE INDEX tasks_document_created ON tasks(document_id, created_at_ms);
                     CREATE TABLE revisions (
                         id TEXT PRIMARY KEY,
                         document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE RESTRICT,
@@ -122,48 +134,131 @@ class BusinessStore:
                     """
                 )
 
-    def create_document(self, upload: StoredUpload, *, original_name: str, owner_id: str) -> BusinessDocument:
-        if not owner_id.strip() or not original_name.strip():
-            raise BusinessStoreError("Document owner and original name are required")
+    def create_document(self, upload: StoredUpload, *, original_name: str) -> BusinessDocument:
+        document = self._new_document(upload, original_name=original_name)
+        with closing(self._connect()) as database, database:
+            self._insert_document(database, document)
+        return document
+
+    def create_document_with_task(
+        self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None
+    ) -> tuple[BusinessDocument, IngestTask]:
+        """Persist a document and recoverable initial task in one transaction."""
+        document = self._new_document(upload, original_name=original_name)
+        now = _now_ms()
+        task = IngestTask(
+            id=uuid.uuid4().hex,
+            document_id=document.id,
+            requested_tier=requested_tier,
+            actual_tier=None,
+            status="uploaded",
+            parse_ids=(),
+            error_code=None,
+            created_at_ms=now,
+            updated_at_ms=now,
+        )
+        with closing(self._connect()) as database, database:
+            self._insert_document(database, document)
+            database.execute(
+                "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (task.id, task.document_id, task.requested_tier, task.actual_tier, task.status, "[]", None, now, now),
+            )
+        return document, task
+
+    @staticmethod
+    def _new_document(upload: StoredUpload, *, original_name: str) -> BusinessDocument:
+        if not original_name.strip():
+            raise BusinessStoreError("Original document name is required")
         if not _SHA256_RE.fullmatch(upload.sha256) or upload.size < 1:
             raise BusinessStoreError("Stored upload identity is invalid")
         storage_key = upload.path.name
         if storage_key in ("", ".", "..") or upload.path.parent == upload.path:
             raise BusinessStoreError("Stored upload key is invalid")
-        document = BusinessDocument(
+        return BusinessDocument(
             id=uuid.uuid4().hex,
-            owner_id=owner_id,
             original_name=original_name,
             storage_key=storage_key,
             sha256=upload.sha256,
             size=upload.size,
             created_at_ms=_now_ms(),
         )
-        with closing(self._connect()) as database, database:
-            database.execute(
-                "INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    document.id,
-                    document.owner_id,
-                    document.original_name,
-                    document.storage_key,
-                    document.sha256,
-                    document.size,
-                    document.created_at_ms,
-                ),
-            )
-        return document
 
-    def get_document(self, document_id: str, *, owner_id: str) -> BusinessDocument | None:
+    @staticmethod
+    def _insert_document(database: sqlite3.Connection, document: BusinessDocument) -> None:
+        database.execute(
+            "INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                document.id,
+                document.original_name,
+                document.storage_key,
+                document.sha256,
+                document.size,
+                document.created_at_ms,
+            ),
+        )
+
+    def get_document(self, document_id: str) -> BusinessDocument | None:
         with closing(self._connect()) as database:
-            row = database.execute("SELECT * FROM documents WHERE id=? AND owner_id=?", (document_id, owner_id)).fetchone()
+            row = database.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
         return BusinessDocument(**dict(row)) if row is not None else None
+
+    def get_task(self, task_id: str) -> IngestTask | None:
+        with closing(self._connect()) as database:
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        return self._task_from_row(row) if row is not None else None
+
+    def mark_task_submitted(self, task_id: str, *, actual_tier: Tier, parse_ids: tuple[int, ...]) -> IngestTask:
+        if not parse_ids or any(parse_id < 1 for parse_id in parse_ids):
+            raise BusinessStoreError("Doclib submission must expose parse IDs")
+        with closing(self._connect()) as database, database:
+            cursor = database.execute(
+                "UPDATE tasks SET status='submitted', actual_tier=?, parse_ids_json=?, error_code=NULL, updated_at_ms=? "
+                "WHERE id=? AND status IN ('uploaded', 'failed')",
+                (actual_tier, json.dumps(parse_ids), _now_ms(), task_id),
+            )
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Task cannot be submitted from its current state")
+        task = self.get_task(task_id)
+        assert task is not None
+        return task
+
+    def mark_task_failed(self, task_id: str, *, error_code: str) -> IngestTask:
+        if not error_code.strip():
+            raise BusinessStoreError("Failure code is required")
+        with closing(self._connect()) as database, database:
+            cursor = database.execute(
+                "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
+                "WHERE id=? AND status IN ('uploaded', 'submitted', 'failed')",
+                (error_code, _now_ms(), task_id),
+            )
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Task cannot fail from its current state")
+        task = self.get_task(task_id)
+        assert task is not None
+        return task
+
+    def mark_task_done(self, task_id: str) -> IngestTask:
+        with closing(self._connect()) as database, database:
+            cursor = database.execute(
+                "UPDATE tasks SET status='done', updated_at_ms=? WHERE id=? AND status='submitted'",
+                (_now_ms(), task_id),
+            )
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Task cannot complete from its current state")
+        task = self.get_task(task_id)
+        assert task is not None
+        return task
+
+    @staticmethod
+    def _task_from_row(row: sqlite3.Row) -> IngestTask:
+        payload = dict(row)
+        payload["parse_ids"] = tuple(json.loads(payload.pop("parse_ids_json")))
+        return IngestTask(**payload)
 
     def add_completed_revision(
         self,
         document_id: str,
         *,
-        owner_id: str,
         parse: ParseInfo,
         producer_version: str,
         model_ref: str | None = None,
@@ -174,9 +269,7 @@ class BusinessStore:
             raise BusinessStoreError("Producer version is required")
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
-            document = database.execute(
-                "SELECT sha256 FROM documents WHERE id=? AND owner_id=?", (document_id, owner_id)
-            ).fetchone()
+            document = database.execute("SELECT sha256 FROM documents WHERE id=?", (document_id,)).fetchone()
             if document is None:
                 raise BusinessStoreError("Business document not found")
             if parse.sha256 != document["sha256"]:
@@ -222,19 +315,15 @@ class BusinessStore:
             )
         return revision
 
-    def get_revision(self, revision_id: str, *, owner_id: str) -> ParseRevision | None:
+    def get_revision(self, revision_id: str) -> ParseRevision | None:
         with closing(self._connect()) as database:
-            row = database.execute(
-                "SELECT r.* FROM revisions r JOIN documents d ON d.id=r.document_id WHERE r.id=? AND d.owner_id=?",
-                (revision_id, owner_id),
-            ).fetchone()
+            row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
         return ParseRevision(**dict(row)) if row is not None else None
 
     def capture_evidence(
         self,
         revision_id: str,
         *,
-        owner_id: str,
         locator: str,
         snippet: str,
         bbox: tuple[float, float, float, float] | None = None,
@@ -247,10 +336,7 @@ class BusinessStore:
         ):
             raise BusinessStoreError("Evidence bbox must be a finite ordered rectangle")
         with closing(self._connect()) as database, database:
-            row = database.execute(
-                "SELECT r.*, d.owner_id FROM revisions r JOIN documents d ON d.id=r.document_id WHERE r.id=? AND d.owner_id=?",
-                (revision_id, owner_id),
-            ).fetchone()
+            row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
             if row is None:
                 raise BusinessStoreError("Parse revision not found")
             if cursor.short_id.lower() != row["short_id"].lower() or cursor.tier != row["tier"]:
@@ -283,13 +369,11 @@ class BusinessStore:
             )
         return evidence
 
-    def get_evidence(self, evidence_id: str, *, owner_id: str) -> EvidenceSnapshot | None:
+    def get_evidence(self, evidence_id: str) -> EvidenceSnapshot | None:
         with closing(self._connect()) as database:
             row = database.execute(
-                "SELECT e.*, r.document_id FROM evidence e "
-                "JOIN revisions r ON r.id=e.revision_id JOIN documents d ON d.id=r.document_id "
-                "WHERE e.id=? AND d.owner_id=?",
-                (evidence_id, owner_id),
+                "SELECT e.*, r.document_id FROM evidence e JOIN revisions r ON r.id=e.revision_id WHERE e.id=?",
+                (evidence_id,),
             ).fetchone()
         if row is None:
             return None

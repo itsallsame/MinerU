@@ -3,19 +3,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from ...types import Tier
+
+TaskStatus = Literal["uploaded", "submitted", "done", "failed"]
 
 
 @dataclass(frozen=True)
 class BusinessDocument:
     id: str
-    owner_id: str
     original_name: str
     storage_key: str
     sha256: str
     size: int
     created_at_ms: int
+
+
+@dataclass(frozen=True)
+class IngestTask:
+    id: str
+    document_id: str
+    requested_tier: Tier | None
+    actual_tier: Tier | None
+    status: TaskStatus
+    parse_ids: tuple[int, ...]
+    error_code: str | None
+    created_at_ms: int
+    updated_at_ms: int
 
 
 @dataclass(frozen=True)
@@ -45,4 +60,4 @@ class EvidenceSnapshot:
     created_at_ms: int
 
 
-__all__ = ["BusinessDocument", "EvidenceSnapshot", "ParseRevision"]
+__all__ = ["BusinessDocument", "EvidenceSnapshot", "IngestTask", "ParseRevision", "TaskStatus"]

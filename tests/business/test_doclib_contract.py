@@ -154,19 +154,19 @@ def test_business_evidence_references_real_doclib_parse(live_doclib: tuple[Docli
     database_dir.mkdir()
     business = BusinessStore(database_dir / "business.sqlite3")
     business.initialize()
-    document = business.create_document(stored, original_name="report.html", owner_id="alice")
+    document = business.create_document(stored, original_name="report.html")
     submitted = DoclibGateway(client, shared_root=root).submit(stored.path)
     _wait_for_parse(client, list(submitted.parse_ids))
     parse = client.get_parse(submitted.parse_ids[0])
-    revision = business.add_completed_revision(document.id, owner_id="alice", parse=parse, producer_version="4.0.6")
+    revision = business.add_completed_revision(document.id, parse=parse, producer_version="4.0.6")
     content = client.get_doc_content(submitted.sha256, tier="flash")
     locator = content.content_ranges[0].start
     snippet = client.read_content(locator).content
-    evidence = business.capture_evidence(revision.id, owner_id="alice", locator=locator, snippet=snippet)
+    evidence = business.capture_evidence(revision.id, locator=locator, snippet=snippet)
 
     assert evidence.document_id == document.id
     assert evidence.snippet == snippet
-    assert BusinessStore(database_dir / "business.sqlite3").get_evidence(evidence.id, owner_id="alice") == evidence
+    assert BusinessStore(database_dir / "business.sqlite3").get_evidence(evidence.id) == evidence
 
 
 def test_doclib_content_identity_is_hash_based(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
@@ -190,6 +190,21 @@ def test_doclib_content_identity_is_hash_based(live_doclib: tuple[DoclibClient, 
     assert first_doc.sha256 == duplicate_doc.sha256
     assert first_doc.short_id == duplicate_doc.short_id
     assert first_doc.sha256 != different_doc.sha256
+
+
+def test_same_content_reuses_trackable_parse_id(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, _home = live_doclib
+    first = root / "first.html"
+    second = root / "second.html"
+    first.write_text("<h1>Project Lantern duplicate parse</h1>")
+    second.write_bytes(first.read_bytes())
+    gateway = DoclibGateway(client, shared_root=root)
+    submitted = gateway.submit(first)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    reused = gateway.submit(second)
+    assert reused.sha256 == submitted.sha256
+    assert reused.parse_ids
+    assert all(client.get_parse(parse_id).status == "done" for parse_id in reused.parse_ids)
 
 
 def test_text_pdf_flash_parse_and_locator(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

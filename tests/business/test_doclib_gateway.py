@@ -9,7 +9,8 @@ from unittest.mock import Mock
 import pytest
 
 from mineru.business.documents import DoclibGateway, DocumentIntegrityError, DocumentPathError
-from mineru.doclib import DoclibInterface, ParseResponse
+from mineru.doclib import DoclibInterface, ParseInfo, ParseResponse
+from mineru.doclib.types import ListParsesResponse
 
 
 def _response(path: Path, *, tier: str = "flash") -> ParseResponse:
@@ -40,6 +41,48 @@ def test_gateway_submits_shared_html_as_local_flash(tmp_path: Path) -> None:
     assert request.path == str(source)
     assert request.tier == "flash"
     assert request.remote is False
+
+
+def test_gateway_keeps_reused_parse_ids(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir()
+    source = root / "report.html"
+    source.write_text("<h1>Already parsed</h1>")
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.return_value = _response(source).model_copy(
+        update={"created_parse_ids": [], "wait_parse_ids": [], "reused_parse_ids": [42]}
+    )
+    assert DoclibGateway(client, shared_root=root).submit(source).parse_ids == (42,)
+
+
+def test_gateway_resolves_completed_cache_hit_without_response_ids(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir()
+    source = root / "report.html"
+    source.write_text("<h1>Already completed</h1>")
+    response = _response(source).model_copy(update={"status": "done", "created_parse_ids": [], "wait_parse_ids": []})
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.return_value = response
+    client.list_parses.return_value = ListParsesResponse(
+        parses=[
+            ParseInfo(
+                id=42,
+                sha256=response.sha256,
+                short_id=response.sha256[:12],
+                tier="flash",
+                page_range="1",
+                status="done",
+                privacy="local",
+                created_at=1,
+                updated_at=2,
+                done_at=2,
+            )
+        ],
+        total=1,
+        limit=200,
+    )
+    assert DoclibGateway(client, shared_root=root).submit(source).parse_ids == (42,)
+    assert client.list_parses.call_args.kwargs["status"] == "done"
 
 
 def test_gateway_rejects_unshared_path_and_symlink(tmp_path: Path) -> None:

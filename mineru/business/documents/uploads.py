@@ -96,5 +96,38 @@ class ImmutableUploadStore:
                     published.unlink(missing_ok=True)
                 staging.unlink(missing_ok=True)
 
+    def source_path(self, storage_key: str) -> Path:
+        """Resolve a database-owned opaque key without accepting paths."""
+        if storage_key in ("", ".", "..") or Path(storage_key).name != storage_key:
+            raise UploadError("Invalid upload storage key")
+        path = self._root / storage_key
+        if path.is_symlink() or not path.is_file():
+            raise UploadError("Stored source is missing or not a regular file")
+        return path
+
+    def discard_unregistered(self, upload: StoredUpload) -> None:
+        """Roll back a just-published file if business DB registration failed.
+
+        Must only be called before submitting the file to Doclib. Refuse to
+        remove a path or contents that no longer match this upload receipt.
+        """
+        path = upload.path
+        if path.parent != self._root or path.is_symlink() or not path.is_file():
+            raise UploadError("Upload rollback path is not a regular file in this store")
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                size += len(chunk)
+                digest.update(chunk)
+        if size != upload.size or digest.hexdigest() != upload.sha256:
+            raise UploadError("Upload changed after publication; refusing rollback")
+        path.unlink()
+        directory_fd = os.open(self._root, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+
 
 __all__ = ["ImmutableUploadStore", "StoredUpload", "UploadError"]
