@@ -20,7 +20,8 @@ from mineru.business.services import BusinessDiscovery, DocumentWorkflow, Eviden
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse, SearchResponse
 from mineru.doclib.types import (
-    ContentRequestScope, DocContentResponse, ParseBlockSummary, ParseStructureResponse, SearchResult,
+    ContentRequestScope, DocContentResponse, ParseBlockMatch, ParseBlockSearchResponse,
+    ParseBlockSummary, ParseStructureResponse, SearchResult,
 )
 
 
@@ -289,6 +290,15 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     assert page_result["items"][0]["locator"] == locator
     assert page_result["items"][0]["state"] == "historical_parse_unconfirmed"
     assert page_result["next_page"] is None
+    doclib.search_parse_blocks.return_value = ParseBlockSearchResponse(
+        sha256=digest, short_id=digest[:12], tier="flash", page_no=1,
+        matches=[ParseBlockMatch(block_no=1, locator=f"{locator}/block:1",
+                                 snippet="Notice historical text")],
+    )
+    blocks_args = script.parser().parse_args(["search-blocks", overview["revision"]["id"], "Notice"])
+    blocks_result = script.run(blocks_args, client)
+    assert blocks_result["items"][0]["block_no"] == 1
+    assert blocks_result["items"][0]["state"] == "historical_parse_unconfirmed"
     doclib.read_parse_content.return_value = DocContentResponse(
         sha256=digest, short_id=digest[:12], tier="flash", content="# Notice historical text",
         request_scope=ContentRequestScope(locator=locator),

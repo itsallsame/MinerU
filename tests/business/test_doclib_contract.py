@@ -260,6 +260,11 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
     assert "Current Lantern" in client.read_content(locator).content
     assert any(block.preview == "Historical Lantern" for block in client.read_parse_structure(first_id, 1).blocks)
     assert any(block.preview == "Current Lantern" for block in client.read_parse_structure(second_id, 1).blocks)
+    historical_hits = client.search_parse_blocks(first_id, 1, "Historical Lantern")
+    assert len(historical_hits.matches) == 1
+    assert historical_hits.matches[0].block_no == 1
+    assert "Historical Lantern" in historical_hits.matches[0].snippet
+    assert client.search_parse_blocks(second_id, 1, "Historical Lantern").matches == []
 
     business_dir = root / "business-revisions"
     business_dir.mkdir()
@@ -268,6 +273,14 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
     upload = ImmutableUploadStore(root, max_bytes=1024).store(io.BytesIO(source.read_bytes()), filename="revision.html")
     document = business.create_document(upload, original_name="revision.html")
     revision = business.add_completed_revision(document.id, parse=first_info, producer_version="4.0.6")
+    block_page = BusinessDiscovery(store=business, doclib=client).search_blocks(revision.id, "Historical Lantern")
+    assert len(block_page.items) == 1
+    assert block_page.items[0].locator == historical_hits.matches[0].locator
+    frozen_block = EvidenceWriter(store=business, doclib=client).capture(
+        revision.id, locator=block_page.items[0].locator,
+    )
+    assert "Historical Lantern" in frozen_block.snippet
+    assert "Current Lantern" not in frozen_block.snippet
     evidence = EvidenceWriter(store=business, doclib=client).capture(revision.id, locator=locator)
     assert "Historical Lantern" in evidence.snippet
     assert "Current Lantern" not in evidence.snippet
@@ -304,6 +317,9 @@ def test_native_structure_preserves_nested_model_blocks_without_child_locator_cl
     child = parent.children[0]
     assert child.type == "text" and child.path == [0, 0] and child.preview == "Nested item"
     assert child.locator == parent.locator and child.block_no == parent.block_no
+    matches = client.search_parse_blocks(parse.id, 1, "Nested item")
+    assert len(matches.matches) == 1
+    assert matches.matches[0].locator == parent.locator
 
 
 def test_published_upload_can_be_submitted_to_doclib(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

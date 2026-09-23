@@ -295,6 +295,21 @@ class ParseStructureResponse(DoclibModel):
     blocks: list[ParseBlockSummary] = Field(default_factory=list)
 
 
+class ParseBlockMatch(DoclibModel):
+    block_no: int
+    locator: str
+    snippet: str
+    bbox: tuple[float, float, float, float] | None = None
+
+
+class ParseBlockSearchResponse(DoclibModel):
+    sha256: str
+    short_id: str
+    tier: Tier
+    page_no: int
+    matches: list[ParseBlockMatch] = Field(default_factory=list)
+
+
 class ContentRequestScope(DoclibModel):
     page_range: str | None = Field(default=None, description=PAGE_RANGE_DESCRIPTION)
     after: str | None = None

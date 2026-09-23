@@ -64,6 +64,23 @@ class RevisionSearchPage:
 
 
 @dataclass(frozen=True)
+class RevisionBlockHit:
+    locator: str
+    page_no: int
+    block_no: int
+    snippet: str
+    bbox: tuple[float, float, float, float] | None
+
+
+@dataclass(frozen=True)
+class RevisionBlockSearchPage:
+    revision_id: str
+    items: tuple[RevisionBlockHit, ...]
+    next_page: int | None
+    scanned_pages: int
+
+
+@dataclass(frozen=True)
 class RevisionHeading:
     level: int
     title: str
@@ -226,6 +243,60 @@ class BusinessDiscovery:
             scanned_pages=len(window),
         )
 
+    def search_blocks(self, revision_id: str, query: str, *, start_page: int | None = None) -> RevisionBlockSearchPage:
+        query = query.strip()
+        if not query or len(query) > 200 or (start_page is not None and start_page < 1):
+            raise DiscoveryError("invalid_search_request")
+        revision = self._store.get_revision(revision_id)
+        if revision is None:
+            raise DiscoveryError("revision_not_found")
+        pages = sorted(parse_page_range_set(revision.page_range))
+        if start_page is not None and start_page not in pages:
+            raise DiscoveryError("invalid_search_request")
+        start = pages.index(start_page) if start_page is not None else 0
+        window = pages[start:start + self._REVISION_SCAN_PAGES]
+        found: list[RevisionBlockHit] = []
+        for page_no in window:
+            parse_id = revision.parse_id_for_page(page_no)
+            if parse_id is None:
+                raise DiscoveryError("historical_structure_mismatch")
+            try:
+                response = self._doclib.search_parse_blocks(parse_id, page_no, query)
+            except ServerNotRunningError as exc:
+                raise DiscoveryError("doclib_unavailable") from exc
+            except MineruError as exc:
+                if exc.code == "invalid_search":
+                    raise DiscoveryError("historical_search_limit_exceeded") from exc
+                raise DiscoveryError("historical_search_unavailable") from exc
+            if (
+                response.sha256 != revision.sha256 or response.short_id.lower() != revision.short_id.lower()
+                or response.tier != revision.tier or response.page_no != page_no or len(response.matches) > 100
+            ):
+                raise DiscoveryError("historical_search_mismatch")
+            seen: set[int] = set()
+            for match in response.matches:
+                try:
+                    cursor = parse_content_cursor(match.locator)
+                except ValueError as exc:
+                    raise DiscoveryError("historical_search_mismatch") from exc
+                if (
+                    cursor.short_id.lower() != revision.short_id.lower() or cursor.tier != revision.tier
+                    or cursor.page_no != page_no or cursor.block_no != match.block_no
+                    or cursor.char_offset is not None or match.block_no in seen
+                    or not match.snippet or len(match.snippet) > 200
+                ):
+                    raise DiscoveryError("historical_search_mismatch")
+                seen.add(match.block_no)
+                found.append(RevisionBlockHit(match.locator, page_no, match.block_no, match.snippet, match.bbox))
+                if len(found) > 200:
+                    raise DiscoveryError("historical_search_too_many_matches")
+        next_index = start + len(window)
+        return RevisionBlockSearchPage(
+            revision_id=revision_id, items=tuple(found),
+            next_page=pages[next_index] if next_index < len(pages) else None,
+            scanned_pages=len(window),
+        )
+
     def outline(self, revision_id: str, *, start_page: int | None = None) -> RevisionOutlinePage:
         revision = self._store.get_revision(revision_id)
         if revision is None:
@@ -329,7 +400,7 @@ class BusinessDiscovery:
 
 __all__ = [
     "BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead",
-    "RevisionSearchHit", "RevisionSearchPage",
+    "RevisionSearchHit", "RevisionSearchPage", "RevisionBlockHit", "RevisionBlockSearchPage",
     "RevisionHeading", "RevisionOutlinePage",
     "BusinessStructurePage", "StructureBlock",
 ]

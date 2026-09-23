@@ -39,6 +39,7 @@ from .types import (
     ParseInfo,
     ParseRequest,
     ParseResponse,
+    ParseBlockSearchResponse,
     ParseStructureResponse,
     ParseStatus,
     ParsingRuleInfo,
@@ -313,6 +314,10 @@ class DoclibInterface(ABC):
 
     def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         """Read native top-level block summaries from one retained parse batch and page."""
+        raise NotImplementedError()
+
+    def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
+        """Search all top-level model blocks in a retained historical parse page."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -706,6 +711,10 @@ class AsyncDoclibInterface(ABC):
 
     async def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         """Async version of ``DoclibInterface.read_parse_structure``."""
+        raise NotImplementedError()
+
+    async def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
+        """Async version of ``DoclibInterface.search_parse_blocks``."""
         raise NotImplementedError()
 
     @abstractmethod

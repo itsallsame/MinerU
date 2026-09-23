@@ -55,6 +55,7 @@ from .types import (
     ParseInfo,
     ParseRequest,
     ParseResponse,
+    ParseBlockSearchResponse,
     ParseStructureResponse,
     ParseStatus,
     ParsingRuleInfo,
@@ -290,6 +291,13 @@ class DoclibClient(DoclibInterface):
     def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         return self._request_model(
             ParseStructureResponse, path_params={"parse_id": parse_id}, params={"page_no": page_no},
+        )
+
+    @route("GET", "/parses/{parse_id}/block-search", tags=("parse",))
+    def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
+        return self._request_model(
+            ParseBlockSearchResponse, path_params={"parse_id": parse_id},
+            params={"page_no": page_no, "query": query},
         )
 
     @route("POST", "/docs/{doc_ref}/exports", tags=("docs",))

@@ -137,6 +137,8 @@ from .types import (
     ParseRequest,
     ParseResponse,
     ParseBlockSummary,
+    ParseBlockMatch,
+    ParseBlockSearchResponse,
     ParseStructureResponse,
     ParseServerStatus,
     ParseStatus,
@@ -745,6 +747,57 @@ class DoclibServer(AsyncDoclibInterface):
         return ParseStructureResponse(
             sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"],
             page_no=page_no, blocks=blocks,
+        )
+
+    @route("GET", "/parses/{parse_id}/block-search", tags=("parse",))
+    async def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
+        """Search complete top-level block text from one retained historical parse batch."""
+        query = query.strip()
+        if page_no < 1 or not query or len(query) > 200:
+            raise InvalidRequestError("invalid_request", "Invalid page or query.", "query")
+        row = await self.state.db.fetchone(
+            "SELECT p.*, d.short_id AS short_id FROM parses p JOIN docs d ON d.sha256=p.sha256 WHERE p.id=?",
+            (parse_id,),
+        )
+        if row is None or row["status"] not in (PARSE_STATUS_DONE, PARSE_STATUS_SUPERSEDED) or row["done_at"] is None:
+            raise NotFoundError("not_cached", f"Completed parse {parse_id} is not cached.", "parse_id")
+        if page_no not in parse_page_range_set(row["page_range"]):
+            raise InvalidRequestError("invalid_request", "Page does not belong to this parse batch.", "page_no")
+        loaded = load_pages_from_done_batches(
+            _effective_data_dir(self.state), row["sha256"], row["tier"], cast(list[ParseBatchRow], [row]),
+            requested_page_numbers={page_no},
+        )
+        page = next((item for item in loaded if item.page_idx + 1 == page_no), None)
+        if page is None:
+            raise NotFoundError("not_cached", "Requested historical page is not cached.", "page_no")
+        if len(page.blocks) > 500:
+            raise InvalidRequestError("invalid_search", "Page has too many top-level blocks.", "page_no")
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        budget = [0, 0]
+        matches: list[ParseBlockMatch] = []
+        for block in page.blocks:
+            try:
+                text = _structure_search_text(block, budget=budget)
+            except ValueError as exc:
+                raise InvalidRequestError("invalid_search", "Page model exceeds search limits.", "page_no") from exc
+            match = pattern.search(text)
+            if match is None:
+                continue
+            if block.index is None:
+                raise InvalidRequestError("invalid_search", "Matched block has no locator index.", "page_no")
+            left = max(0, match.start() - 90)
+            right = min(len(text), match.end() + 90)
+            snippet = re.sub(r"\s+", " ", text[left:right]).strip()[:200]
+            matches.append(ParseBlockMatch(
+                block_no=block.index + 1,
+                locator=block_ref(row["short_id"], row["tier"], page_no, block.index + 1),
+                snippet=snippet, bbox=block.bbox,
+            ))
+            if len(matches) > 100:
+                raise InvalidRequestError("invalid_search", "Page has too many matching blocks.", "page_no")
+        return ParseBlockSearchResponse(
+            sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"],
+            page_no=page_no, matches=matches,
         )
 
     async def _build_read_plan_from_parse(
@@ -2094,6 +2147,49 @@ def _structure_text_preview(spans: Any) -> str:
         elif isinstance(content, list):
             parts.append(_structure_text_preview(content))
     return re.sub(r"\s+", " ", "".join(parts)).strip()[:200]
+
+
+def _structure_search_text(block: BlockBase, *, budget: list[int], depth: int = 1) -> str:
+    """Flatten model text, not image payloads, URLs or sidecar paths."""
+    budget[0] += 1
+    if budget[0] > 2000 or depth > 16:
+        raise ValueError("model tree exceeds search limit")
+    content = getattr(block, "content", None)
+    if isinstance(content, str):
+        budget[1] += len(content)
+        if budget[1] > 1_000_000:
+            raise ValueError("model text exceeds search limit")
+        if block.type == BlockType.TABLE_BODY:
+            return re.sub(r"<[^>]*>", " ", content)
+        if block.type in {
+            BlockType.CODE_BODY, BlockType.EQUATION, BlockType.IMAGE_BODY, BlockType.CHART_BODY,
+        }:
+            return content
+        return ""
+    if not isinstance(content, list):
+        return ""
+    pieces: list[str] = []
+    for child in content:
+        if isinstance(child, BlockBase):
+            pieces.append(_structure_search_text(child, budget=budget, depth=depth + 1))
+        elif getattr(child, "type", None) in ("text", "equation_inline", "code_inline", "hyperlink"):
+            value = getattr(child, "content", None)
+            if isinstance(value, str):
+                budget[1] += len(value)
+                if budget[1] > 1_000_000:
+                    raise ValueError("model text exceeds search limit")
+                pieces.append(value)
+            elif isinstance(value, list):
+                for span in value:
+                    inner = getattr(span, "content", None)
+                    if isinstance(inner, str):
+                        budget[1] += len(inner)
+                        if budget[1] > 1_000_000:
+                            raise ValueError("model text exceeds search limit")
+                        pieces.append(inner)
+    if any(isinstance(item, BlockBase) for item in content):
+        return " ".join(part for part in pieces if part)
+    return "".join(pieces)
 
 
 def _page_markdown_blocks(

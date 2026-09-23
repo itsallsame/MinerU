@@ -15,9 +15,10 @@ from mineru.business.services import BusinessDiscovery, DiscoveryError, Evidence
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, SearchResponse
 from mineru.doclib.types import (
-    ContentNextRequest, ContentRequestScope, DocContentResponse, ParseBlockSummary, ParseStructureResponse, SearchResult,
+    ContentNextRequest, ContentRequestScope, DocContentResponse, ParseBlockMatch, ParseBlockSearchResponse,
+    ParseBlockSummary, ParseStructureResponse, SearchResult,
 )
-from mineru.errors import ServerNotRunningError
+from mineru.errors import InvalidRequestError, ServerNotRunningError
 
 
 def _fixture(tmp_path: Path) -> tuple[BusinessStore, Mock, str, str, str, str]:
@@ -260,6 +261,56 @@ def test_outline_requires_continuation_and_rejects_truncated_pages(tmp_path: Pat
     last = discovery.outline(revision.id, start_page=26)
     assert [(item.title, item.page_no) for item in last.items] == [("Later heading", 26)]
     assert last.scanned_pages == 2 and last.next_page is None
+
+
+def test_block_search_uses_historical_batches_and_rejects_forged_locator(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=sha, short_id=short_id, tier="flash", page_range=str(page_no),
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((8, 1), (9, 2)))
+    revision = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.6")
+
+    def search(parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
+        assert parse_id == (8 if page_no == 1 else 9) and query == "Lantern"
+        locator = f"doc:{short_id}/tier:flash/page:{page_no}/block:1"
+        return ParseBlockSearchResponse(
+            sha256=sha, short_id=short_id, tier="flash", page_no=page_no,
+            matches=[ParseBlockMatch(block_no=1, locator=locator, snippet=f"Lantern page {page_no}")],
+        )
+
+    doclib.search_parse_blocks.side_effect = search
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    page = discovery.search_blocks(revision.id, " Lantern ")
+    assert [item.page_no for item in page.items] == [1, 2]
+    assert page.next_page is None and page.scanned_pages == 2
+    assert all(item.block_no == 1 for item in page.items)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{revision.id}/search-blocks", params={"query": "Lantern"})
+    assert response.status_code == 200 and len(response.json()["items"]) == 2
+    assert all(item["state"] == "historical_parse_unconfirmed" for item in response.json()["items"])
+    assert "parse_id" not in response.text and "/private/" not in response.text
+    assert api.get(f"/api/business/revisions/{revision.id}/search-blocks", params={"query": " "}).status_code == 422
+
+    doclib.search_parse_blocks.side_effect = None
+    doclib.search_parse_blocks.return_value = ParseBlockSearchResponse(
+        sha256=sha, short_id=short_id, tier="flash", page_no=1,
+        matches=[ParseBlockMatch(block_no=2, locator=f"doc:{short_id}/tier:flash/page:1/block:3",
+                                 snippet="forged")],
+    )
+    with pytest.raises(DiscoveryError, match="historical_search_mismatch"):
+        discovery.search_blocks(revision.id, "Lantern")
+
+    doclib.search_parse_blocks.side_effect = InvalidRequestError("invalid_search", "Too many blocks")
+    with pytest.raises(DiscoveryError, match="historical_search_limit_exceeded"):
+        discovery.search_blocks(revision.id, "Lantern")
 
 
 def test_native_structure_is_routed_to_the_historical_page_batch_and_sanitized(tmp_path: Path) -> None:

@@ -21,9 +21,15 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
         "tier": "flash", "page_range": "1",
         "producer_version": "4.0.6", "model_ref": None, "created_at_ms": now,
     }
-    first = f"doc:{document['sha256'][:7]}/tier:flash/page:1"
+    first = f"doc:{document['sha256'][:7]}/tier:flash/page:1/block:1"
     second = f"doc:{document['sha256'][:7]}/tier:flash/page:1/block:2"
     calls: list[str] = []
+    freezes: list[str] = []
+    evidence = {
+        "id": "evidence-1", "revision_id": revision["id"], "document_id": document["id"],
+        "locator": first, "page_no": 1, "block_no": 1, "bbox": None,
+        "snippet": "第一段历史内容", "snippet_sha256": "c" * 64, "created_at_ms": now,
+    }
 
     def fulfill(route: object, payload: object) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
@@ -46,10 +52,21 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             }))
             page.route("**/api/business/documents/*/revisions", lambda route: fulfill(route, [revision]))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, []))
-            page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, []))
-            page.route("**/api/business/revisions/rev-1/search?*", lambda route: fulfill(route, {
+            page.route("**/api/business/evidence/evidence-1", lambda route: fulfill(route, {
+                **evidence, "navigation_status": "current_match",
+            }))
+
+            def freeze(route: object) -> None:
+                freezes.append(json.loads(route.request.post_data)["locator"])
+                fulfill(route, evidence)
+
+            page.route("**/api/business/revisions/rev-1/evidence", lambda route: (
+                freeze(route) if route.request.method == "POST" else fulfill(route, [evidence] if freezes else [])
+            ))
+            page.route("**/api/business/revisions/rev-1/search-blocks?*", lambda route: fulfill(route, {
                 "revision_id": "rev-1", "scanned_pages": 1, "next_page": None,
-                "items": [{"locator": first, "page_no": 1, "snippet": "年度通知原文",
+                "items": [{"locator": first, "page_no": 1, "block_no": 1, "bbox": None,
+                           "snippet": "年度通知原文",
                            "state": "historical_parse_unconfirmed"}],
             }))
 
@@ -69,21 +86,24 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_label("检索已解析的业务文档").fill("年度通知")
             page.get_by_role("button", name="检索", exact=True).click()
             page.get_by_text("当前索引预览，未人工确认：年度通知摘要").wait_for()
-            page.get_by_role("button", name="查找原文页").click()
-            page.get_by_text("机器解析命中，未人工确认：年度通知原文").wait_for()
-            page.get_by_role("button", name="打开并读取此页").click()
+            page.get_by_role("button", name="查找块级候选依据").click()
+            page.get_by_text("机器解析候选，未人工确认：年度通知原文").wait_for()
+            page.get_by_role("button", name="打开并读取此块").click()
             page.get_by_text("检索未返回任务状态").wait_for()
             page.get_by_text("第一段历史内容").wait_for()
             page.get_by_role("button", name="继续读取下一段").click()
             page.get_by_text("第二段历史内容").wait_for()
             assert len(calls) == 2
             assert "doc%3Abbbbbbb" in calls[0]
+            page.get_by_role("button", name="冻结此块原文").click()
+            page.get_by_text("第一段历史内容", exact=True).wait_for()
+            assert freezes == [first]
             if screenshot:
                 page.screenshot(path=str(screenshot), full_page=True)
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             assert not errors, errors
-            print("Playwright business discovery passed: index preview, business document, historical continuation")
+            print("Playwright business discovery passed: index preview, historical block and explicit freeze")
         finally:
             browser.close()
 

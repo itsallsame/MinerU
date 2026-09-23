@@ -56,6 +56,7 @@ from ..services import (
     HistoricalRead,
     NavigationStatus,
     RevisionSearchPage,
+    RevisionBlockSearchPage,
     RevisionOutlinePage,
     BusinessStructurePage,
     StructureBlock,
@@ -418,6 +419,30 @@ class RevisionSearchView(BaseModel):
         )
 
 
+class RevisionBlockHitView(BaseModel):
+    locator: str
+    page_no: int
+    block_no: int
+    snippet: str
+    bbox: tuple[float, float, float, float] | None
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+
+class RevisionBlockSearchView(BaseModel):
+    revision_id: str
+    items: list[RevisionBlockHitView]
+    next_page: int | None
+    scanned_pages: int
+
+    @classmethod
+    def from_page(cls, page: RevisionBlockSearchPage) -> RevisionBlockSearchView:
+        return cls(
+            revision_id=page.revision_id,
+            items=[RevisionBlockHitView(**vars(hit)) for hit in page.items],
+            next_page=page.next_page, scanned_pages=page.scanned_pages,
+        )
+
+
 class RevisionHeadingView(BaseModel):
     level: int
     title: str
@@ -579,6 +604,24 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return RevisionSearchView.from_page(discovery.search_revision(revision_id, query, start_page=start_page))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/search-blocks", response_model=RevisionBlockSearchView)
+    def search_revision_blocks(
+        revision_id: str,
+        query: Annotated[str, Query(min_length=1, max_length=200)],
+        start_page: Annotated[int | None, Query(ge=1)] = None,
+    ) -> RevisionBlockSearchView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return RevisionBlockSearchView.from_page(discovery.search_blocks(revision_id, query, start_page=start_page))
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else

@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 47,
+  "completed_features": 48,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3849,9 +3849,9 @@
         "实现：搜索结果证据列表",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "历史修订块级候选列表（25 页续扫、顶层块定位、未确认标记）与用户显式冻结入口。真实 Doclib 旧/新批次及冻结证据链路、业务测试、Web test/build、Playwright、Skill 同 API 已验证；不承诺无限量召回或自动人工确认。"
     },
     {
       "id": "FE-019",

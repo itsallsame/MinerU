@@ -159,6 +159,10 @@ def parser() -> argparse.ArgumentParser:
     search_pages.add_argument("revision_id")
     search_pages.add_argument("query")
     search_pages.add_argument("--start-page", type=int)
+    search_blocks = commands.add_parser("search-blocks")
+    search_blocks.add_argument("revision_id")
+    search_blocks.add_argument("query")
+    search_blocks.add_argument("--start-page", type=int)
     outline = commands.add_parser("outline")
     outline.add_argument("revision_id")
     outline.add_argument("--start-page", type=int)
@@ -194,6 +198,11 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
         if args.start_page is not None:
             params["start_page"] = args.start_page
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/search?{urlencode(params)}")
+    if command == "search-blocks":
+        params = {"query": args.query}
+        if args.start_page is not None:
+            params["start_page"] = args.start_page
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/search-blocks?{urlencode(params)}")
     if command == "outline":
         suffix = f"?{urlencode({'start_page': args.start_page})}" if args.start_page is not None else ""
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/outline{suffix}")

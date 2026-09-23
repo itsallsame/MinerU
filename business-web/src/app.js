@@ -325,29 +325,44 @@ async function searchDocuments(event) {
       open.type = "button";
       open.addEventListener("click", () => selectDocument(hit.document.id, hit.document));
       row.append(open);
-      const findPages = element("button", "secondary-button", "查找原文页");
+      const findPages = element("button", "secondary-button", "查找块级候选依据");
       findPages.type = "button";
       const matches = element("div", "page-matches");
       async function scan(startPage = null) {
         findPages.disabled = true;
-        matches.append(element("p", "review-hint", "正在扫描历史解析页（每次最多 25 页）…"));
+        matches.append(element("p", "review-hint", "正在扫描历史解析块（每次最多 25 页）…"));
         try {
-          const found = await businessApi.searchRevision(hit.revision_id, query, startPage);
+          const found = await businessApi.searchBlocks(hit.revision_id, query, startPage);
           if (requestNumber !== state.searchRequest) return;
           matches.lastElementChild.remove();
           for (const match of found.items) {
             const result = element("div", "page-match");
-            result.append(element("p", "", `第 ${match.page_no} 页 · 机器解析命中，未人工确认：${match.snippet}`));
-            const read = element("button", "secondary-button", "打开并读取此页");
+            result.append(element("p", "", `第 ${match.page_no} 页 · 块 ${match.block_no} · 机器解析候选，未人工确认：${match.snippet}`));
+            if (match.bbox) result.append(element("small", "review-hint", `模型坐标：${match.bbox.join(", ")}`));
+            const read = element("button", "secondary-button", "打开并读取此块");
             read.type = "button";
             read.addEventListener("click", async () => {
               await selectDocument(hit.document.id, hit.document, { revisionId: hit.revision_id });
               await review.readHistorical(match.locator);
             });
-            result.append(read);
+            const freeze = element("button", "secondary-button", "冻结此块原文");
+            freeze.type = "button";
+            freeze.addEventListener("click", async () => {
+              freeze.disabled = true;
+              try {
+                const evidence = await businessApi.captureEvidence(hit.revision_id, match.locator);
+                await selectDocument(hit.document.id, hit.document, {
+                  revisionId: hit.revision_id, evidenceId: evidence.id,
+                });
+              } catch (error) {
+                result.append(element("p", "error-banner", `证据冻结失败：${error.message}`));
+                freeze.disabled = false;
+              }
+            });
+            result.append(read, freeze);
             matches.append(result);
           }
-          if (!found.items.length) matches.append(element("p", "review-hint", "本次扫描的页中没有命中。"));
+          if (!found.items.length) matches.append(element("p", "review-hint", "本次扫描的块中没有命中。"));
           if (found.next_page !== null) {
             const more = element("button", "secondary-button", "继续扫描后续页");
             more.type = "button";
@@ -355,7 +370,12 @@ async function searchDocuments(event) {
             matches.append(more);
           }
         } catch (error) {
-          matches.replaceChildren(element("p", "error-banner", `历史页检索失败：${error.message}`));
+          const limitError = ["historical_search_limit_exceeded", "historical_search_too_many_matches"]
+            .includes(error.message);
+          const detail = limitError
+            ? "块搜索达到安全上限，结果未完整返回；可换更具体的关键词，或逐页读取原文。"
+            : `历史块检索失败：${error.message}`;
+          matches.replaceChildren(element("p", "error-banner", detail));
         } finally {
           findPages.disabled = false;
         }

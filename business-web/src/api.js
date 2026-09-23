@@ -51,6 +51,11 @@ export const businessApi = {
       query, ...(startPage === null ? {} : { start_page: String(startPage) }),
     })}`,
   ),
+  searchBlocks: (id, query, startPage = null) => request(
+    `/revisions/${encodeURIComponent(id)}/search-blocks?${new URLSearchParams({
+      query, ...(startPage === null ? {} : { start_page: String(startPage) }),
+    })}`,
+  ),
   outline: (id, startPage = null) => request(
     `/revisions/${encodeURIComponent(id)}/outline${startPage === null ? "" : `?${new URLSearchParams({ start_page: String(startPage) })}`}`,
   ),
