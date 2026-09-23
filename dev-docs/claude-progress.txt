@@ -618,3 +618,10 @@ Changes:
 Verification: Read-only code/design inspection and JSON/diff validation; no FE-033 implementation or target-machine claim.
 Evidence: dev-docs/2026-09-24-structure-edit-scope.md
 Next: Use the chosen scope to implement append-only structure decisions through store/API/Web/Skill with identity and browser tests; continue FE-016 and offline gates. Keep goal active.
+
+=== 2026-09-24 Session 57 (Unified browser regression) ===
+Status: In progress; FE-050 verified complete (64/241 passed); P4 still incomplete
+Changes: Added a single offline Chromium regression command covering all 18 synthetic-API browser scenarios, and documented its scope and prerequisites. No business behavior or data changed.
+Verification: Web 11 unit tests/8-asset build, 18 Playwright browser scenarios, Ruff on the runner and feature-count/diff validation passed on Mac. Real API/sample and Kylin/NVIDIA validation remain separate.
+Evidence: dev-docs/evidence/2026-09-24-browser-regression-suite.md
+Next: Await FE-033 structure-edit scope; continue FE-016 cancellation design and FE-046/047 audits, then real API/sample and offline target gates. Keep goal active.

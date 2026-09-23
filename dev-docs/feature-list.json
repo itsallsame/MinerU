@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 63,
+  "completed_features": 64,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4553,9 +4553,9 @@
         "实现：浏览器关键流程回归",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "构建后可用 pnpm test:browser 一键运行 18 项离线 Chromium 回归：上传/重试、复核、模板、检索、审计、原文、断线恢复及异步竞态；另 11 项 Node 单测通过。浏览器 API 为合成响应，不替代真实服务、真实样本或麒麟验收。证据：dev-docs/evidence/2026-09-24-browser-regression-suite.md"
     },
     {
       "id": "SKL-001",

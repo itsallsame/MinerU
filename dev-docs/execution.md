@@ -29,6 +29,8 @@ Python 运行从本仓库根目录执行。基础单测：
 
 按阶段增加 `tests/business/`，相关测试完成后运行；本地解析冒烟可用 `mineru-kit parse demo/pdfs/demo1.pdf --tier flash --pages all`，但真正推理仍需相应依赖与模型准备。业务前端当前使用零第三方依赖的原生 JS/CSS，`cd business-web && pnpm test && pnpm build` 仅调用已预置 Node，不会安装包；隔离区只导入构建后的 `dist/`。麒麟离线/GPU 实测不以 Mac 结果代替。
 
+Web 关键流程的离线 Chromium 回归在构建后运行 `cd business-web && pnpm test:browser`。准备机须预装 Python Playwright 与 Chromium；脚本只在本机随机端口启动静态资源服务并模拟业务 API 响应，不连接模型，也不代替真实 API、真实样本或目标麒麟验收。另有 `tests/browser_smoke.py` 专用于已启动的真实业务 API，不属于离线套件。
+
 ## 会话启动协议
 
 1. 确认工作目录为本 fork，读取 `AGENTS.md`、`git status --short`、`git log -5 --oneline`。
