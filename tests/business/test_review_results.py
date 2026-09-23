@@ -61,6 +61,26 @@ def test_candidate_requires_explicit_decision_before_confirmation(tmp_path: Path
         store.confirm_result(run_id, source="web")
 
 
+def test_quality_stats_count_workflow_records_not_accuracy(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    before = store.quality_stats()
+    assert before["documents"] == before["revisions"] == before["extraction_done"] == 1
+    assert before["confirmed_runs"] == before["result_versions"] == 0
+    assert before["open_issues"] == 0
+    store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
+    store.confirm_result(run_id, source="web")
+    store.decide_field(
+        run_id, field_code="title", value="年度通知（修订）", evidence_id=evidence_id,
+        source="api", reason="明确复核修订",
+    )
+    store.confirm_result(run_id, source="api")
+    after = store.quality_stats()
+    assert after["confirmed_runs"] == 1
+    assert after["result_versions"] == 2
+    assert after["documents"] == after["revisions"] == after["extraction_done"] == 1
+    assert "accuracy" not in after
+
+
 def test_manual_correction_keeps_old_confirmed_result_immutable(tmp_path: Path) -> None:
     store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
     store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
@@ -89,6 +109,7 @@ def test_manual_correction_keeps_old_confirmed_result_immutable(tmp_path: Path) 
 
 def test_required_missing_and_conflict_block_until_reviewed(tmp_path: Path) -> None:
     store, run_id, evidence_id = _run(tmp_path, snippet="原文没有显式标题")
+    assert store.quality_stats()["open_issues"] == 1
     issue = store.list_quality_issues(run_id)[0]
     assert issue.code == "required_missing"
     with pytest.raises(BusinessStoreError, match="cannot be ignored"):
@@ -102,6 +123,7 @@ def test_required_missing_and_conflict_block_until_reviewed(tmp_path: Path) -> N
     with pytest.raises(BusinessStoreError, match="Blocking quality issues"):
         store.confirm_result(run_id, source="web")
     resolution = store.resolve_issue(issue.id, status="resolved", source="web", reason="已结合原文复核")
+    assert store.quality_stats()["open_issues"] == 0
     assert resolution.previous_status == "open"
     assert store.list_quality_issues(run_id)[0].status == "resolved"
     assert store.confirm_result(run_id, source="web").version == 1

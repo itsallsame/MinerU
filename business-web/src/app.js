@@ -66,6 +66,31 @@ function clearError() {
   node.hidden = true;
 }
 
+async function refreshQualityStats() {
+  const root = byId("quality-content");
+  root.replaceChildren(element("p", "review-hint", "正在读取业务记录统计…"));
+  try {
+    const stats = await businessApi.qualityStats();
+    if (!byId("quality-panel").open) return;
+    const grid = element("div", "quality-grid");
+    for (const [label, value] of [
+      ["业务文档", stats.documents], ["解析待处理任务", stats.parse_pending],
+      ["解析完成任务", stats.parse_done], ["解析失败任务", stats.parse_failed],
+      ["解析修订", stats.revisions], ["提取待处理运行", stats.extraction_pending],
+      ["提取完成运行", stats.extraction_done], ["提取失败运行", stats.extraction_failed],
+      ["未处理阻断问题", stats.open_issues], ["已确认提取运行", stats.confirmed_runs],
+      ["成果版本", stats.result_versions],
+    ]) {
+      const card = element("div", "quality-metric");
+      card.append(element("strong", "", String(value)), element("span", "", label));
+      grid.append(card);
+    }
+    root.replaceChildren(grid, element("p", "review-hint", "按业务记录累计；任务、修订、运行和成果版本可一对多。未处理问题按问题条目计。统计不代表字段准确率或人工评估结果。"));
+  } catch (error) {
+    root.replaceChildren(element("p", "error-banner", `统计不可用：${error.message}`));
+  }
+}
+
 function updateFileSelection() {
   const files = [...byId("files").files];
   byId("selected-files").textContent = files.length
@@ -453,6 +478,8 @@ async function pollTasks() {
 byId("files").addEventListener("change", updateFileSelection);
 byId("upload-form").addEventListener("submit", submitFiles);
 byId("search-form").addEventListener("submit", searchDocuments);
+byId("quality-panel").addEventListener("toggle", () => { if (byId("quality-panel").open) refreshQualityStats(); });
+byId("quality-refresh").addEventListener("click", refreshQualityStats);
 window.addEventListener("hashchange", openEvidenceLink);
 byId("refresh").addEventListener("click", refreshDocuments);
 for (const id of ["status-filter", "template-filter"]) {

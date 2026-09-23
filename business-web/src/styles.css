@@ -59,6 +59,14 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .secondary-button { background: #fff; color: #2d644c; border: 1px solid #d6e2da; border-radius: 8px; padding: 9px 12px; font-size: 12px; white-space: nowrap; }
 .secondary-button:hover { border-color: #7ba98a; background: #f8fbf9; }
 .error-banner { margin-top: 20px; border: 1px solid #f1c6bb; background: #fff4f0; color: #a14435; padding: 12px 14px; border-radius: 9px; font-size: 12px; }
+.quality-panel { margin-top: 20px; border: 1px solid #dce8de; border-radius: 12px; background: #fff; padding: 15px; }
+.quality-panel summary { cursor: pointer; color: #2c6047; font-size: 13px; font-weight: 700; }
+.quality-panel summary span { color: #819188; font-size: 11px; font-weight: 400; margin-left: 8px; }
+.quality-actions { margin: 13px 0; }
+.quality-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.quality-metric { border: 1px solid #e2ebe3; background: #f8fbf8; border-radius: 9px; padding: 10px; }
+.quality-metric strong { display: block; color: #245e42; font-size: 21px; }
+.quality-metric span { color: #647b69; font-size: 11px; }
 .search-panel { margin-top: 24px; border: 1px solid #dce8de; border-radius: 12px; background: #fff; padding: 15px; }
 .search-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .search-form label { color: #486854; font-size: 12px; font-weight: 700; flex: 1 1 100%; }

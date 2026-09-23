@@ -368,6 +368,27 @@ class BusinessStore:
             ).fetchall()
         return tuple(self._template_from_row(row) for row in rows)
 
+    def quality_stats(self) -> dict[str, int]:
+        """Count persisted workflow records, not inferred accuracy or unique content hashes."""
+        queries = {
+            "documents": "SELECT COUNT(*) FROM documents",
+            "parse_pending": "SELECT COUNT(*) FROM tasks WHERE status IN ('uploaded', 'submitted')",
+            "parse_failed": "SELECT COUNT(*) FROM tasks WHERE status = 'failed'",
+            "parse_done": "SELECT COUNT(*) FROM tasks WHERE status = 'done'",
+            "revisions": "SELECT COUNT(*) FROM revisions",
+            "extraction_pending": "SELECT COUNT(*) FROM extraction_runs WHERE status IN ('queued', 'running')",
+            "extraction_failed": "SELECT COUNT(*) FROM extraction_runs WHERE status = 'failed'",
+            "extraction_done": "SELECT COUNT(*) FROM extraction_runs WHERE status = 'done'",
+            "open_issues": "SELECT COUNT(*) FROM quality_issues WHERE status = 'open'",
+            "confirmed_runs": "SELECT COUNT(DISTINCT run_id) FROM confirmed_results",
+            "result_versions": "SELECT COUNT(*) FROM confirmed_results",
+        }
+        with closing(self._connect()) as database:
+            database.execute("BEGIN")
+            result = {name: int(database.execute(query).fetchone()[0]) for name, query in queries.items()}
+            database.rollback()
+        return result
+
     def enqueue_extraction(self, revision_id: str) -> ExtractionRun:
         """Persist a run; repeated requests share one active run per revision."""
         with closing(self._connect()) as database, database:

@@ -67,6 +67,11 @@
           <button id="refresh" class="secondary-button" type="button">刷新列表 <span aria-hidden="true">↻</span></button>
         </div>
         <div id="global-error" class="error-banner" role="alert" hidden></div>
+        <details id="quality-panel" class="quality-panel">
+          <summary>质量与处理统计 <span>业务记录计数 · 非解析准确率</span></summary>
+          <div class="quality-actions"><button id="quality-refresh" class="secondary-button" type="button">更新统计</button></div>
+          <div id="quality-content" class="quality-content" aria-live="polite">展开后读取统计。</div>
+        </details>
         <section class="search-panel" aria-label="业务文档检索">
           <form id="search-form" class="search-form">
             <label for="search-query">检索已解析的业务文档</label>

@@ -354,3 +354,12 @@ Changes:
 Verification: Five synthetic evaluator tests and all 118 business tests passed (2 dependency warnings), including an in-process real business FastAPI/store extraction response; Ruff and CLI help passed. These are contract checks only, not real-sample accuracy.
 Evidence: dev-docs/evidence/2026-09-23-four-class-acceptance-harness.md
 Next: Run evaluator on approved four-class de-identified originals/annotations when supplied; continue P4 quality/UX and P1/P6 isolated Kylin/NVIDIA validation. Keep goal active.
+
+=== 2026-09-23 Session 33 (Quality workflow statistics) ===
+Status: In progress; FE-043 completed (49/241), wider P4/P6 gates remain open
+Changes:
+- Added read-only business workflow counts and a lazy-loaded quality statistics panel, without users/roles or inferred accuracy rates.
+- Separated document/task/revision/run/issue/confirmed-run/result-version units and documented their meanings.
+Verification: targeted backend 12 passed, full business 119 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright lazy load/refresh/390px viewport passed. Initial sandboxed full run could not bind local Doclib sockets; identical rerun with local-listener permission passed.
+Evidence: dev-docs/evidence/2026-09-23-quality-stats.md
+Next: Complete global audit view and other P4 UX, four-class annotated acceptance, isolated Kylin/NVIDIA gates. Keep goal active.

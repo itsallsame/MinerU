@@ -25,6 +25,12 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
     store.initialize()
     doclib = Mock(spec=DoclibInterface)
 
+    assert store.quality_stats() == {
+        "documents": 0, "parse_pending": 0, "parse_failed": 0, "parse_done": 0,
+        "revisions": 0, "extraction_pending": 0, "extraction_failed": 0, "extraction_done": 0,
+        "open_issues": 0, "confirmed_runs": 0, "result_versions": 0,
+    }
+
     def submit_to_doclib(request: ParseRequest) -> ParseResponse:
         path = Path(request.path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -53,6 +59,8 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
             evidence_writer=EvidenceWriter(store=store, doclib=doclib),
         )
     )
+
+    assert client.get("/api/business/quality-stats").json()["documents"] == 0
 
     uploaded = client.post(
         "/api/business/documents",

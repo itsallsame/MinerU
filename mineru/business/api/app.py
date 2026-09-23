@@ -216,6 +216,20 @@ class QualityIssueView(BaseModel):
         return cls(**vars(issue))
 
 
+class QualityStatsView(BaseModel):
+    documents: int
+    parse_pending: int
+    parse_failed: int
+    parse_done: int
+    revisions: int
+    extraction_pending: int
+    extraction_failed: int
+    extraction_done: int
+    open_issues: int
+    confirmed_runs: int
+    result_versions: int
+
+
 class ExtractionResultView(BaseModel):
     run: ExtractionRunView
     candidates: list[FieldCandidateView]
@@ -550,6 +564,10 @@ def create_app(
                 extraction_worker.stop()
 
     app = FastAPI(title="MinerU Business Documents", version="0.1.0", lifespan=lifespan)
+
+    @app.get("/api/business/quality-stats", response_model=QualityStatsView)
+    def get_quality_stats() -> QualityStatsView:
+        return QualityStatsView(**store.quality_stats())
 
     @app.get("/api/business/capabilities", response_model=CapabilitiesView)
     def get_capabilities() -> CapabilitiesView:

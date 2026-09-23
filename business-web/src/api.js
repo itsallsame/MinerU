@@ -36,6 +36,7 @@ const postJson = (path, body) => request(path, {
 
 export const businessApi = {
   capabilities: () => request("/capabilities"),
+  qualityStats: () => request("/quality-stats"),
   templates: () => request("/templates"),
   createTemplate: (definition) => postJson("/templates", definition),
   updateTemplate: (code, definition) => request(`/templates/${encodeURIComponent(code)}`, {
