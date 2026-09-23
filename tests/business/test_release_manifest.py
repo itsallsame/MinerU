@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -21,50 +22,63 @@ BUSINESS_ID = "sha256:" + "d" * 64
 BASE_ID = "sha256:" + "c" * 64
 
 
-def _image(image_id: str, *, revision: str | None = None, arch: str = "amd64") -> dict[str, object]:
+def _image(
+    image_id: str, *, revision: str | None = None, arch: str = "amd64", web_sha256: str | None = None,
+) -> dict[str, object]:
     labels = {"org.opencontainers.image.revision": revision} if revision else {}
     if revision:
         labels["org.opencontainers.image.base.id"] = BASE_ID
+    if web_sha256:
+        labels["io.mineru.business.web.manifest.sha256"] = web_sha256
     return {"Os": "linux", "Architecture": arch, "Id": image_id, "Config": {"Labels": labels}}
 
 
-def _artifacts(tmp_path: Path) -> tuple[Path, Path]:
+def _artifacts(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     wheelhouse = tmp_path / "wheelhouse"
     wheelhouse.mkdir()
     (wheelhouse / "requirements.lock").write_text("demo==1.0 --hash=sha256:" + "d" * 64)
     (wheelhouse / "demo-1.0-py3-none-any.whl").write_bytes(b"wheel")
     model_manifest = tmp_path / "model-manifest.json"
     model_manifest.write_text(json.dumps({"schema": 1, "files": {"weights.bin": "e" * 64}}))
-    return wheelhouse, model_manifest
+    web_dist = tmp_path / "web-dist"
+    web_dist.mkdir()
+    index = web_dist / "index.html"
+    index.write_text("<title>MinerU</title>")
+    web_manifest = web_dist / "asset-manifest.json"
+    web_manifest.write_text(json.dumps({"index.html": hashlib.sha256(index.read_bytes()).hexdigest()}))
+    return wheelhouse, model_manifest, web_dist, hashlib.sha256(web_manifest.read_bytes()).hexdigest()
 
 
 def test_release_record_binds_code_image_deps_and_models(tmp_path: Path) -> None:
-    wheelhouse, model_manifest = _artifacts(tmp_path)
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
     record = release_manifest.build_release_record(
         revision=REVISION,
         worker=_image(IMAGE_ID, revision=REVISION),
-        business=_image(BUSINESS_ID, revision=REVISION),
+        business=_image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
         base=_image(BASE_ID),
         wheelhouse=wheelhouse,
         model_manifest=model_manifest,
+        web_dist=web_dist,
     )
     assert record["source_revision"] == REVISION
-    assert record["schema"] == 2
+    assert record["schema"] == 3
     assert record["worker_image_id"] == IMAGE_ID
     assert record["business_image_id"] == BUSINESS_ID
     assert record["model"]["file_count"] == 1
     assert "requirements.lock" in record["wheelhouse"]["files"]
+    assert record["business_web"]["manifest_sha256"] == web_sha256
 
 
 def test_release_record_rejects_wrong_architecture_and_revision(tmp_path: Path) -> None:
-    wheelhouse, model_manifest = _artifacts(tmp_path)
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
     args = {
         "revision": REVISION,
         "worker": _image(IMAGE_ID, revision=REVISION),
-        "business": _image(BUSINESS_ID, revision=REVISION),
+        "business": _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
         "base": _image(BASE_ID),
         "wheelhouse": wheelhouse,
         "model_manifest": model_manifest,
+        "web_dist": web_dist,
     }
     with pytest.raises(ValueError, match="linux/amd64"):
         release_manifest.build_release_record(**{**args, "worker": _image(IMAGE_ID, revision=REVISION, arch="arm64")})
@@ -75,37 +89,60 @@ def test_release_record_rejects_wrong_architecture_and_revision(tmp_path: Path) 
     with pytest.raises(ValueError, match="base label"):
         release_manifest.build_release_record(**{**args, "worker": wrong_base})
     with pytest.raises(ValueError, match="linux/amd64"):
-        release_manifest.build_release_record(**{**args, "business": _image(BUSINESS_ID, revision=REVISION, arch="arm64")})
+        release_manifest.build_release_record(**{
+            **args, "business": _image(BUSINESS_ID, revision=REVISION, arch="arm64", web_sha256=web_sha256)
+        })
     with pytest.raises(ValueError, match="business image revision label"):
         release_manifest.build_release_record(**{**args, "business": _image(BUSINESS_ID, revision="f" * 40)})
-    wrong_business_base = _image(BUSINESS_ID, revision=REVISION)
+    wrong_business_base = _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256)
     wrong_business_base["Config"]["Labels"]["org.opencontainers.image.base.id"] = "sha256:" + "f" * 64
     with pytest.raises(ValueError, match="business image base label"):
         release_manifest.build_release_record(**{**args, "business": wrong_business_base})
     with pytest.raises(ValueError, match="distinct IDs"):
-        release_manifest.build_release_record(**{**args, "business": _image(IMAGE_ID, revision=REVISION)})
+        release_manifest.build_release_record(**{
+            **args, "business": _image(IMAGE_ID, revision=REVISION, web_sha256=web_sha256)
+        })
+
+
+def test_release_record_rejects_unbound_or_changed_web_assets(tmp_path: Path) -> None:
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    args = {
+        "revision": REVISION,
+        "worker": _image(IMAGE_ID, revision=REVISION),
+        "business": _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
+        "base": _image(BASE_ID),
+        "wheelhouse": wheelhouse,
+        "model_manifest": model_manifest,
+        "web_dist": web_dist,
+    }
+    with pytest.raises(ValueError, match="Web asset manifest label"):
+        release_manifest.build_release_record(**{**args, "business": _image(BUSINESS_ID, revision=REVISION)})
+    (web_dist / "index.html").write_text("changed")
+    with pytest.raises(ValueError, match="differs from its manifest"):
+        release_manifest.build_release_record(**args)
 
 
 def test_release_record_rejects_incomplete_artifacts(tmp_path: Path) -> None:
-    wheelhouse, model_manifest = _artifacts(tmp_path)
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
     (wheelhouse / "demo-1.0-py3-none-any.whl").unlink()
     with pytest.raises(ValueError, match="no wheel files"):
         release_manifest.build_release_record(
             revision=REVISION,
             worker=_image(IMAGE_ID, revision=REVISION),
-            business=_image(BUSINESS_ID, revision=REVISION),
+            business=_image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
             base=_image(BASE_ID),
             wheelhouse=wheelhouse,
             model_manifest=model_manifest,
+            web_dist=web_dist,
         )
 
 
 def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    wheelhouse, model_manifest = _artifacts(tmp_path)
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
     output = tmp_path / "release.json"
     images = {
         "worker:test": _image(IMAGE_ID, revision=REVISION),
-        "business:test": _image(BUSINESS_ID, revision=REVISION),
+        "business:test": _image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
         "base:test": _image(BASE_ID),
     }
 
@@ -134,6 +171,8 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
             str(wheelhouse),
             "--model-manifest",
             str(model_manifest),
+            "--web-dist",
+            str(web_dist),
             "--output",
             str(output),
         ],
@@ -142,3 +181,4 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
     record = json.loads(output.read_text())
     assert record["worker_image_id"] == IMAGE_ID
     assert record["business_image_id"] == BUSINESS_ID
+    assert record["business_web"]["manifest_sha256"] == web_sha256

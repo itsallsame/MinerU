@@ -60,6 +60,12 @@ class ServerConfig:
 
 def build_app(config: ServerConfig) -> FastAPI:
     """Build one API process with no model or GPU dependency at runtime."""
+    development_web_root = Path(__file__).resolve().parents[3] / "business-web" / "dist"
+    web_root = Path(os.environ.get("MINERU_BUSINESS_WEB_ROOT", str(development_web_root)))
+    if not web_root.is_absolute() or web_root.is_symlink():
+        raise ValueError("MINERU_BUSINESS_WEB_ROOT must be an absolute, non-symlink directory")
+    if os.environ.get("MINERU_BUSINESS_REQUIRE_WEB") == "1" and not (web_root / "index.html").is_file():
+        raise ValueError("Business Web assets are required but were not built")
     store = BusinessStore(config.database_path)
     store.initialize()
     uploads = ImmutableUploadStore(config.upload_root, max_bytes=config.max_upload_bytes)
@@ -83,6 +89,7 @@ def build_app(config: ServerConfig) -> FastAPI:
         field_extraction=extraction,
         extraction_worker=ExtractionWorker(extraction),
         uploads=uploads,
+        web_root=web_root if (web_root / "index.html").is_file() else None,
     )
 
 

@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from ...filetypes import (
@@ -380,6 +381,7 @@ def create_app(
     evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
     extraction_worker: ExtractionWorker | None = None,
     uploads: ImmutableUploadStore | None = None,
+    web_root: Path | None = None,
 ) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     @asynccontextmanager
@@ -652,6 +654,9 @@ def create_app(
         except UploadError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return TaskView.from_record(task)
+
+    if web_root is not None:
+        app.mount("/", StaticFiles(directory=web_root, html=True), name="business-web")
 
     return app
 

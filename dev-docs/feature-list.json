@@ -3475,9 +3475,9 @@
         "实现：前端项目和生产构建",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "零第三方依赖构建、同源托管、镜像/发布清单前端哈希绑定；Mac 构建和浏览器验证，麒麟镜像构建仍属 P1/P6 门槛。"
     },
     {
       "id": "FE-002",
@@ -3497,9 +3497,9 @@
         "实现：开放系统入口与服务状态提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "页面显示开放系统与实际 API 连接状态；Playwright 真实页面验证。"
     },
     {
       "id": "FE-003",
@@ -3519,9 +3519,9 @@
         "实现：文档任务列表",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "持久分页 API 与前端文档/任务卡片，Playwright 列表详情验证。"
     },
     {
       "id": "FE-004",
@@ -3541,9 +3541,9 @@
         "实现：任务状态筛选",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "UI 筛选参数由 Playwright 验证，后端状态筛选由业务 API 测试验证。"
     },
     {
       "id": "FE-005",
@@ -3563,9 +3563,9 @@
         "实现：文档类型筛选",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "UI 模板筛选请求由 Playwright 验证，后端模板筛选由 API 测试验证。"
     },
     {
       "id": "FE-006",
@@ -3585,9 +3585,9 @@
         "实现：批量上传组件",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "浏览器验证混合有效/无效文件批次逐个反馈和只发送有效文件。"
     },
     {
       "id": "FE-007",
@@ -3607,9 +3607,9 @@
         "实现：文件类型前端预检",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "能力响应驱动扩展名校验，Node 测试与 Playwright 不支持格式无请求验证。"
     },
     {
       "id": "FE-008",
@@ -3629,9 +3629,9 @@
         "实现：文件大小前端预检",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "读取后端实际 max_upload_bytes；Node 边界测试覆盖超限/空文件。"
     },
     {
       "id": "FE-009",
@@ -3651,9 +3651,9 @@
         "实现：解析档位选择组件",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "PDF/图片从服务能力档位选择，Playwright 验证 Standard 随上传发送。"
     },
     {
       "id": "FE-010",
@@ -3673,9 +3673,9 @@
         "实现：原生格式Flash提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "UI 提示原生格式固定 Flash，Node 和 Playwright 验证 HTML 不传其他档位。"
     },
     {
       "id": "FE-011",
@@ -3695,9 +3695,9 @@
         "实现：当前服务能力展示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "真实本地 API 的格式数/上传大小上限在 Playwright 页面显示。"
     },
     {
       "id": "FE-012",
@@ -3717,9 +3717,9 @@
         "实现：上传逐文件反馈",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Playwright 混合批次验证拒绝和受理分别呈现。"
     },
     {
       "id": "FE-013",
@@ -4531,9 +4531,9 @@
         "实现：前端组件自动测试",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Node 内置测试覆盖文件能力、档位/Flash 与安全预览分类；后续复核组件仍需单独加测试。"
     },
     {
       "id": "FE-050",

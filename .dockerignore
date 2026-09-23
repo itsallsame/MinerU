@@ -6,6 +6,10 @@ __pycache__
 .ruff_cache
 .coverage
 htmlcov
+business-web/node_modules
+business-web/src
+business-web/tests
+business-web/scripts
 dev-docs/evidence
 models
 models/**

@@ -14,6 +14,7 @@ from typing import Any
 
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _command(*args: str) -> str:
@@ -37,7 +38,10 @@ def _image_info(reference: str) -> dict[str, Any]:
     return data
 
 
-def _validated_image_id(label: str, image: dict[str, Any], *, revision: str | None = None, base_id: str | None = None) -> str:
+def _validated_image_id(
+    label: str, image: dict[str, Any], *, revision: str | None = None, base_id: str | None = None,
+    web_manifest_sha256: str | None = None,
+) -> str:
     if image.get("Os") != "linux" or image.get("Architecture") != "amd64":
         raise ValueError(f"{label} image is not linux/amd64")
     image_id = image.get("Id")
@@ -48,7 +52,33 @@ def _validated_image_id(label: str, image: dict[str, Any], *, revision: str | No
         raise ValueError(f"{label} image revision label differs from the checked-out source")
     if base_id is not None and labels.get("org.opencontainers.image.base.id") != base_id:
         raise ValueError(f"{label} image base label differs from the inspected base image")
+    if web_manifest_sha256 is not None and labels.get("io.mineru.business.web.manifest.sha256") != web_manifest_sha256:
+        raise ValueError(f"{label} image Web asset manifest label differs from the built assets")
     return image_id
+
+
+def _validated_web_assets(web_dist: Path) -> tuple[str, dict[str, str]]:
+    if not web_dist.is_dir() or web_dist.is_symlink():
+        raise ValueError("Business Web dist directory is missing or is a symlink")
+    manifest_path = web_dist / "asset-manifest.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise ValueError("Business Web asset manifest is missing or is a symlink")
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not data:
+        raise ValueError("Business Web asset manifest is empty or invalid")
+    expected_files = set(data)
+    actual_files = {path.name for path in web_dist.iterdir() if path.name != manifest_path.name}
+    if expected_files != actual_files:
+        raise ValueError("Business Web assets differ from the manifest file list")
+    for name, digest in data.items():
+        if not isinstance(name, str) or name in ("", ".", "..") or Path(name).name != name:
+            raise ValueError("Business Web asset manifest contains an invalid name")
+        if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+            raise ValueError("Business Web asset manifest contains an invalid digest")
+        path = web_dist / name
+        if not path.is_file() or path.is_symlink() or _sha256(path) != digest:
+            raise ValueError(f"Business Web asset differs from its manifest: {name}")
+    return _sha256(manifest_path), data
 
 
 def build_release_record(
@@ -59,13 +89,17 @@ def build_release_record(
     base: dict[str, Any],
     wheelhouse: Path,
     model_manifest: Path,
+    web_dist: Path,
     previous_release: Path | None = None,
 ) -> dict[str, Any]:
     if not COMMIT_RE.fullmatch(revision):
         raise ValueError("Source revision must be a full lowercase Git commit SHA")
     base_id = _validated_image_id("base", base)
     worker_id = _validated_image_id("worker", worker, revision=revision, base_id=base_id)
-    business_id = _validated_image_id("business", business, revision=revision, base_id=base_id)
+    web_sha256, web_files = _validated_web_assets(web_dist)
+    business_id = _validated_image_id(
+        "business", business, revision=revision, base_id=base_id, web_manifest_sha256=web_sha256,
+    )
     if worker_id == business_id:
         raise ValueError("Worker and business images must have distinct IDs")
     if not wheelhouse.is_dir() or wheelhouse.is_symlink():
@@ -90,7 +124,7 @@ def build_release_record(
     if previous_release is not None and (not previous_release.is_file() or previous_release.is_symlink()):
         raise ValueError("Previous release manifest is missing")
     return {
-        "schema": 2,
+        "schema": 3,
         "source_revision": revision,
         "platform": "linux/amd64",
         "worker_image_id": worker_id,
@@ -106,6 +140,7 @@ def build_release_record(
         "wheelhouse": {
             "files": {path.relative_to(wheelhouse).as_posix(): _sha256(path) for path in wheel_files},
         },
+        "business_web": {"manifest_sha256": web_sha256, "files": web_files},
         "previous_release_sha256": _sha256(previous_release) if previous_release else None,
     }
 
@@ -117,6 +152,7 @@ def main() -> int:
     parser.add_argument("--base-image", required=True)
     parser.add_argument("--wheelhouse", required=True, type=Path)
     parser.add_argument("--model-manifest", required=True, type=Path)
+    parser.add_argument("--web-dist", required=True, type=Path)
     parser.add_argument("--previous-release", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
@@ -133,6 +169,7 @@ def main() -> int:
             base=_image_info(args.base_image),
             wheelhouse=args.wheelhouse,
             model_manifest=args.model_manifest,
+            web_dist=args.web_dist,
             previous_release=args.previous_release,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)

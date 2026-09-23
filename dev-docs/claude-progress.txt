@@ -217,3 +217,13 @@ Changes:
 Verification: Ruff passed; full business suite 85 passed/2 dependency warnings on Mac when local Doclib Unix/TCP sockets were permitted. A restricted run failed solely on socket.bind permissions; targeted API/store tests passed 11/11 in the restricted sandbox.
 Evidence: dev-docs/evidence/2026-09-23-p4-web-read-contracts.md
 Next: Build and browser-test the business Web against these real APIs, then own Skill. No Mac result proves Kylin offline/GPU acceptance.
+
+=== 2026-09-23 Session 19 (Business Web first slice and asset provenance) ===
+Status: In progress; P4 review/results and P1/P6 target gates remain open
+Changes:
+- Added a zero-dependency business Web with open-system entry, capabilities, batch upload preflight, task/library UI, source preview and revision display.
+- Mounted Web assets on the same FastAPI origin and copied only built assets into the business image; no model changes.
+- Bound built Web asset manifest to business image label and release record so untracked dist cannot silently drift from a recorded release.
+Verification: pnpm test 3 passed, pnpm build 5 assets; full business suite 88 passed/2 dependency warnings with local sockets, Ruff and Compose config passed; Playwright Chromium real-page/mocked-upload smoke and desktop/mobile visual checks passed on Mac.
+Evidence: dev-docs/evidence/2026-09-23-p4-business-web-first-slice.md
+Next: Finish P4 review/evidence/results/template flows and deeper browser coverage; continue own Skill, offline/real-sample/target gates. Do not claim P4 or production complete.

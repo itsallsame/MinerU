@@ -1,0 +1,330 @@
+import { businessApi } from "./api.js";
+import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskLabel, tierForFile } from "./domain.js";
+
+const byId = (id) => document.getElementById(id);
+const state = {
+  capabilities: null,
+  templates: [],
+  page: 0,
+  limit: 20,
+  total: 0,
+  items: [],
+  selectedId: null,
+  revisions: [],
+  listRequest: 0,
+  polling: false,
+  uploading: false,
+};
+
+function element(tag, className = "", content = "") {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (content) node.textContent = content;
+  return node;
+}
+
+function setConnection(online, message) {
+  const node = byId("connection");
+  node.textContent = message;
+  node.className = `connection ${online ? "online" : "offline"}`;
+}
+
+function showError(message) {
+  const node = byId("global-error");
+  node.textContent = message;
+  node.hidden = false;
+}
+
+function clearError() {
+  const node = byId("global-error");
+  node.textContent = "";
+  node.hidden = true;
+}
+
+function updateFileSelection() {
+  const files = [...byId("files").files];
+  byId("selected-files").textContent = files.length
+    ? `${files.length} 个文件 · ${files.map((file) => file.name).join("、")}`
+    : "尚未选择文件";
+  byId("upload-submit").disabled = !state.capabilities || !files.length || state.uploading;
+}
+
+function feedback(file, message, kind = "") {
+  const node = element("div", `feedback-item ${kind}`, `${file.name} · ${message}`);
+  byId("upload-feedback").append(node);
+  return node;
+}
+
+function populateTemplateSelects() {
+  const upload = byId("upload-template");
+  const filter = byId("template-filter");
+  for (const select of [upload, filter]) {
+    select.replaceChildren(select.firstElementChild);
+    for (const template of state.templates) {
+      const option = element("option", "", template.name);
+      option.value = template.code;
+      option.disabled = select === upload && !template.enabled;
+      select.append(option);
+    }
+  }
+}
+
+async function bootstrap() {
+  const [capabilities, templates] = await Promise.allSettled([businessApi.capabilities(), businessApi.templates()]);
+  if (capabilities.status === "fulfilled") {
+    state.capabilities = capabilities.value;
+    const cap = state.capabilities;
+    byId("capability-note").textContent =
+      `当前服务支持 ${cap.parseable_extensions.length} 种扩展名，单文件上限 ${formatBytes(cap.max_upload_bytes)}；` +
+      "PDF / 图片提供四档解析。";
+  } else {
+    byId("capability-note").textContent = "服务能力不可用，上传已暂停。";
+    showError(capabilities.reason.message);
+  }
+  if (templates.status === "fulfilled") {
+    state.templates = templates.value;
+    populateTemplateSelects();
+  } else {
+    showError(`模板列表暂不可用：${templates.reason.message}`);
+  }
+  updateFileSelection();
+  await refreshDocuments();
+}
+
+function renderDocuments() {
+  const container = byId("document-list");
+  container.replaceChildren();
+  byId("total-count").textContent = `${state.total} 份文档`;
+  if (!state.items.length) {
+    container.append(element("div", "empty-state", "当前筛选下还没有文档。可以从左侧添加第一份文档。"));
+  }
+  for (const item of state.items) {
+    const { document: record, task } = item;
+    const card = element("button", `document-card ${record.id === state.selectedId ? "selected" : ""}`);
+    card.type = "button";
+    card.setAttribute("aria-label", `查看 ${record.original_name}，${task ? taskLabel(task.status) : "无任务"}`);
+    const icon = element("span", "file-icon", extensionOf(record.original_name).slice(0, 4) || "FILE");
+    icon.setAttribute("aria-hidden", "true");
+    const body = element("span", "document-card-content");
+    body.append(element("strong", "", record.original_name));
+    const template = state.templates.find((entry) => entry.code === record.template_code);
+    body.append(element("span", "document-meta", `${template?.name || "未分类"} · ${formatBytes(record.size)} · ${new Date(record.created_at_ms).toLocaleString("zh-CN")}`));
+    const badge = element("span", `status ${task?.status || ""}`, task ? taskLabel(task.status) : "无任务");
+    card.append(icon, body, badge);
+    card.addEventListener("click", () => selectDocument(record.id));
+    container.append(card);
+  }
+  byId("previous-page").disabled = state.page === 0;
+  byId("next-page").disabled = (state.page + 1) * state.limit >= state.total;
+  byId("page-label").textContent = `第 ${state.page + 1} 页`;
+}
+
+async function refreshDocuments() {
+  const requestNumber = ++state.listRequest;
+  try {
+    const page = await businessApi.documents({
+      limit: state.limit,
+      offset: state.page * state.limit,
+      status: byId("status-filter").value,
+      templateCode: byId("template-filter").value,
+    });
+    if (requestNumber !== state.listRequest) return;
+    state.items = page.items;
+    state.total = page.total;
+    setConnection(true, "业务服务已连接");
+    clearError();
+    if (state.selectedId && !state.items.some((item) => item.document.id === state.selectedId)) {
+      state.selectedId = null;
+      state.revisions = [];
+      const detail = byId("detail-content");
+      detail.className = "detail-empty";
+      detail.replaceChildren(
+        element("h2", "", "选择一份文档"),
+        element("p", "", "这里会展示原文、解析任务与修订记录。"),
+      );
+    }
+    renderDocuments();
+    if (state.selectedId) renderDetail();
+  } catch (error) {
+    if (requestNumber !== state.listRequest) return;
+    setConnection(false, "业务服务不可用");
+    showError(error.message);
+    byId("document-list").replaceChildren(element("div", "empty-state", "无法读取文档。请检查服务并重试。"));
+  }
+}
+
+function detailRow(label, value) {
+  const row = element("div");
+  row.append(element("span", "", label), element("strong", "", value));
+  return row;
+}
+
+function renderDetail() {
+  const item = state.items.find((entry) => entry.document.id === state.selectedId);
+  if (!item) return;
+  const { document: record, task } = item;
+  const root = byId("detail-content");
+  root.className = "";
+  root.replaceChildren();
+  const top = element("div", "detail-topline");
+  top.append(element("span", "eyebrow", "DOCUMENT DETAIL"), element("span", "detail-id", record.id.slice(0, 12)));
+  root.append(top, element("h2", "", record.original_name));
+  root.append(element("p", "detail-subline", `原文件 SHA-256：${record.sha256.slice(0, 16)}…`));
+  const summary = element("section", "detail-section");
+  summary.append(element("h3", "", "处理状态"));
+  const grid = element("div", "detail-grid");
+  const template = state.templates.find((entry) => entry.code === record.template_code);
+  grid.append(
+    detailRow("业务类型", template?.name || "未分类"),
+    detailRow("解析状态", task ? taskLabel(task.status) : "无任务"),
+    detailRow("请求档位", task?.requested_tier || "Flash（原生格式）"),
+    detailRow("实际档位", task?.actual_tier || "尚未完成"),
+  );
+  summary.append(grid);
+  if (task?.error_code) summary.append(element("p", "error-banner", `失败代码：${task.error_code}`));
+  const actions = element("div", "detail-actions");
+  if (task?.status === "failed") {
+    const retry = element("button", "", "重新提交任务");
+    retry.type = "button";
+    retry.addEventListener("click", async () => {
+      retry.disabled = true;
+      try {
+        await businessApi.retry(task.id);
+        clearError();
+        await refreshDocuments();
+      } catch (error) {
+        showError(`重试失败：${error.message}`);
+        retry.disabled = false;
+      }
+    });
+    actions.append(retry);
+  }
+  summary.append(actions);
+  root.append(summary);
+
+  const source = element("section", "detail-section");
+  source.append(element("h3", "", "原文"));
+  const sourceUrl = businessApi.sourceUrl(record.id);
+  const kind = sourcePreviewKind(record.original_name);
+  const download = element("a", "", kind === "download" ? "下载原文件 ↗" : "在新窗口打开原文 ↗");
+  download.href = sourceUrl;
+  download.target = "_blank";
+  download.rel = "noopener noreferrer";
+  const sourceActions = element("div", "detail-actions");
+  sourceActions.append(download);
+  source.append(sourceActions);
+  if (kind === "pdf") {
+    const preview = element("iframe", "source-preview");
+    preview.src = sourceUrl;
+    preview.title = `${record.original_name} PDF 原文预览`;
+    source.append(preview);
+  } else if (kind === "image") {
+    const preview = element("img", "source-preview image");
+    preview.src = sourceUrl;
+    preview.alt = `${record.original_name} 原图`;
+    source.append(preview);
+  } else {
+    source.append(element("p", "preview-note", "该格式暂不支持浏览器原文预览。可下载原文件；不会伪造 PDF 页码或坐标。"));
+  }
+  root.append(source);
+
+  const revisions = element("section", "detail-section");
+  revisions.append(element("h3", "", "解析修订"));
+  if (state.revisions.length) {
+    for (const revision of state.revisions) {
+      const row = element("div", "revision-item", `${revision.tier.toUpperCase()} · MinerU ${revision.producer_version}`);
+      row.append(element("small", "", new Date(revision.created_at_ms).toLocaleString("zh-CN")));
+      revisions.append(row);
+    }
+  } else {
+    revisions.append(element("p", "preview-note", task?.status === "done" ? "暂无可用修订记录。" : "解析完成后显示修订记录。"));
+  }
+  root.append(revisions);
+}
+
+async function selectDocument(id) {
+  state.selectedId = id;
+  state.revisions = [];
+  renderDocuments();
+  renderDetail();
+  try {
+    const revisions = await businessApi.revisions(id);
+    if (state.selectedId !== id) return;
+    state.revisions = revisions;
+    renderDetail();
+  } catch (error) {
+    if (state.selectedId === id) showError(`修订记录不可用：${error.message}`);
+  }
+}
+
+async function submitFiles(event) {
+  event.preventDefault();
+  if (state.uploading) return;
+  const files = [...byId("files").files];
+  state.uploading = true;
+  updateFileSelection();
+  byId("upload-feedback").replaceChildren();
+  let accepted = 0;
+  for (const file of files) {
+    const classification = classifyFile(file, state.capabilities);
+    if (!classification.ok) {
+      feedback(file, classification.message, "error");
+      continue;
+    }
+    const resultNode = feedback(file, "正在上传…");
+    try {
+      const tier = tierForFile(file, state.capabilities, byId("upload-tier").value);
+      const result = await businessApi.upload(file, { tier, templateCode: byId("upload-template").value });
+      resultNode.textContent = `${file.name} · 已受理 · ${taskLabel(result.task.status)}`;
+      resultNode.className = "feedback-item success";
+      accepted += 1;
+    } catch (error) {
+      resultNode.textContent = `${file.name} · ${error.message}`;
+      resultNode.className = "feedback-item error";
+    }
+  }
+  state.uploading = false;
+  byId("files").value = "";
+  updateFileSelection();
+  if (accepted) {
+    state.page = 0;
+    await refreshDocuments();
+  }
+}
+
+async function pollTasks() {
+  if (state.polling || state.uploading || !state.items.length) return;
+  const pending = state.items.filter((item) => ["uploaded", "submitted"].includes(item.task?.status));
+  if (!pending.length) return;
+  state.polling = true;
+  try {
+    let changed = false;
+    for (const item of pending) {
+      try {
+        const updated = await businessApi.task(item.task.id);
+        if (updated.status !== item.task.status || updated.actual_tier !== item.task.actual_tier) changed = true;
+      } catch (error) {
+        showError(`任务状态暂不可用：${error.message}`);
+      }
+    }
+    if (changed) {
+      await refreshDocuments();
+      if (state.selectedId) await selectDocument(state.selectedId);
+    }
+  } finally {
+    state.polling = false;
+  }
+}
+
+byId("files").addEventListener("change", updateFileSelection);
+byId("upload-form").addEventListener("submit", submitFiles);
+byId("refresh").addEventListener("click", refreshDocuments);
+for (const id of ["status-filter", "template-filter"]) {
+  byId(id).addEventListener("change", () => { state.page = 0; refreshDocuments(); });
+}
+byId("previous-page").addEventListener("click", () => { if (state.page > 0) { state.page -= 1; refreshDocuments(); } });
+byId("next-page").addEventListener("click", () => {
+  if ((state.page + 1) * state.limit < state.total) { state.page += 1; refreshDocuments(); }
+});
+setInterval(pollTasks, 4000);
+bootstrap();
