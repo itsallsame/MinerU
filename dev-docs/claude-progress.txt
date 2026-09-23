@@ -174,6 +174,16 @@ Verification: 73 business tests passed/2 warnings on Mac with local sockets; Ruf
 Evidence: dev-docs/evidence/2026-09-23-p3-evidence-backed-candidates.md
 Next: Implement persistent asynchronous extraction and review/confirmation state machine; expand field methods and real-sample accuracy checks.
 
+=== 2026-09-23 Session 16 (Open review and immutable result versions) ===
+Status: In progress; P3 async/richer extraction and P4/P5/P6 remain open
+Changes:
+- Added append-only field decisions, issue resolutions, audit events, and immutable confirmed result versions with no user identity or permission checks.
+- Confirmation requires completed extraction, no open blocking issue, and explicit decisions for required fields; incomplete coverage cannot be waived.
+- Exposed open review, result, and audit API routes for future Web and own Skill consumers.
+Verification: Full business suite 80 passed/2 warnings on Mac with local sockets; Ruff passed.
+Evidence: dev-docs/evidence/2026-09-23-p3-review-confirmation.md
+Next: Make extraction durable/asynchronous, then implement business Web and own Skill against the same open API; target hardware and real-sample gates remain pending.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

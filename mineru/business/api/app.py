@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict
@@ -10,14 +10,20 @@ from pydantic import BaseModel, ConfigDict
 from ...types import Tier
 from ..documents import UploadError
 from ..domain import (
+    AuditEvent,
     BusinessDocument,
+    ConfirmedField,
+    ConfirmedResult,
     EvidenceSnapshot,
     ExtractionRun,
     FieldCandidate,
+    FieldDecision,
     FieldType,
     IngestTask,
+    IssueResolution,
     ParseRevision,
     QualityIssue,
+    ReviewSource,
     TemplateField,
     TemplateVersion,
 )
@@ -32,6 +38,111 @@ from ..services import (
     NavigationStatus,
 )
 from ..store import BusinessStore, BusinessStoreError
+
+
+class FieldDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+    evidence_id: str
+    source: ReviewSource
+    reason: str | None = None
+
+
+class FieldDecisionView(BaseModel):
+    id: str
+    run_id: str
+    field_code: str
+    previous_value: str | None
+    value: str
+    evidence_id: str
+    basis: str
+    source: ReviewSource
+    reason: str | None
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, decision: FieldDecision) -> FieldDecisionView:
+        return cls(**vars(decision))
+
+
+class IssueResolutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["resolved", "ignored"]
+    source: ReviewSource
+    reason: str
+
+
+class IssueResolutionView(BaseModel):
+    id: str
+    issue_id: str
+    run_id: str
+    previous_status: str
+    status: str
+    source: ReviewSource
+    reason: str
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, resolution: IssueResolution) -> IssueResolutionView:
+        return cls(**vars(resolution))
+
+
+class ConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: ReviewSource
+
+
+class ConfirmedFieldView(BaseModel):
+    field_code: str
+    value: str
+    evidence_id: str
+    decision_id: str
+    basis: str
+
+    @classmethod
+    def from_record(cls, field: ConfirmedField) -> ConfirmedFieldView:
+        return cls(**vars(field))
+
+
+class ConfirmedResultView(BaseModel):
+    id: str
+    run_id: str
+    version: int
+    revision_id: str
+    template_code: str
+    template_version: int
+    fields: tuple[ConfirmedFieldView, ...]
+    fields_sha256: str
+    source: ReviewSource
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, result: ConfirmedResult) -> ConfirmedResultView:
+        return cls(
+            id=result.id, run_id=result.run_id, version=result.version, revision_id=result.revision_id,
+            template_code=result.template_code, template_version=result.template_version,
+            fields=tuple(ConfirmedFieldView.from_record(field) for field in result.fields),
+            fields_sha256=result.fields_sha256, source=result.source, created_at_ms=result.created_at_ms,
+        )
+
+
+class AuditEventView(BaseModel):
+    id: str
+    run_id: str
+    action: str
+    target_id: str
+    source: ReviewSource
+    old_value: str | None
+    new_value: str
+    reason: str | None
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, event: AuditEvent) -> AuditEventView:
+        return cls(**vars(event))
 
 
 class ExtractionRunView(BaseModel):
@@ -233,6 +344,69 @@ def create_app(
     """Build the shared open API; network placement is a deployment boundary."""
     app = FastAPI(title="MinerU Business Documents", version="0.1.0")
 
+    @app.post(
+        "/api/business/extractions/{run_id}/fields/{field_code}/decisions",
+        response_model=FieldDecisionView, status_code=201,
+    )
+    def decide_field(run_id: str, field_code: str, request: FieldDecisionRequest) -> FieldDecisionView:
+        try:
+            decision = store.decide_field(
+                run_id, field_code=field_code, value=request.value, evidence_id=request.evidence_id,
+                source=request.source, reason=request.reason,
+            )
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FieldDecisionView.from_record(decision)
+
+    @app.get("/api/business/extractions/{run_id}/decisions", response_model=list[FieldDecisionView])
+    def list_field_decisions(run_id: str) -> list[FieldDecisionView]:
+        if store.get_extraction(run_id) is None:
+            raise HTTPException(status_code=404, detail="Extraction not found")
+        return [FieldDecisionView.from_record(item) for item in store.list_field_decisions(run_id)]
+
+    @app.post("/api/business/issues/{issue_id}/resolutions", response_model=IssueResolutionView, status_code=201)
+    def resolve_issue(issue_id: str, request: IssueResolutionRequest) -> IssueResolutionView:
+        try:
+            resolution = store.resolve_issue(
+                issue_id, status=request.status, source=request.source, reason=request.reason
+            )
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return IssueResolutionView.from_record(resolution)
+
+    @app.get("/api/business/extractions/{run_id}/resolutions", response_model=list[IssueResolutionView])
+    def list_issue_resolutions(run_id: str) -> list[IssueResolutionView]:
+        if store.get_extraction(run_id) is None:
+            raise HTTPException(status_code=404, detail="Extraction not found")
+        return [IssueResolutionView.from_record(item) for item in store.list_issue_resolutions(run_id)]
+
+    @app.post("/api/business/extractions/{run_id}/confirm", response_model=ConfirmedResultView, status_code=201)
+    def confirm_result(run_id: str, request: ConfirmationRequest) -> ConfirmedResultView:
+        try:
+            result = store.confirm_result(run_id, source=request.source)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return ConfirmedResultView.from_record(result)
+
+    @app.get("/api/business/extractions/{run_id}/results", response_model=list[ConfirmedResultView])
+    def list_confirmed_results(run_id: str) -> list[ConfirmedResultView]:
+        if store.get_extraction(run_id) is None:
+            raise HTTPException(status_code=404, detail="Extraction not found")
+        return [ConfirmedResultView.from_record(item) for item in store.list_confirmed_results(run_id)]
+
+    @app.get("/api/business/results/{result_id}", response_model=ConfirmedResultView)
+    def get_confirmed_result(result_id: str) -> ConfirmedResultView:
+        result = store.get_confirmed_result(result_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Result not found")
+        return ConfirmedResultView.from_record(result)
+
+    @app.get("/api/business/extractions/{run_id}/audit", response_model=list[AuditEventView])
+    def list_audit_events(run_id: str) -> list[AuditEventView]:
+        if store.get_extraction(run_id) is None:
+            raise HTTPException(status_code=404, detail="Extraction not found")
+        return [AuditEventView.from_record(item) for item in store.list_audit_events(run_id)]
+
     @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=201)
     def extract_fields(revision_id: str) -> ExtractionRunView:
         if field_extraction is None:
@@ -378,6 +552,10 @@ def create_app(
 
 
 __all__ = [
+    "AuditEventView",
+    "ConfirmationRequest",
+    "ConfirmedFieldView",
+    "ConfirmedResultView",
     "DocumentView",
     "EvidenceCaptureRequest",
     "EvidenceInspectionView",
@@ -385,6 +563,10 @@ __all__ = [
     "ExtractionResultView",
     "ExtractionRunView",
     "FieldCandidateView",
+    "FieldDecisionRequest",
+    "FieldDecisionView",
+    "IssueResolutionRequest",
+    "IssueResolutionView",
     "QualityIssueView",
     "RevisionView",
     "SubmissionView",

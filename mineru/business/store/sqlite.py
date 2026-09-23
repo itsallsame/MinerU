@@ -18,21 +18,27 @@ from ...doclib.types import ParseInfo
 from ...types import Tier
 from ..documents.uploads import StoredUpload
 from ..domain import (
+    AuditEvent,
     BUILTIN_TEMPLATES,
     BusinessDocument,
+    ConfirmedField,
+    ConfirmedResult,
     EvidenceSnapshot,
     ExtractionRun,
     FieldCandidate,
+    FieldDecision,
     IngestTask,
+    IssueResolution,
     ParseRevision,
     QualityIssue,
+    ReviewSource,
     TemplateField,
     TemplateVersion,
     validate_template,
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 5
 
 
 class BusinessStoreError(ValueError):
@@ -82,7 +88,8 @@ class BusinessStore:
                 }
                 if tables != {
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
-                    "extraction_runs", "field_candidates", "quality_issues",
+                    "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
+                    "issue_resolutions", "confirmed_results", "audit_events",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -195,16 +202,68 @@ class BusinessStore:
                         field_code TEXT,
                         code TEXT NOT NULL CHECK(code IN ('required_missing', 'conflicting_candidates', 'coverage_incomplete')),
                         severity TEXT NOT NULL CHECK(severity = 'blocking'),
-                        status TEXT NOT NULL CHECK(status = 'open'),
+                        status TEXT NOT NULL CHECK(status IN ('open', 'resolved', 'ignored')),
                         created_at_ms INTEGER NOT NULL,
                         UNIQUE(run_id, field_code, code)
                     );
                     CREATE INDEX quality_issues_run_created ON quality_issues(run_id, created_at_ms);
+                    CREATE TABLE field_decisions (
+                        id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        field_code TEXT NOT NULL,
+                        previous_value TEXT,
+                        value TEXT NOT NULL,
+                        evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
+                        basis TEXT NOT NULL CHECK(basis IN ('candidate_acceptance', 'manual_correction')),
+                        source TEXT NOT NULL CHECK(source IN ('web', 'skill', 'api')),
+                        reason TEXT,
+                        created_at_ms INTEGER NOT NULL
+                    );
+                    CREATE INDEX field_decisions_run_created ON field_decisions(run_id, created_at_ms);
+                    CREATE TABLE issue_resolutions (
+                        id TEXT PRIMARY KEY,
+                        issue_id TEXT NOT NULL UNIQUE REFERENCES quality_issues(id) ON DELETE RESTRICT,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        previous_status TEXT NOT NULL CHECK(previous_status = 'open'),
+                        status TEXT NOT NULL CHECK(status IN ('resolved', 'ignored')),
+                        source TEXT NOT NULL CHECK(source IN ('web', 'skill', 'api')),
+                        reason TEXT NOT NULL,
+                        created_at_ms INTEGER NOT NULL
+                    );
+                    CREATE INDEX issue_resolutions_run_created ON issue_resolutions(run_id, created_at_ms);
+                    CREATE TABLE confirmed_results (
+                        id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        version INTEGER NOT NULL CHECK(version > 0),
+                        revision_id TEXT NOT NULL REFERENCES revisions(id) ON DELETE RESTRICT,
+                        template_code TEXT NOT NULL,
+                        template_version INTEGER NOT NULL,
+                        fields_json TEXT NOT NULL,
+                        fields_sha256 TEXT NOT NULL,
+                        source TEXT NOT NULL CHECK(source IN ('web', 'skill', 'api')),
+                        created_at_ms INTEGER NOT NULL,
+                        FOREIGN KEY (template_code, template_version)
+                            REFERENCES template_versions(code, version) ON DELETE RESTRICT,
+                        UNIQUE(run_id, version)
+                    );
+                    CREATE INDEX confirmed_results_run_version ON confirmed_results(run_id, version);
+                    CREATE TABLE audit_events (
+                        id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        action TEXT NOT NULL CHECK(action IN ('field_decided', 'issue_resolved', 'result_confirmed')),
+                        target_id TEXT NOT NULL,
+                        source TEXT NOT NULL CHECK(source IN ('web', 'skill', 'api')),
+                        old_value TEXT,
+                        new_value TEXT NOT NULL,
+                        reason TEXT,
+                        created_at_ms INTEGER NOT NULL
+                    );
+                    CREATE INDEX audit_events_run_created ON audit_events(run_id, created_at_ms);
                     """
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 4")
+                database.execute("PRAGMA user_version = 5")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -442,6 +501,223 @@ class BusinessStore:
                 "SELECT * FROM quality_issues WHERE run_id=? ORDER BY created_at_ms, id", (run_id,)
             ).fetchall()
         return tuple(QualityIssue(**dict(row)) for row in rows)
+
+    @staticmethod
+    def _review_source(source: str) -> ReviewSource:
+        if source not in ("web", "skill", "api"):
+            raise BusinessStoreError("Review source must be web, skill, or api")
+        return source  # type: ignore[return-value]
+
+    @staticmethod
+    def _latest_decisions(database: sqlite3.Connection, run_id: str) -> dict[str, FieldDecision]:
+        rows = database.execute(
+            "SELECT * FROM field_decisions WHERE run_id=? ORDER BY rowid", (run_id,)
+        ).fetchall()
+        latest: dict[str, FieldDecision] = {}
+        for row in rows:
+            decision = FieldDecision(**dict(row))
+            latest[decision.field_code] = decision
+        return latest
+
+    @staticmethod
+    def _append_audit(
+        database: sqlite3.Connection, *, run_id: str, action: str, target_id: str, source: ReviewSource,
+        old_value: str | None, new_value: str, reason: str | None, created_at_ms: int,
+    ) -> None:
+        database.execute(
+            "INSERT INTO audit_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (uuid.uuid4().hex, run_id, action, target_id, source, old_value, new_value, reason, created_at_ms),
+        )
+
+    def decide_field(
+        self, run_id: str, *, field_code: str, value: str, evidence_id: str,
+        source: str, reason: str | None = None,
+    ) -> FieldDecision:
+        reviewed_by = self._review_source(source)
+        if not value.strip() or len(value) > 2000:
+            raise BusinessStoreError("Review value must be 1-2000 characters")
+        if reason is not None and len(reason) > 2000:
+            raise BusinessStoreError("Review reason is too long")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute(
+                "SELECT x.*, e.revision_id AS evidence_revision_id FROM extraction_runs x "
+                "JOIN evidence e ON e.id=? WHERE x.id=?", (evidence_id, run_id),
+            ).fetchone()
+            if row is None or row["status"] != "done" or row["evidence_revision_id"] != row["revision_id"]:
+                raise BusinessStoreError("Review requires a completed run and evidence from the same revision")
+            fields_row = database.execute(
+                "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
+                (row["template_code"], row["template_version"]),
+            ).fetchone()
+            if fields_row is None or field_code not in {
+                field["code"] for field in json.loads(fields_row["fields_json"])
+            }:
+                raise BusinessStoreError("Review field is not in the frozen template")
+            accepted = database.execute(
+                "SELECT 1 FROM field_candidates WHERE run_id=? AND field_code=? AND value=? AND evidence_id=?",
+                (run_id, field_code, value, evidence_id),
+            ).fetchone() is not None
+            basis = "candidate_acceptance" if accepted else "manual_correction"
+            if not accepted and not (reason and reason.strip()):
+                raise BusinessStoreError("Manual correction requires a reason")
+            previous = self._latest_decisions(database, run_id).get(field_code)
+            now = _now_ms()
+            decision = FieldDecision(
+                id=uuid.uuid4().hex, run_id=run_id, field_code=field_code,
+                previous_value=previous.value if previous else None, value=value, evidence_id=evidence_id,
+                basis=basis, source=reviewed_by, reason=reason, created_at_ms=now,
+            )
+            database.execute(
+                "INSERT INTO field_decisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (decision.id, decision.run_id, decision.field_code, decision.previous_value, decision.value,
+                 decision.evidence_id, decision.basis, decision.source, decision.reason, decision.created_at_ms),
+            )
+            self._append_audit(
+                database, run_id=run_id, action="field_decided", target_id=decision.id,
+                source=reviewed_by, old_value=decision.previous_value, new_value=value,
+                reason=reason, created_at_ms=now,
+            )
+        return decision
+
+    def list_field_decisions(self, run_id: str) -> tuple[FieldDecision, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM field_decisions WHERE run_id=? ORDER BY rowid", (run_id,)
+            ).fetchall()
+        return tuple(FieldDecision(**dict(row)) for row in rows)
+
+    def resolve_issue(
+        self, issue_id: str, *, status: str, source: str, reason: str
+    ) -> IssueResolution:
+        reviewed_by = self._review_source(source)
+        if status not in ("resolved", "ignored"):
+            raise BusinessStoreError("Issue status must be resolved or ignored")
+        if not reason.strip() or len(reason) > 2000:
+            raise BusinessStoreError("Issue resolution requires a reason")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute(
+                "SELECT q.*, x.status AS run_status FROM quality_issues q "
+                "JOIN extraction_runs x ON x.id=q.run_id WHERE q.id=?", (issue_id,),
+            ).fetchone()
+            if row is None or row["run_status"] != "done" or row["status"] != "open":
+                raise BusinessStoreError("Issue is not open on a completed extraction")
+            if row["code"] == "coverage_incomplete":
+                raise BusinessStoreError("Incomplete source coverage cannot be waived")
+            if row["code"] == "required_missing" and status == "ignored":
+                raise BusinessStoreError("Required field absence cannot be ignored")
+            if status == "resolved" and row["field_code"] not in self._latest_decisions(database, row["run_id"]):
+                raise BusinessStoreError("Resolving a field issue requires a field decision")
+            now = _now_ms()
+            resolution = IssueResolution(
+                id=uuid.uuid4().hex, issue_id=issue_id, run_id=row["run_id"],
+                previous_status="open", status=status, source=reviewed_by,
+                reason=reason, created_at_ms=now,
+            )
+            database.execute("UPDATE quality_issues SET status=? WHERE id=? AND status='open'", (status, issue_id))
+            database.execute(
+                "INSERT INTO issue_resolutions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (resolution.id, resolution.issue_id, resolution.run_id, resolution.previous_status,
+                 resolution.status, resolution.source, resolution.reason, resolution.created_at_ms),
+            )
+            self._append_audit(
+                database, run_id=row["run_id"], action="issue_resolved", target_id=resolution.id,
+                source=reviewed_by, old_value="open", new_value=status, reason=reason, created_at_ms=now,
+            )
+        return resolution
+
+    def list_issue_resolutions(self, run_id: str) -> tuple[IssueResolution, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM issue_resolutions WHERE run_id=? ORDER BY rowid", (run_id,)
+            ).fetchall()
+        return tuple(IssueResolution(**dict(row)) for row in rows)
+
+    @staticmethod
+    def _result_from_row(row: sqlite3.Row) -> ConfirmedResult:
+        payload = dict(row)
+        payload["fields"] = tuple(ConfirmedField(**field) for field in json.loads(payload.pop("fields_json")))
+        return ConfirmedResult(**payload)
+
+    def confirm_result(self, run_id: str, *, source: str) -> ConfirmedResult:
+        reviewed_by = self._review_source(source)
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            run = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
+            if run is None or run["status"] != "done":
+                raise BusinessStoreError("Only completed extraction can be confirmed")
+            open_issue = database.execute(
+                "SELECT 1 FROM quality_issues WHERE run_id=? AND status='open' LIMIT 1", (run_id,)
+            ).fetchone()
+            if open_issue is not None:
+                raise BusinessStoreError("Blocking quality issues remain open")
+            fields_row = database.execute(
+                "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
+                (run["template_code"], run["template_version"]),
+            ).fetchone()
+            if fields_row is None:
+                raise BusinessStoreError("Frozen template version is missing")
+            latest = self._latest_decisions(database, run_id)
+            missing = [
+                field["code"] for field in json.loads(fields_row["fields_json"])
+                if field["required"] and field["code"] not in latest
+            ]
+            if missing:
+                raise BusinessStoreError("Required fields need explicit review decisions")
+            fields = tuple(
+                ConfirmedField(
+                    field_code=code, value=decision.value, evidence_id=decision.evidence_id,
+                    decision_id=decision.id, basis=decision.basis,
+                )
+                for code, decision in sorted(latest.items())
+            )
+            fields_json = json.dumps([vars(field) for field in fields], ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":"))
+            fields_sha256 = hashlib.sha256(fields_json.encode("utf-8")).hexdigest()
+            previous = database.execute(
+                "SELECT version, fields_sha256 FROM confirmed_results WHERE run_id=? ORDER BY version DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            if previous is not None and previous["fields_sha256"] == fields_sha256:
+                raise BusinessStoreError("No review changes since the last confirmation")
+            now = _now_ms()
+            result = ConfirmedResult(
+                id=uuid.uuid4().hex, run_id=run_id, version=previous["version"] + 1 if previous else 1,
+                revision_id=run["revision_id"], template_code=run["template_code"],
+                template_version=run["template_version"], fields=fields, fields_sha256=fields_sha256,
+                source=reviewed_by, created_at_ms=now,
+            )
+            database.execute(
+                "INSERT INTO confirmed_results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (result.id, result.run_id, result.version, result.revision_id, result.template_code,
+                 result.template_version, fields_json, result.fields_sha256, result.source, result.created_at_ms),
+            )
+            self._append_audit(
+                database, run_id=run_id, action="result_confirmed", target_id=result.id,
+                source=reviewed_by, old_value=previous["fields_sha256"] if previous else None,
+                new_value=fields_sha256, reason=None, created_at_ms=now,
+            )
+        return result
+
+    def get_confirmed_result(self, result_id: str) -> ConfirmedResult | None:
+        with closing(self._connect()) as database:
+            row = database.execute("SELECT * FROM confirmed_results WHERE id=?", (result_id,)).fetchone()
+        return self._result_from_row(row) if row is not None else None
+
+    def list_confirmed_results(self, run_id: str) -> tuple[ConfirmedResult, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM confirmed_results WHERE run_id=? ORDER BY version DESC", (run_id,)
+            ).fetchall()
+        return tuple(self._result_from_row(row) for row in rows)
+
+    def list_audit_events(self, run_id: str) -> tuple[AuditEvent, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM audit_events WHERE run_id=? ORDER BY rowid", (run_id,)
+            ).fetchall()
+        return tuple(AuditEvent(**dict(row)) for row in rows)
 
     def create_document(
         self, upload: StoredUpload, *, original_name: str, template_code: str | None = None

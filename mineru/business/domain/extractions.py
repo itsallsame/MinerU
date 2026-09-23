@@ -39,7 +39,7 @@ class QualityIssue:
     field_code: str | None
     code: IssueCode
     severity: Literal["blocking"]
-    status: Literal["open"]
+    status: Literal["open", "resolved", "ignored"]
     created_at_ms: int
 
 
