@@ -419,3 +419,13 @@ Changes:
 Verification: Web 10 tests/8-asset build; Playwright three-level review recovery, evidence deep-link, and service outage recovery passed.
 Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
 Next: Resolve remaining cross-document async races and search/audit retry UX; then FE-048 missing-resource feedback, four-class samples and Kylin/NVIDIA field gates. Keep goal active.
+
+=== 2026-09-23 Session 40 (Cross-document async isolation) ===
+Status: In progress; FE-047 further advanced but remains incomplete, still 53/241 passed
+Changes:
+- Added context-version guards around review asynchronous reads and writes; switching documents/revisions invalidates old client-side completions.
+- Pinned review writes to the originating run ID and blocked run/revision selector changes during a pending review action; server-accepted writes are not falsely described as cancelled.
+- Guarded polling evidence refresh after run completion against a later document switch.
+Verification: Web 10 tests/8-asset build; Playwright delayed write A→B isolation plus review recovery, evidence deep-link and outage regressions passed.
+Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
+Next: Search/audit async retries and remaining write-race scenarios, FE-048 missing-resource feedback, real four-class sample and Kylin/NVIDIA acceptance. Keep goal active.

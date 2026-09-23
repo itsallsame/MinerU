@@ -4489,7 +4489,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复及详情修订、解析修订、提取运行的重试切片已验证；跨文档写操作竞态、检索/审计面板等仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md"
+      "notes": "服务断线/恢复、详情与复核重试、延迟字段决定跨文档隔离已验证；检索/审计面板及其他写操作场景仍待完成。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md"
     },
     {
       "id": "FE-048",

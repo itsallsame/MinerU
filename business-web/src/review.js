@@ -53,12 +53,13 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     selectedFieldCode: null, inspectionHighlightValue: null,
     sourcePageNo: null,
     revisionLoading: false, runLoading: false,
-    revisionLoadFailed: false, runLoadFailed: false, targetRunId: null,
+    revisionLoadFailed: false, runLoadFailed: false, targetRunId: null, contextVersion: 0,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
   function clear() {
     state.generation += 1;
+    state.contextVersion += 1;
     state.document = null;
     state.revisions = [];
     state.revisionId = null;
@@ -87,16 +88,20 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   async function perform(action) {
     if (state.busy) return;
+    const contextVersion = state.contextVersion;
+    const isCurrent = () => contextVersion === state.contextVersion;
     state.busy = true;
     state.error = "";
     render();
     try {
-      await action();
+      await action(isCurrent);
     } catch (error) {
-      state.error = error.message;
+      if (isCurrent()) state.error = error.message;
     } finally {
-      state.busy = false;
-      render();
+      if (isCurrent()) {
+        state.busy = false;
+        render();
+      }
     }
   }
 
@@ -138,6 +143,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   async function selectRevision(revisionId, targetRunId = null) {
     const generation = ++state.generation;
+    state.contextVersion += 1;
+    state.busy = false;
     state.revisionId = revisionId;
     state.targetRunId = targetRunId;
     state.runId = null;
@@ -191,6 +198,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   async function setDocument(documentRecord, revisions, { revisionId = null, evidenceId = null, runId = null } = {}) {
     state.generation += 1;
+    state.contextVersion += 1;
+    state.busy = false;
     state.document = documentRecord;
     state.revisions = revisions;
     state.revisionId = null;
@@ -233,14 +242,14 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function startExtraction() {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
       const created = await businessApi.enqueueExtraction(revisionId);
-      if (revisionId !== state.revisionId) return;
+      if (!isCurrent()) return;
       const [runs, evidence] = await Promise.all([
         businessApi.extractions(revisionId), businessApi.revisionEvidence(revisionId),
       ]);
-      if (revisionId !== state.revisionId) return;
+      if (!isCurrent()) return;
       state.runs = runs;
       state.evidence = evidence;
       await loadRun(created.id);
@@ -249,12 +258,18 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   async function refreshActive() {
     if (!state.runId || !["queued", "running"].includes(state.extraction?.run.status) || state.busy) return;
-    await loadRun(state.runId);
-    if (state.extraction?.run.status === "done") {
+    const runId = state.runId;
+    await loadRun(runId);
+    if (state.runId === runId && state.extraction?.run.status === "done") {
+      const revisionId = state.revisionId;
+      const contextVersion = state.contextVersion;
       try {
-        state.evidence = await businessApi.revisionEvidence(state.revisionId);
+        const evidence = await businessApi.revisionEvidence(revisionId);
+        if (contextVersion !== state.contextVersion || runId !== state.runId) return;
+        state.evidence = evidence;
         render();
       } catch (error) {
+        if (contextVersion !== state.contextVersion || runId !== state.runId) return;
         state.error = `证据列表读取失败：${error.message}`;
         render();
       }
@@ -263,8 +278,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   async function inspectEvidence(evidenceId, fieldCode = null, value = null) {
     let inspected = false;
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const inspection = await businessApi.inspectEvidence(evidenceId);
+      if (!isCurrent()) return;
       state.selectedFieldCode = fieldCode;
       state.inspectionHighlightValue = value;
       state.inspection = inspection;
@@ -347,18 +363,18 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function readHistorical(locator) {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
       const reading = await businessApi.readRevision(revisionId, locator);
-      if (revisionId === state.revisionId) state.reading = reading;
+      if (isCurrent()) state.reading = reading;
     });
   }
 
   async function compareRevisions(otherId, startPage = null) {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
       const page = await businessApi.diffRevisions(revisionId, otherId, startPage);
-      if (revisionId !== state.revisionId || otherId !== state.diffOtherId) return;
+      if (!isCurrent() || otherId !== state.diffOtherId) return;
       state.diff = {
         items: startPage === null ? page.items : [...(state.diff?.items || []), ...page.items],
         nextPage: page.next_page,
@@ -369,14 +385,14 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function readDiffPage(item) {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const leftRevisionId = state.revisionId;
       const rightRevisionId = state.diffOtherId;
       const [left, right] = await Promise.all([
         item.left_locator ? businessApi.readRevision(leftRevisionId, item.left_locator, 30000) : null,
         item.right_locator ? businessApi.readRevision(rightRevisionId, item.right_locator, 30000) : null,
       ]);
-      if (leftRevisionId !== state.revisionId || rightRevisionId !== state.diffOtherId) return;
+      if (!isCurrent() || rightRevisionId !== state.diffOtherId) return;
       if (left?.truncated || right?.truncated) throw new Error("页面过长，无法完整展示两版文本；不能据此判断全部差异。");
       state.diffPreview = { pageNo: item.page_no, left: left?.content ?? null, right: right?.content ?? null };
     });
@@ -432,10 +448,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function loadOutline(startPage = null) {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
       const page = await businessApi.outline(revisionId, startPage);
-      if (revisionId !== state.revisionId) return;
+      if (!isCurrent()) return;
       state.outline = {
         items: startPage === null ? page.items : [...(state.outline?.items || []), ...page.items],
         nextPage: page.next_page,
@@ -445,10 +461,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function loadStructure(pageNo) {
-    await perform(async () => {
+    await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
       const page = await businessApi.structure(revisionId, pageNo);
-      if (revisionId === state.revisionId) state.structure = page;
+      if (isCurrent()) state.structure = page;
     });
   }
 
@@ -588,10 +604,15 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       const pageNumber = Number(page.value);
       if (!Number.isInteger(pageNumber) || pageNumber < 1 || !revision) return;
       const locator = `doc:${revision.short_id}/tier:${revision.tier}/page:${pageNumber}`;
-      perform(async () => {
+      perform(async (isCurrent) => {
         const created = await businessApi.captureEvidence(revision.id, locator);
-        state.evidence = await businessApi.revisionEvidence(revision.id);
-        state.inspection = await businessApi.inspectEvidence(created.id);
+        if (!isCurrent()) return;
+        const evidence = await businessApi.revisionEvidence(revision.id);
+        if (!isCurrent()) return;
+        const inspection = await businessApi.inspectEvidence(created.id);
+        if (!isCurrent()) return;
+        state.evidence = evidence;
+        state.inspection = inspection;
       });
     });
     box.append(capture);
@@ -665,9 +686,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         const row = element("div", "candidate-row");
         row.append(element("span", "", candidate.value));
         row.append(button("看证据", () => inspectEvidence(candidate.evidence_id, field.code, candidate.value), state.busy));
-        row.append(button("接受候选", () => perform(async () => {
-          await businessApi.decideField(state.runId, field.code, candidate.value, candidate.evidence_id);
-          await loadRun(state.runId);
+        row.append(button("接受候选", () => perform(async (isCurrent) => {
+          const runId = state.runId;
+          await businessApi.decideField(runId, field.code, candidate.value, candidate.evidence_id);
+          if (isCurrent()) await loadRun(runId);
         }), state.busy));
         card.append(row);
       }
@@ -702,9 +724,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       form.append(value, evidence, reason, save);
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        perform(async () => {
-          await businessApi.decideField(state.runId, field.code, value.value, evidence.value, reason.value || null);
-          await loadRun(state.runId);
+        perform(async (isCurrent) => {
+          const runId = state.runId;
+          await businessApi.decideField(runId, field.code, value.value, evidence.value, reason.value || null);
+          if (isCurrent()) await loadRun(runId);
         });
       });
       card.append(form);
@@ -739,18 +762,20 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
           const ignore = button("有依据地忽略", () => {}, state.busy);
           ignore.addEventListener("click", () => {
             if (!reason.reportValidity()) return;
-            perform(async () => {
+            perform(async (isCurrent) => {
+              const runId = state.runId;
               await businessApi.resolveIssue(issue.id, "ignored", reason.value);
-              await loadRun(state.runId);
+              if (isCurrent()) await loadRun(runId);
             });
           });
           form.append(ignore);
         }
         form.addEventListener("submit", (event) => {
           event.preventDefault();
-          perform(async () => {
+          perform(async (isCurrent) => {
+            const runId = state.runId;
             await businessApi.resolveIssue(issue.id, "resolved", reason.value);
-            await loadRun(state.runId);
+            if (isCurrent()) await loadRun(runId);
           });
         });
         card.append(form);
@@ -770,9 +795,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       for (const reason of blockers) list.append(element("li", "", reason));
       box.append(list);
     }
-    box.append(button("确认并生成不可变成果版本", () => perform(async () => {
-      await businessApi.confirm(state.runId);
-      await loadRun(state.runId);
+    box.append(button("确认并生成不可变成果版本", () => perform(async (isCurrent) => {
+      const runId = state.runId;
+      await businessApi.confirm(runId);
+      if (isCurrent()) await loadRun(runId);
     }), state.busy || !!blockers.length));
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {
@@ -813,6 +839,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     const tools = element("div", "review-tools");
     const revisionSelect = element("select");
     revisionSelect.setAttribute("aria-label", "选择解析修订");
+    revisionSelect.disabled = state.busy;
     for (const revision of state.revisions) {
       const option = element("option", "", `${revision.tier.toUpperCase()} · 第 ${revision.page_range} 页 · ${new Date(revision.created_at_ms).toLocaleString("zh-CN")}`);
       option.value = revision.id;
@@ -824,6 +851,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (state.runs.length) {
       const runSelect = element("select");
       runSelect.setAttribute("aria-label", "选择提取运行");
+      runSelect.disabled = state.busy;
       for (const run of state.runs) {
         const option = element("option", "", `${runLabels[run.status] || run.status} · ${new Date(run.created_at_ms).toLocaleString("zh-CN")}`);
         option.value = run.id;
@@ -836,7 +864,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     tools.append(button(
       state.runs.length ? "重新生成字段候选" : "生成字段候选",
       startExtraction,
-      state.busy || state.revisionLoading || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
+      state.busy || state.revisionLoading || state.runLoading || state.runLoadFailed
+        || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
     const sourceLinks = renderSourceFieldIndex();
