@@ -1,0 +1,44 @@
+=== 基于 MinerU 4 的离线业务文档平台 - Progress Log ===
+
+Project: itsallsame/MinerU 业务化版本
+Branch: master
+Started: 2026-09-23
+Goal: 架构设计、阶段开发、测试验证；零历史兼容；麒麟 x86_64 + NVIDIA 完全离线生产。
+
+=== 用户确认的开发与验证方式 ===
+
+Setup: uv venv .venv && uv pip install -e '.[dev,test]'
+Baseline tests: .venv/bin/python -m pytest tests/unittest
+Local smoke: mineru-kit parse demo/pdfs/demo1.pdf --tier flash --pages all
+Frontend (after creation): pnpm test && pnpm build
+Production: approved offline artifacts on Kylin x86_64 + NVIDIA; models mounted separately.
+
+=== 2026-09-23 Session 0 (Design baseline) ===
+Status: Completed
+Changes:
+- Cloned user's fork on master, configured official upstream, verified version 4.0.6.
+- Created dev-docs/deepdive.md with alternatives, constraints, scenario checks and open questions.
+- Found public DoclibClient/DoclibInterface and doclib single-instance ownership lock; prioritize contract prototype.
+Verification: read-only repository inspection; no code or runtime inference claim.
+
+=== 2026-09-23 Session 1 (Phase initialization) ===
+Status: Completed
+Changes:
+- Created architecture and phase plan documents.
+- Created 241 granular features across P1-P6 and execution rules.
+Verification: JSON parsed; total, actual and unique IDs all equal 241; six implementation phases defined.
+Next: Start P1 offline packaging after phase boundary report.
+
+=== Known constraints and unresolved inputs ===
+
+- Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
+- Real de-identified four-type documents and ground truth have not been provided; accuracy figures remain unmeasured.
+- License obligations for the intended production/distribution mode need project-side review before release.
+- No old project code/data has been deleted or migrated.
+
+=== Next session instructions ===
+
+1. Read AGENTS.md, this file, feature-list.json, architecture and plan; check git status/log.
+2. Complete P1 as a whole: source-based offline build, external model mount, no-network guards, release manifest, relevant tests.
+3. Run project-appropriate tests, document actual results and limitations; review changes and report phase completion.
+4. Stop at phase boundary for user confirmation. Never mark target hardware acceptance passed from Mac tests.

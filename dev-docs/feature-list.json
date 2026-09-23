@@ -1,0 +1,5850 @@
+{
+  "project": "基于 MinerU 4 的离线业务文档平台",
+  "created_at": "2026-09-23",
+  "last_updated": "2026-09-23",
+  "repository": "git@github.com:itsallsame/MinerU.git",
+  "branch": "master",
+  "total_features": 241,
+  "completed_features": 0,
+  "build_commands": {
+    "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
+    "test": ".venv/bin/python -m pytest tests/unittest",
+    "run": "mineru-kit parse demo/pdfs/demo1.pdf --tier flash --pages all",
+    "frontend": "cd business-web && pnpm test && pnpm build",
+    "production": "麒麟 x86_64 离线构建；模型由只读宿主目录挂载"
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "name": "离线交付底座",
+      "priority": "P0",
+      "features": [
+        "INF-001",
+        "INF-002",
+        "INF-003",
+        "INF-004",
+        "INF-005",
+        "INF-006",
+        "INF-007",
+        "INF-008",
+        "INF-009",
+        "INF-010",
+        "INF-011",
+        "INF-012",
+        "INF-013",
+        "INF-014",
+        "INF-015",
+        "INF-016",
+        "INF-017",
+        "INF-018",
+        "INF-019",
+        "INF-020",
+        "INF-021",
+        "INF-022",
+        "INF-023",
+        "INF-024",
+        "INF-025",
+        "INF-026",
+        "INF-027",
+        "INF-028",
+        "INF-029",
+        "INF-030"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Doclib契约原型",
+      "priority": "P0",
+      "features": [
+        "DOC-001",
+        "DOC-002",
+        "DOC-003",
+        "DOC-004",
+        "DOC-005",
+        "DOC-006",
+        "DOC-007",
+        "DOC-008",
+        "DOC-009",
+        "DOC-010",
+        "DOC-011",
+        "DOC-012",
+        "DOC-013",
+        "DOC-014",
+        "DOC-015",
+        "DOC-016",
+        "DOC-017",
+        "DOC-018",
+        "DOC-019",
+        "DOC-020",
+        "DOC-021",
+        "DOC-022",
+        "DOC-023",
+        "DOC-024",
+        "DOC-025",
+        "DOC-026",
+        "DOC-027",
+        "DOC-028",
+        "DOC-029",
+        "DOC-030",
+        "DOC-031",
+        "DOC-032",
+        "DOC-033",
+        "DOC-034"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "业务领域与后端",
+      "priority": "P1",
+      "features": [
+        "BE-001",
+        "BE-002",
+        "BE-003",
+        "BE-004",
+        "BE-005",
+        "BE-006",
+        "BE-007",
+        "BE-008",
+        "BE-009",
+        "BE-010",
+        "BE-011",
+        "BE-012",
+        "BE-013",
+        "BE-014",
+        "BE-015",
+        "BE-016",
+        "BE-017",
+        "BE-018",
+        "BE-019",
+        "BE-020",
+        "BE-021",
+        "BE-022",
+        "BE-023",
+        "BE-024",
+        "BE-025",
+        "BE-026",
+        "BE-027",
+        "BE-028",
+        "BE-029",
+        "BE-030",
+        "BE-031",
+        "BE-032",
+        "BE-033",
+        "BE-034",
+        "BE-035",
+        "BE-036",
+        "BE-037",
+        "BE-038",
+        "BE-039",
+        "BE-040",
+        "BE-041",
+        "BE-042",
+        "BE-043",
+        "BE-044",
+        "BE-045",
+        "BE-046",
+        "BE-047",
+        "BE-048",
+        "BE-049",
+        "BE-050",
+        "BE-051",
+        "BE-052",
+        "BE-053",
+        "BE-054",
+        "BE-055",
+        "BE-056",
+        "BE-057",
+        "BE-058",
+        "BE-059",
+        "BE-060",
+        "BE-061",
+        "BE-062",
+        "BE-063",
+        "BE-064",
+        "BE-065",
+        "BE-066",
+        "BE-067",
+        "BE-068",
+        "BE-069",
+        "BE-070"
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "业务前端",
+      "priority": "P1",
+      "features": [
+        "FE-001",
+        "FE-002",
+        "FE-003",
+        "FE-004",
+        "FE-005",
+        "FE-006",
+        "FE-007",
+        "FE-008",
+        "FE-009",
+        "FE-010",
+        "FE-011",
+        "FE-012",
+        "FE-013",
+        "FE-014",
+        "FE-015",
+        "FE-016",
+        "FE-017",
+        "FE-018",
+        "FE-019",
+        "FE-020",
+        "FE-021",
+        "FE-022",
+        "FE-023",
+        "FE-024",
+        "FE-025",
+        "FE-026",
+        "FE-027",
+        "FE-028",
+        "FE-029",
+        "FE-030",
+        "FE-031",
+        "FE-032",
+        "FE-033",
+        "FE-034",
+        "FE-035",
+        "FE-036",
+        "FE-037",
+        "FE-038",
+        "FE-039",
+        "FE-040",
+        "FE-041",
+        "FE-042",
+        "FE-043",
+        "FE-044",
+        "FE-045",
+        "FE-046",
+        "FE-047",
+        "FE-048",
+        "FE-049",
+        "FE-050"
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "自有Skill",
+      "priority": "P1",
+      "features": [
+        "SKL-001",
+        "SKL-002",
+        "SKL-003",
+        "SKL-004",
+        "SKL-005",
+        "SKL-006",
+        "SKL-007",
+        "SKL-008",
+        "SKL-009",
+        "SKL-010",
+        "SKL-011",
+        "SKL-012",
+        "SKL-013",
+        "SKL-014",
+        "SKL-015",
+        "SKL-016",
+        "SKL-017",
+        "SKL-018",
+        "SKL-019",
+        "SKL-020",
+        "SKL-021",
+        "SKL-022"
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "系统验收",
+      "priority": "P2",
+      "features": [
+        "QA-001",
+        "QA-002",
+        "QA-003",
+        "QA-004",
+        "QA-005",
+        "QA-006",
+        "QA-007",
+        "QA-008",
+        "QA-009",
+        "QA-010",
+        "QA-011",
+        "QA-012",
+        "QA-013",
+        "QA-014",
+        "QA-015",
+        "QA-016",
+        "QA-017",
+        "QA-018",
+        "QA-019",
+        "QA-020",
+        "QA-021",
+        "QA-022",
+        "QA-023",
+        "QA-024",
+        "QA-025",
+        "QA-026",
+        "QA-027",
+        "QA-028",
+        "QA-029",
+        "QA-030",
+        "QA-031",
+        "QA-032",
+        "QA-033",
+        "QA-034",
+        "QA-035"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "INF-001",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "锁定源码提交写入构建标签",
+      "description": "完成并验证：锁定源码提交写入构建标签",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：锁定源码提交写入构建标签",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-002",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "本地源码安装取代包索引安装",
+      "description": "完成并验证：本地源码安装取代包索引安装",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：本地源码安装取代包索引安装",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-003",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "移除构建期模型下载",
+      "description": "完成并验证：移除构建期模型下载",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：移除构建期模型下载",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-004",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "构建上下文排除模型目录",
+      "description": "完成并验证：构建上下文排除模型目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：构建上下文排除模型目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-005",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "构建上下文排除用户文档目录",
+      "description": "完成并验证：构建上下文排除用户文档目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：构建上下文排除用户文档目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-006",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "构建上下文排除文档库数据目录",
+      "description": "完成并验证：构建上下文排除文档库数据目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：构建上下文排除文档库数据目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-007",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "构建上下文排除业务数据库文件",
+      "description": "完成并验证：构建上下文排除业务数据库文件",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：构建上下文排除业务数据库文件",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-008",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "配置只读模型挂载目录",
+      "description": "完成并验证：配置只读模型挂载目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：配置只读模型挂载目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-009",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "配置持久文档库目录",
+      "description": "完成并验证：配置持久文档库目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：配置持久文档库目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-010",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "配置持久业务数据目录",
+      "description": "完成并验证：配置持久业务数据目录",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：配置持久业务数据目录",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-011",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "启动时强制本地模型源",
+      "description": "完成并验证：启动时强制本地模型源",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：启动时强制本地模型源",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-012",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "禁用生产云端解析回退",
+      "description": "完成并验证：禁用生产云端解析回退",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：禁用生产云端解析回退",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-013",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "禁用生产远程VLM回退",
+      "description": "完成并验证：禁用生产远程VLM回退",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：禁用生产远程VLM回退",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-014",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "模型目录缺失时启动失败",
+      "description": "完成并验证：模型目录缺失时启动失败",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：模型目录缺失时启动失败",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-015",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "模型校验失败时启动失败",
+      "description": "完成并验证：模型校验失败时启动失败",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：模型校验失败时启动失败",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-016",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "记录实际MinerU源码版本",
+      "description": "完成并验证：记录实际MinerU源码版本",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：记录实际MinerU源码版本",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-017",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "记录模型目录和后端组合",
+      "description": "完成并验证：记录模型目录和后端组合",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：记录模型目录和后端组合",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-018",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "锁定Python依赖版本",
+      "description": "完成并验证：锁定Python依赖版本",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：锁定Python依赖版本",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-019",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "准备离线Python依赖仓库",
+      "description": "完成并验证：准备离线Python依赖仓库",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：准备离线Python依赖仓库",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-020",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "准备前端离线依赖策略",
+      "description": "完成并验证：准备前端离线依赖策略",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：准备前端离线依赖策略",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-021",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "准备离线系统依赖清单",
+      "description": "完成并验证：准备离线系统依赖清单",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：准备离线系统依赖清单",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-022",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "校验离线制品SHA256",
+      "description": "完成并验证：校验离线制品SHA256",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：校验离线制品SHA256",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-023",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "校验镜像架构为amd64",
+      "description": "完成并验证：校验镜像架构为amd64",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：校验镜像架构为amd64",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-024",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "限制MinerU内部接口网络暴露",
+      "description": "完成并验证：限制MinerU内部接口网络暴露",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：限制MinerU内部接口网络暴露",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-025",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "配置NVIDIA设备可见性",
+      "description": "完成并验证：配置NVIDIA设备可见性",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：配置NVIDIA设备可见性",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-026",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "验证仅业务代码变更不触碰模型",
+      "description": "完成并验证：验证仅业务代码变更不触碰模型",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：验证仅业务代码变更不触碰模型",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-027",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "验证仅模型变更不重建业务镜像",
+      "description": "完成并验证：验证仅模型变更不重建业务镜像",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：验证仅模型变更不重建业务镜像",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-028",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "生成可回滚的发布清单",
+      "description": "完成并验证：生成可回滚的发布清单",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：生成可回滚的发布清单",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-029",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "记录断网启动验收步骤",
+      "description": "完成并验证：记录断网启动验收步骤",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：记录断网启动验收步骤",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "INF-030",
+      "phase": "P1",
+      "category": "infra",
+      "priority": "P0",
+      "name": "保留旧镜像与模型版本用于回退",
+      "description": "完成并验证：保留旧镜像与模型版本用于回退",
+      "dependencies": [],
+      "files": [
+        "docker/business/Dockerfile",
+        "docker/worker/Dockerfile",
+        "docker/compose.business.yaml",
+        "config/business.example.yaml"
+      ],
+      "steps": [
+        "实现：保留旧镜像与模型版本用于回退",
+        "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-001",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "DoclibClient连接状态探测",
+      "description": "完成并验证：DoclibClient连接状态探测",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：DoclibClient连接状态探测",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-002",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "Doclib单实例所有权验证",
+      "description": "完成并验证：Doclib单实例所有权验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：Doclib单实例所有权验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-003",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "业务文档ID映射MinerU文档引用",
+      "description": "完成并验证：业务文档ID映射MinerU文档引用",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：业务文档ID映射MinerU文档引用",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-004",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "原文件SHA256与去重策略",
+      "description": "完成并验证：原文件SHA256与去重策略",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：原文件SHA256与去重策略",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-005",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "同名不同内容文件身份验证",
+      "description": "完成并验证：同名不同内容文件身份验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：同名不同内容文件身份验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-006",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "重复上传同内容文件行为验证",
+      "description": "完成并验证：重复上传同内容文件行为验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：重复上传同内容文件行为验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-007",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "PDF入库与文档身份验证",
+      "description": "完成并验证：PDF入库与文档身份验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：PDF入库与文档身份验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-008",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "图片入库与文档身份验证",
+      "description": "完成并验证：图片入库与文档身份验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：图片入库与文档身份验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-009",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "DOCX原生Flash入库验证",
+      "description": "完成并验证：DOCX原生Flash入库验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：DOCX原生Flash入库验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-010",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "PPTX原生Flash入库验证",
+      "description": "完成并验证：PPTX原生Flash入库验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：PPTX原生Flash入库验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-011",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "XLSX原生Flash入库验证",
+      "description": "完成并验证：XLSX原生Flash入库验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：XLSX原生Flash入库验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-012",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "PDF四档可用性探测",
+      "description": "完成并验证：PDF四档可用性探测",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：PDF四档可用性探测",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-013",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "原生格式强制Flash策略",
+      "description": "完成并验证：原生格式强制Flash策略",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：原生格式强制Flash策略",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-014",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析任务提交和状态轮询",
+      "description": "完成并验证：解析任务提交和状态轮询",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析任务提交和状态轮询",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-015",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析失败错误归一化",
+      "description": "完成并验证：解析失败错误归一化",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析失败错误归一化",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-016",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析取消状态映射",
+      "description": "完成并验证：解析取消状态映射",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析取消状态映射",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-017",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析结果实际tier记录",
+      "description": "完成并验证：解析结果实际tier记录",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析结果实际tier记录",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-018",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析生产者版本记录",
+      "description": "完成并验证：解析生产者版本记录",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析生产者版本记录",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-019",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "解析修订身份生成",
+      "description": "完成并验证：解析修订身份生成",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：解析修订身份生成",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-020",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "结构内容读取",
+      "description": "完成并验证：结构内容读取",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：结构内容读取",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-021",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "Markdown内容读取",
+      "description": "完成并验证：Markdown内容读取",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：Markdown内容读取",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-022",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "文档搜索结果读取",
+      "description": "完成并验证：文档搜索结果读取",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：文档搜索结果读取",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-023",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "定位器续读",
+      "description": "完成并验证：定位器续读",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：定位器续读",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-024",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "定位器回原文页码",
+      "description": "完成并验证：定位器回原文页码",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：定位器回原文页码",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-025",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "定位器缺失回退语义",
+      "description": "完成并验证：定位器缺失回退语义",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：定位器缺失回退语义",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-026",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "重新解析旧证据保留",
+      "description": "完成并验证：重新解析旧证据保留",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：重新解析旧证据保留",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-027",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "Doclib重启后读取恢复",
+      "description": "完成并验证：Doclib重启后读取恢复",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：Doclib重启后读取恢复",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-028",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "文档忘记与业务引用处理",
+      "description": "完成并验证：文档忘记与业务引用处理",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：文档忘记与业务引用处理",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-029",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "文档库数据备份和恢复验证",
+      "description": "完成并验证：文档库数据备份和恢复验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：文档库数据备份和恢复验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-030",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "容器间Doclib客户端通信验证",
+      "description": "完成并验证：容器间Doclib客户端通信验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：容器间Doclib客户端通信验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-031",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "Doclib接口权限代理验证",
+      "description": "完成并验证：Doclib接口权限代理验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：Doclib接口权限代理验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-032",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "Office原文预览能力验证",
+      "description": "完成并验证：Office原文预览能力验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：Office原文预览能力验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-033",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "断网状态Doclib解析验证",
+      "description": "完成并验证：断网状态Doclib解析验证",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：断网状态Doclib解析验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "DOC-034",
+      "phase": "P2",
+      "category": "doclib",
+      "priority": "P0",
+      "name": "模型不可用时Doclib失败语义",
+      "description": "完成并验证：模型不可用时Doclib失败语义",
+      "dependencies": [
+        "INF-001"
+      ],
+      "files": [
+        "mineru/business/documents",
+        "tests/business/test_doclib_contract.py"
+      ],
+      "steps": [
+        "实现：模型不可用时Doclib失败语义",
+        "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-001",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务文档实体和状态定义",
+      "description": "完成并验证：业务文档实体和状态定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务文档实体和状态定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-002",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务任务实体和状态定义",
+      "description": "完成并验证：业务任务实体和状态定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务任务实体和状态定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-003",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "解析修订实体定义",
+      "description": "完成并验证：解析修订实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：解析修订实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-004",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "模板版本实体定义",
+      "description": "完成并验证：模板版本实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：模板版本实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-005",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "字段定义类型约束",
+      "description": "完成并验证：字段定义类型约束",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：字段定义类型约束",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-006",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "字段候选实体定义",
+      "description": "完成并验证：字段候选实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：字段候选实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-007",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "证据引用实体定义",
+      "description": "完成并验证：证据引用实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：证据引用实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-008",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "质量问题实体定义",
+      "description": "完成并验证：质量问题实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：质量问题实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-009",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "人工复核决定实体定义",
+      "description": "完成并验证：人工复核决定实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：人工复核决定实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-010",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "成果修订实体定义",
+      "description": "完成并验证：成果修订实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：成果修订实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-011",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "审计事件实体定义",
+      "description": "完成并验证：审计事件实体定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：审计事件实体定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-012",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务错误码定义",
+      "description": "完成并验证：业务错误码定义",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务错误码定义",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-013",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务数据库初始化",
+      "description": "完成并验证：业务数据库初始化",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务数据库初始化",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-014",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务数据库事务边界",
+      "description": "完成并验证：业务数据库事务边界",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务数据库事务边界",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-015",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "文档与Doclib身份映射存储",
+      "description": "完成并验证：文档与Doclib身份映射存储",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：文档与Doclib身份映射存储",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-016",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "模板创建与版本快照",
+      "description": "完成并验证：模板创建与版本快照",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：模板创建与版本快照",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-017",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "公文默认模板",
+      "description": "完成并验证：公文默认模板",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：公文默认模板",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-018",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "论文默认模板",
+      "description": "完成并验证：论文默认模板",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：论文默认模板",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-019",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "研究报告默认模板",
+      "description": "完成并验证：研究报告默认模板",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：研究报告默认模板",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-020",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "报纸默认模板",
+      "description": "完成并验证：报纸默认模板",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：报纸默认模板",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-021",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "自定义模板字段校验",
+      "description": "完成并验证：自定义模板字段校验",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：自定义模板字段校验",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-022",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "上传文件类型校验",
+      "description": "完成并验证：上传文件类型校验",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：上传文件类型校验",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-023",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "上传大小限制",
+      "description": "完成并验证：上传大小限制",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：上传大小限制",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-024",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "上传文件哈希计算",
+      "description": "完成并验证：上传文件哈希计算",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：上传文件哈希计算",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-025",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "上传文件安全文件名",
+      "description": "完成并验证：上传文件安全文件名",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：上传文件安全文件名",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-026",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务任务持久队列",
+      "description": "完成并验证：业务任务持久队列",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务任务持久队列",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-027",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "任务重启恢复",
+      "description": "完成并验证：任务重启恢复",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：任务重启恢复",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-028",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "任务重试幂等",
+      "description": "完成并验证：任务重试幂等",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：任务重试幂等",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-029",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "任务取消竞态处理",
+      "description": "完成并验证：任务取消竞态处理",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：任务取消竞态处理",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-030",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "解析档位按格式校验",
+      "description": "完成并验证：解析档位按格式校验",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：解析档位按格式校验",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-031",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "解析完成触发字段抽取",
+      "description": "完成并验证：解析完成触发字段抽取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：解析完成触发字段抽取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-032",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "标题候选提取",
+      "description": "完成并验证：标题候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：标题候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-033",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "作者候选提取",
+      "description": "完成并验证：作者候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：作者候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-034",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "日期候选提取",
+      "description": "完成并验证：日期候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：日期候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-035",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "单位候选提取",
+      "description": "完成并验证：单位候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：单位候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-036",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "文号候选提取",
+      "description": "完成并验证：文号候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：文号候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-037",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "摘要候选提取",
+      "description": "完成并验证：摘要候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：摘要候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-038",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "关键词候选提取",
+      "description": "完成并验证：关键词候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：关键词候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-039",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "表格字段候选提取",
+      "description": "完成并验证：表格字段候选提取",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：表格字段候选提取",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-040",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "候选字段证据关联",
+      "description": "完成并验证：候选字段证据关联",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：候选字段证据关联",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-041",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "候选字段置信度归一化",
+      "description": "完成并验证：候选字段置信度归一化",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：候选字段置信度归一化",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-042",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "必填字段缺失问题",
+      "description": "完成并验证：必填字段缺失问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：必填字段缺失问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-043",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "低置信度字段问题",
+      "description": "完成并验证：低置信度字段问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：低置信度字段问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-044",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "多候选冲突问题",
+      "description": "完成并验证：多候选冲突问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：多候选冲突问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-045",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "标题层级问题",
+      "description": "完成并验证：标题层级问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：标题层级问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-046",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "阅读顺序问题",
+      "description": "完成并验证：阅读顺序问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：阅读顺序问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-047",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "跨页关系问题",
+      "description": "完成并验证：跨页关系问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：跨页关系问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-048",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "手写疑似问题",
+      "description": "完成并验证：手写疑似问题",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：手写疑似问题",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-049",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "质量问题严重度计算",
+      "description": "完成并验证：质量问题严重度计算",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：质量问题严重度计算",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-050",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "问题人工确认",
+      "description": "完成并验证：问题人工确认",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：问题人工确认",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-051",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "问题人工忽略",
+      "description": "完成并验证：问题人工忽略",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：问题人工忽略",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-052",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "字段人工修订",
+      "description": "完成并验证：字段人工修订",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：字段人工修订",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-053",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "结构人工修订",
+      "description": "完成并验证：结构人工修订",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：结构人工修订",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-054",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "人工修改审计记录",
+      "description": "完成并验证：人工修改审计记录",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：人工修改审计记录",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-055",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "必核问题阻断确认",
+      "description": "完成并验证：必核问题阻断确认",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：必核问题阻断确认",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-056",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "确认结果版本冻结",
+      "description": "完成并验证：确认结果版本冻结",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：确认结果版本冻结",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-057",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "已确认结果不可静默覆盖",
+      "description": "完成并验证：已确认结果不可静默覆盖",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：已确认结果不可静默覆盖",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-058",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "按权限读取原文证据",
+      "description": "完成并验证：按权限读取原文证据",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：按权限读取原文证据",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-059",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "用户身份验证",
+      "description": "完成并验证：用户身份验证",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：用户身份验证",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-060",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "角色与文档授权",
+      "description": "完成并验证：角色与文档授权",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：角色与文档授权",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-061",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "Skill令牌权限范围",
+      "description": "完成并验证：Skill令牌权限范围",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：Skill令牌权限范围",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-062",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API任务创建",
+      "description": "完成并验证：业务API任务创建",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API任务创建",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-063",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API任务状态查询",
+      "description": "完成并验证：业务API任务状态查询",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API任务状态查询",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-064",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API字段与问题查询",
+      "description": "完成并验证：业务API字段与问题查询",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API字段与问题查询",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-065",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API复核提交",
+      "description": "完成并验证：业务API复核提交",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API复核提交",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-066",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API成果导出",
+      "description": "完成并验证：业务API成果导出",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API成果导出",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-067",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API错误响应一致性",
+      "description": "完成并验证：业务API错误响应一致性",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API错误响应一致性",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-068",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务API分页和过滤",
+      "description": "完成并验证：业务API分页和过滤",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务API分页和过滤",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-069",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务统计按测试数据隔离",
+      "description": "完成并验证：业务统计按测试数据隔离",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务统计按测试数据隔离",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "BE-070",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "业务数据备份一致性",
+      "description": "完成并验证：业务数据备份一致性",
+      "dependencies": [
+        "DOC-001"
+      ],
+      "files": [
+        "mineru/business/domain",
+        "mineru/business/services",
+        "mineru/business/api",
+        "mineru/business/store",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：业务数据备份一致性",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-001",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "前端项目和生产构建",
+      "description": "完成并验证：前端项目和生产构建",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：前端项目和生产构建",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-002",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "登录状态与权限提示",
+      "description": "完成并验证：登录状态与权限提示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：登录状态与权限提示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-003",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "文档任务列表",
+      "description": "完成并验证：文档任务列表",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：文档任务列表",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-004",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "任务状态筛选",
+      "description": "完成并验证：任务状态筛选",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：任务状态筛选",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-005",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "文档类型筛选",
+      "description": "完成并验证：文档类型筛选",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：文档类型筛选",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-006",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "批量上传组件",
+      "description": "完成并验证：批量上传组件",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：批量上传组件",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-007",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "文件类型前端预检",
+      "description": "完成并验证：文件类型前端预检",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：文件类型前端预检",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-008",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "文件大小前端预检",
+      "description": "完成并验证：文件大小前端预检",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：文件大小前端预检",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-009",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "解析档位选择组件",
+      "description": "完成并验证：解析档位选择组件",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：解析档位选择组件",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-010",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "原生格式Flash提示",
+      "description": "完成并验证：原生格式Flash提示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：原生格式Flash提示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-011",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "当前服务能力展示",
+      "description": "完成并验证：当前服务能力展示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：当前服务能力展示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-012",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "上传逐文件反馈",
+      "description": "完成并验证：上传逐文件反馈",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：上传逐文件反馈",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-013",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "任务进度轮询",
+      "description": "完成并验证：任务进度轮询",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：任务进度轮询",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-014",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "失败原因展示",
+      "description": "完成并验证：失败原因展示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：失败原因展示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-015",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "任务重试入口",
+      "description": "完成并验证：任务重试入口",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：任务重试入口",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-016",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "任务取消入口",
+      "description": "完成并验证：任务取消入口",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：任务取消入口",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-017",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "文档库搜索入口",
+      "description": "完成并验证：文档库搜索入口",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：文档库搜索入口",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-018",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "搜索结果证据列表",
+      "description": "完成并验证：搜索结果证据列表",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：搜索结果证据列表",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-019",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "定位器跳转原文",
+      "description": "完成并验证：定位器跳转原文",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：定位器跳转原文",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-020",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "PDF原文页预览",
+      "description": "完成并验证：PDF原文页预览",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：PDF原文页预览",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-021",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "图片原文预览",
+      "description": "完成并验证：图片原文预览",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：图片原文预览",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-022",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "Office预览不可用提示",
+      "description": "完成并验证：Office预览不可用提示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：Office预览不可用提示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-023",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "解析结构树",
+      "description": "完成并验证：解析结构树",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：解析结构树",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-024",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "解析Markdown面板",
+      "description": "完成并验证：解析Markdown面板",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：解析Markdown面板",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-025",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "解析修订切换",
+      "description": "完成并验证：解析修订切换",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：解析修订切换",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-026",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "解析修订差异提示",
+      "description": "完成并验证：解析修订差异提示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：解析修订差异提示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-027",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "字段候选表单",
+      "description": "完成并验证：字段候选表单",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：字段候选表单",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-028",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "字段证据高亮",
+      "description": "完成并验证：字段证据高亮",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：字段证据高亮",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-029",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "问题队列",
+      "description": "完成并验证：问题队列",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：问题队列",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-030",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "问题严重度标识",
+      "description": "完成并验证：问题严重度标识",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：问题严重度标识",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-031",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "原文与字段双向联动",
+      "description": "完成并验证：原文与字段双向联动",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：原文与字段双向联动",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-032",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "人工字段修改表单",
+      "description": "完成并验证：人工字段修改表单",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：人工字段修改表单",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-033",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "人工结构修改入口",
+      "description": "完成并验证：人工结构修改入口",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：人工结构修改入口",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-034",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "复核决定操作",
+      "description": "完成并验证：复核决定操作",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：复核决定操作",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-035",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "确认前必核问题提示",
+      "description": "完成并验证：确认前必核问题提示",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：确认前必核问题提示",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-036",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "已确认成果页",
+      "description": "完成并验证：已确认成果页",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：已确认成果页",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-037",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "草稿结果水印或状态标识",
+      "description": "完成并验证：草稿结果水印或状态标识",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：草稿结果水印或状态标识",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-038",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "成果版本历史",
+      "description": "完成并验证：成果版本历史",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：成果版本历史",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-039",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "JSON成果下载",
+      "description": "完成并验证：JSON成果下载",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：JSON成果下载",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-040",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "Markdown成果下载",
+      "description": "完成并验证：Markdown成果下载",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：Markdown成果下载",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-041",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "模板管理页面",
+      "description": "完成并验证：模板管理页面",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：模板管理页面",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-042",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "自定义字段配置页面",
+      "description": "完成并验证：自定义字段配置页面",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：自定义字段配置页面",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-043",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "质量统计页面",
+      "description": "完成并验证：质量统计页面",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：质量统计页面",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-044",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "审计记录页面",
+      "description": "完成并验证：审计记录页面",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：审计记录页面",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-045",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "窄屏复核布局",
+      "description": "完成并验证：窄屏复核布局",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：窄屏复核布局",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-046",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "键盘操作与焦点可见性",
+      "description": "完成并验证：键盘操作与焦点可见性",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：键盘操作与焦点可见性",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-047",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "异步错误恢复",
+      "description": "完成并验证：异步错误恢复",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：异步错误恢复",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-048",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "未授权资源反馈",
+      "description": "完成并验证：未授权资源反馈",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：未授权资源反馈",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-049",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "前端组件自动测试",
+      "description": "完成并验证：前端组件自动测试",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：前端组件自动测试",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "FE-050",
+      "phase": "P4",
+      "category": "frontend",
+      "priority": "P1",
+      "name": "浏览器关键流程回归",
+      "description": "完成并验证：浏览器关键流程回归",
+      "dependencies": [
+        "BE-001"
+      ],
+      "files": [
+        "business-web/src",
+        "business-web/tests"
+      ],
+      "steps": [
+        "实现：浏览器关键流程回归",
+        "验证：cd business-web && pnpm test && pnpm build"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-001",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "自有Skill元信息",
+      "description": "完成并验证：自有Skill元信息",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：自有Skill元信息",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-002",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill安装说明",
+      "description": "完成并验证：Skill安装说明",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill安装说明",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-003",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill业务API连接配置",
+      "description": "完成并验证：Skill业务API连接配置",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill业务API连接配置",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-004",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill令牌最小权限说明",
+      "description": "完成并验证：Skill令牌最小权限说明",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill令牌最小权限说明",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-005",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill文档提交命令",
+      "description": "完成并验证：Skill文档提交命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill文档提交命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-006",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill任务状态查询命令",
+      "description": "完成并验证：Skill任务状态查询命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill任务状态查询命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-007",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill字段候选读取命令",
+      "description": "完成并验证：Skill字段候选读取命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill字段候选读取命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-008",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill质量问题读取命令",
+      "description": "完成并验证：Skill质量问题读取命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill质量问题读取命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-009",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill授权文档搜索命令",
+      "description": "完成并验证：Skill授权文档搜索命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill授权文档搜索命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-010",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill定位器原文读取命令",
+      "description": "完成并验证：Skill定位器原文读取命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill定位器原文读取命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-011",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill已确认成果读取命令",
+      "description": "完成并验证：Skill已确认成果读取命令",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill已确认成果读取命令",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-012",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill草稿状态明确标记",
+      "description": "完成并验证：Skill草稿状态明确标记",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill草稿状态明确标记",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-013",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill证据链接返回",
+      "description": "完成并验证：Skill证据链接返回",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill证据链接返回",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-014",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill无权文档拒绝",
+      "description": "完成并验证：Skill无权文档拒绝",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill无权文档拒绝",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-015",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill禁止直连MinerU原始API",
+      "description": "完成并验证：Skill禁止直连MinerU原始API",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill禁止直连MinerU原始API",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-016",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill禁止自动确认结果",
+      "description": "完成并验证：Skill禁止自动确认结果",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill禁止自动确认结果",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-017",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill写操作授权检查",
+      "description": "完成并验证：Skill写操作授权检查",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill写操作授权检查",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-018",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill远程上传能力禁用",
+      "description": "完成并验证：Skill远程上传能力禁用",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill远程上传能力禁用",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-019",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill故障错误解释",
+      "description": "完成并验证：Skill故障错误解释",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill故障错误解释",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-020",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill长文档渐进读取示例",
+      "description": "完成并验证：Skill长文档渐进读取示例",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill长文档渐进读取示例",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-021",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill端到端回归",
+      "description": "完成并验证：Skill端到端回归",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill端到端回归",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "SKL-022",
+      "phase": "P5",
+      "category": "skill",
+      "priority": "P1",
+      "name": "Skill与前端结果一致性验证",
+      "description": "完成并验证：Skill与前端结果一致性验证",
+      "dependencies": [
+        "FE-001"
+      ],
+      "files": [
+        "skills/business-documents/SKILL.md",
+        "tests/business/test_skill_contract.py"
+      ],
+      "steps": [
+        "实现：Skill与前端结果一致性验证",
+        "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-001",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "上游单元测试基线记录",
+      "description": "完成并验证：上游单元测试基线记录",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：上游单元测试基线记录",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-002",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "业务单元测试覆盖率记录",
+      "description": "完成并验证：业务单元测试覆盖率记录",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：业务单元测试覆盖率记录",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-003",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "Doclib契约回归",
+      "description": "完成并验证：Doclib契约回归",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：Doclib契约回归",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-004",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "业务API契约回归",
+      "description": "完成并验证：业务API契约回归",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：业务API契约回归",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-005",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "前端关键流程回归",
+      "description": "完成并验证：前端关键流程回归",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：前端关键流程回归",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-006",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "Skill端到端回归",
+      "description": "完成并验证：Skill端到端回归",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：Skill端到端回归",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-007",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "PDF真实样本解析",
+      "description": "完成并验证：PDF真实样本解析",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：PDF真实样本解析",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-008",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "图片真实样本解析",
+      "description": "完成并验证：图片真实样本解析",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：图片真实样本解析",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-009",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "DOCX真实样本解析",
+      "description": "完成并验证：DOCX真实样本解析",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：DOCX真实样本解析",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-010",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "PPTX真实样本解析",
+      "description": "完成并验证：PPTX真实样本解析",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：PPTX真实样本解析",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-011",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "XLSX真实样本解析",
+      "description": "完成并验证：XLSX真实样本解析",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：XLSX真实样本解析",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-012",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "公文字段准确率评估",
+      "description": "完成并验证：公文字段准确率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：公文字段准确率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-013",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "论文字段准确率评估",
+      "description": "完成并验证：论文字段准确率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：论文字段准确率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-014",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "研究报告字段准确率评估",
+      "description": "完成并验证：研究报告字段准确率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：研究报告字段准确率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-015",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "报纸字段准确率评估",
+      "description": "完成并验证：报纸字段准确率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：报纸字段准确率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-016",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "证据定位命中率评估",
+      "description": "完成并验证：证据定位命中率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：证据定位命中率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-017",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "标题层级准确率评估",
+      "description": "完成并验证：标题层级准确率评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：标题层级准确率评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-018",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "全文相似度评估",
+      "description": "完成并验证：全文相似度评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：全文相似度评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-019",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "复核工作量统计",
+      "description": "完成并验证：复核工作量统计",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：复核工作量统计",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-020",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "手写样本专项评估",
+      "description": "完成并验证：手写样本专项评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：手写样本专项评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-021",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "跨页表格专项评估",
+      "description": "完成并验证：跨页表格专项评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：跨页表格专项评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-022",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "印章水印专项评估",
+      "description": "完成并验证：印章水印专项评估",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：印章水印专项评估",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-023",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "模型文件缺失演练",
+      "description": "完成并验证：模型文件缺失演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：模型文件缺失演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-024",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "模型文件损坏演练",
+      "description": "完成并验证：模型文件损坏演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：模型文件损坏演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-025",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "GPU不可用演练",
+      "description": "完成并验证：GPU不可用演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：GPU不可用演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-026",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "Doclib重启恢复演练",
+      "description": "完成并验证：Doclib重启恢复演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：Doclib重启恢复演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-027",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "业务进程重启恢复演练",
+      "description": "完成并验证：业务进程重启恢复演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：业务进程重启恢复演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-028",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "断网启动验收",
+      "description": "完成并验证：断网启动验收",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：断网启动验收",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-029",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "离线镜像构建验收",
+      "description": "完成并验证：离线镜像构建验收",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：离线镜像构建验收",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-030",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "麒麟NVIDIA驱动兼容验收",
+      "description": "完成并验证：麒麟NVIDIA驱动兼容验收",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：麒麟NVIDIA驱动兼容验收",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-031",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "目标机器显存与吞吐测试",
+      "description": "完成并验证：目标机器显存与吞吐测试",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：目标机器显存与吞吐测试",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-032",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "发布制品哈希核对",
+      "description": "完成并验证：发布制品哈希核对",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：发布制品哈希核对",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-033",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "数据备份恢复演练",
+      "description": "完成并验证：数据备份恢复演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：数据备份恢复演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-034",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "版本回退演练",
+      "description": "完成并验证：版本回退演练",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：版本回退演练",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    },
+    {
+      "id": "QA-035",
+      "phase": "P6",
+      "category": "integration",
+      "priority": "P2",
+      "name": "已知限制和最终报告",
+      "description": "完成并验证：已知限制和最终报告",
+      "dependencies": [
+        "SKL-001"
+      ],
+      "files": [
+        "tests/business",
+        "dev-docs/evidence",
+        "acceptance"
+      ],
+      "steps": [
+        "实现：已知限制和最终报告",
+        "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": ""
+    }
+  ]
+}
