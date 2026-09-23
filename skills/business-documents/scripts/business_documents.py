@@ -45,6 +45,10 @@ class BusinessClient:
                 raise BusinessAPIError("Business API address must be local or private")
         self.host = parsed.hostname
         self.port = port
+        self.base_url = f"http://{parsed.netloc}"
+
+    def evidence_url(self, evidence_id: str) -> str:
+        return f"{self.base_url}/#evidence={quote(evidence_id, safe='')}"
 
     def _connect(self) -> http.client.HTTPConnection:
         return http.client.HTTPConnection(self.host, self.port, timeout=30)
@@ -187,7 +191,8 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "extraction":
         return {"state": "machine_unconfirmed", **client.request("GET", f"/extractions/{quote(args.run_id, safe='')}")}
     if command == "evidence":
-        return client.request("GET", f"/evidence/{quote(args.evidence_id, safe='')}")
+        evidence = client.request("GET", f"/evidence/{quote(args.evidence_id, safe='')}")
+        return {**evidence, "web_url": client.evidence_url(evidence["id"])}
     if command == "results":
         items = client.request("GET", f"/extractions/{quote(args.run_id, safe='')}/results")
         return {"state": "confirmed", "items": items}

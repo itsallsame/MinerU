@@ -201,6 +201,23 @@ def test_skill_reports_business_error_without_success_guess() -> None:
     assert offline.value.status is None
 
 
+def test_skill_evidence_link_uses_the_same_validated_business_web_origin() -> None:
+    script = _script()
+    evidence = {
+        "id": "evidence-1", "document_id": "doc-1", "revision_id": "rev-1",
+        "locator": "doc:abcdef123456/tier:flash/page:1", "snippet": "Frozen text",
+        "navigation_status": "changed",
+    }
+    connection = _Connection({
+        ("GET", "/api/business/evidence/evidence-1"): _Response(evidence),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    result = script.run(script.parser().parse_args(["evidence", "evidence-1"]), client)
+    assert result == {**evidence, "web_url": "http://127.0.0.1:8080/#evidence=evidence-1"}
+    assert connection.calls == [("GET", "/api/business/evidence/evidence-1")]
+
+
 def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) -> None:
     script = _script()
     shared = tmp_path / "shared"

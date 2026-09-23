@@ -104,6 +104,19 @@ async function bootstrap() {
   }
   updateFileSelection();
   await refreshDocuments();
+  await openEvidenceLink();
+}
+
+async function openEvidenceLink() {
+  const match = /^#evidence=([A-Za-z0-9_-]{1,100})$/.exec(window.location.hash);
+  if (!match) return;
+  try {
+    const evidence = await businessApi.inspectEvidence(match[1]);
+    const record = await businessApi.document(evidence.document_id);
+    await selectDocument(record.id, record, { revisionId: evidence.revision_id, evidenceId: evidence.id });
+  } catch (error) {
+    showError(`证据链接不可用：${error.message}`);
+  }
 }
 
 function renderDocuments() {
@@ -259,7 +272,7 @@ function renderDetail() {
   root.append(revisions);
 }
 
-async function selectDocument(id, searchDocument = null) {
+async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
   state.selectedId = id;
   state.selectedSearchDocument = searchDocument;
   state.revisions = [];
@@ -273,7 +286,7 @@ async function selectDocument(id, searchDocument = null) {
     renderDetail();
     const item = state.items.find((entry) => entry.document.id === id)
       || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
-    if (item) await review.setDocument(item.document, revisions);
+    if (item) await review.setDocument(item.document, revisions, reviewTarget);
   } catch (error) {
     if (state.selectedId === id) showError(`修订记录不可用：${error.message}`);
   }
@@ -370,6 +383,7 @@ async function pollTasks() {
 byId("files").addEventListener("change", updateFileSelection);
 byId("upload-form").addEventListener("submit", submitFiles);
 byId("search-form").addEventListener("submit", searchDocuments);
+window.addEventListener("hashchange", openEvidenceLink);
 byId("refresh").addEventListener("click", refreshDocuments);
 for (const id of ["status-filter", "template-filter"]) {
   byId(id).addEventListener("change", () => { state.page = 0; refreshDocuments(); });

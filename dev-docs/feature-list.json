@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 43,
+  "completed_features": 44,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4839,9 +4839,9 @@
         "实现：Skill证据链接返回",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Skill 客户端契约验证 evidence 命令返回同源业务 Web #evidence 深链；真实浏览器配合拦截的合成业务记录验证绑定文档/修订的冻结片段与无写请求。"
     },
     {
       "id": "SKL-014",

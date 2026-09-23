@@ -62,7 +62,7 @@ P2 发现 `ensure_parse` 接收的是 **worker 可访问的本地绝对路径**�
 
 第二组 Web 实现把修订/提取运行、冻结证据、机器候选、显式复核决定、问题处理、确认成果版本与 JSON/Markdown 导出接入同一开放业务 API。机器候选明确标为未确认；未处理问题和未决定的必填字段阻止确认；原文定位仅在当前内容与冻结片段一致时提供 PDF 页跳转尝试，变化或不可用时只展示冻结证据，不能声称历史批次仍可精确导航。审计显示操作来源，不代表个人身份。后续增设业务文档检索和历史解析渐进读取。**P4 仍未完成**：结构树、搜索结果的页块证据、修订差异、字段高亮与双向联动、模板管理/统计等页面以及真实文件端到端验证仍待补齐。
 
-自有 `business-documents` Skill 的首组实现位于本 fork 的 `skills/business-documents/`，随代码分发、在隔离区离线导入 Agent；不是官方 `mineru` Skill。其零第三方依赖脚本与 Web 调用同一业务 API，上传前查询服务能力，读取任务、最新修订/提取、冻结证据及确认成果；机器候选和确认成果分开呈现。之后接入业务检索与修订绑定的定位器读取。Skill 不提供自动确认命令，也不直接调用 Doclib、官方 CLI、模型服务或远程解析。业务 API 仍无结构树及页块级检索证据接口，Skill 不绕过业务层冒充这些能力；P5 仍未完成。
+自有 `business-documents` Skill 位于本 fork 的 `skills/business-documents/`，随代码分发、在隔离区离线导入 Agent；不是官方 `mineru` Skill。其零第三方依赖脚本与 Web 调用同一业务 API，上传前查询服务能力，读取任务、最新修订/提取、冻结证据及确认成果，也能进行业务检索与修订绑定的定位器读取；机器候选和确认成果分开呈现。`evidence` 命令在冻结证据响应外补充同源业务 Web 的 `#evidence=ID` 深链；Web 先通过业务 API 检查证据所属业务文档和修订，再展示冻结片段，定位变化时仍不允许可靠原文跳转。无模板文档也能查看已冻结证据。Skill 不提供自动确认命令，也不直接调用 Doclib、官方 CLI、模型服务或远程解析。业务 API 仍无结构树及页块级检索证据接口，Skill 不绕过业务层冒充这些能力；P5 仍未完成。
 
 第三组实现补齐业务范围内的两条只读契约：`GET /api/business/search` 复用 Doclib 当前索引，但只返回能映射到**已完成业务解析修订**的业务文档，省略 Doclib 文件路径，并标记 `current_index_unconfirmed`。同字节不同业务文档分别列出；一次最多扫描 500 个 Doclib 命中，`scan_complete=false` 明示检索可能未穷尽。Doclib 检索只有文档级片段、没有页块定位器，片段不得当作冻结证据或精确引用。`GET /api/business/revisions/{id}/content` 以业务修订保存的历史 parse ID 读取指定 locator，核对源 SHA-256、short ID、tier 与请求定位器，返回 `historical_parse_unconfirmed`、有界内容和安全续读 locator；不返回 Doclib parse ID 或 asset 路径。它是机器解析文本，不等于人工确认或不可变证据。Web 与自有 Skill 都只访问这两条业务 API。**P4/P5 仍未完成**：搜索结果的页块证据列表、结构树、修订差异、模板管理/统计、真实样本端到端和目标机验收仍开放。
 

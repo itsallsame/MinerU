@@ -142,7 +142,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  async function setDocument(documentRecord, revisions) {
+  async function setDocument(documentRecord, revisions, { revisionId = null, evidenceId = null } = {}) {
     state.generation += 1;
     state.document = documentRecord;
     state.revisions = revisions;
@@ -160,7 +160,16 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.error = "";
     root.hidden = false;
     render();
-    if (revisions.length) await selectRevision(revisions[0].id);
+    if (revisionId && !revisions.some((revision) => revision.id === revisionId)) {
+      throw new Error("证据对应的解析修订已不存在，无法打开证据链接。");
+    }
+    if (revisions.length) await selectRevision(revisionId || revisions[0].id);
+    if (evidenceId) {
+      if (!state.evidence.some((evidence) => evidence.id === evidenceId)) {
+        throw new Error("证据不属于当前解析修订，无法打开证据链接。");
+      }
+      await inspectEvidence(evidenceId);
+    }
   }
 
   async function startExtraction() {
@@ -196,6 +205,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     await perform(async () => {
       state.inspection = await businessApi.inspectEvidence(evidenceId);
     });
+    if (state.inspection?.id === evidenceId) {
+      root.querySelector(".evidence-inspection")?.scrollIntoView({ block: "center" });
+    }
   }
 
   async function readHistorical(locator) {
@@ -298,6 +310,11 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       const card = element("div", "evidence-inspection");
       card.append(element("p", "review-hint", `第 ${info.page_no} 页 · ${status}`));
       card.append(element("pre", "evidence-snippet", info.snippet));
+      const link = element("a", "evidence-link", "在新页面打开此证据 ↗");
+      link.href = `#evidence=${encodeURIComponent(info.id)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      card.append(link);
       if (canNavigateEvidence(info)) {
         const jump = button("尝试跳转当前原文页 ↗", () => {
           if (!onEvidenceNavigate(info)) {
@@ -500,7 +517,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
-    root.append(renderReading());
+    root.append(renderReading(), renderEvidence());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;
@@ -522,7 +539,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       return;
     }
     if (!state.template) return;
-    root.append(renderEvidence(), renderFields(), renderIssues(), renderResults());
+    root.append(renderFields(), renderIssues(), renderResults());
     if (state.audit.length) {
       const details = element("details", "audit-details");
       details.append(element("summary", "", `操作记录 · ${state.audit.length} 条（只记录来源，不代表个人身份）`));
