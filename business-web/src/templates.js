@@ -52,6 +52,7 @@ export function createTemplateManager(root, { onChanged }) {
   let busy = false;
   let message = "";
   let error = "";
+  let viewVersion = 0;
 
   function fieldRow(field = { code: "", label: "", type: "text", required: false }) {
     const row = element("div", "template-field-row");
@@ -85,6 +86,7 @@ export function createTemplateManager(root, { onChanged }) {
     const list = element("div", "template-list");
     for (const template of templates) {
       const choose = button(`${template.name} · v${template.version}${template.enabled ? "" : " · 已停用"}${template.built_in ? " · 内置" : ""}`, () => {
+        viewVersion += 1;
         selectedCode = template.code;
         creating = false;
         error = "";
@@ -95,6 +97,7 @@ export function createTemplateManager(root, { onChanged }) {
       list.append(choose);
     }
     list.append(button("新增自定义模板", () => {
+      viewVersion += 1;
       selectedCode = null;
       creating = true;
       error = "";
@@ -133,6 +136,7 @@ export function createTemplateManager(root, { onChanged }) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (busy) return;
+      const savedViewVersion = viewVersion;
       try {
         const draft = validateTemplateDraft({
           code: selected?.code || code.querySelector("input").value.trim(),
@@ -149,13 +153,17 @@ export function createTemplateManager(root, { onChanged }) {
         const updated = creating
           ? await businessApi.createTemplate(draft)
           : await businessApi.updateTemplate(selected.code, { name: draft.name, fields: draft.fields });
-        selectedCode = updated.code;
-        creating = false;
+        if (savedViewVersion === viewVersion) {
+          selectedCode = updated.code;
+          creating = false;
+        }
         await onChanged();
-        message = `${updated.name} 第 ${updated.version} 版已保存。`;
-        error = "";
+        if (savedViewVersion === viewVersion) {
+          message = `${updated.name} 第 ${updated.version} 版已保存。`;
+          error = "";
+        }
       } catch (cause) {
-        error = cause.message;
+        if (savedViewVersion === viewVersion) error = cause.message;
       } finally {
         busy = false;
         render();
@@ -166,13 +174,16 @@ export function createTemplateManager(root, { onChanged }) {
       root.append(button("停用此自定义模板", async () => {
         if (busy || !window.confirm(`停用“${selected.name}”？新上传将无法选择，历史文档与版本不会删除。`)) return;
         busy = true;
+        const savedViewVersion = viewVersion;
         try {
           await businessApi.disableTemplate(selected.code);
           await onChanged();
-          message = `${selected.name} 已停用；历史版本仍可读取。`;
-          error = "";
+          if (savedViewVersion === viewVersion) {
+            message = `${selected.name} 已停用；历史版本仍可读取。`;
+            error = "";
+          }
         } catch (cause) {
-          error = cause.message;
+          if (savedViewVersion === viewVersion) error = cause.message;
         } finally {
           busy = false;
           render();
