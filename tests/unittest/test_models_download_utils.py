@@ -37,6 +37,28 @@ def test_resolve_model_source_rejects_invalid_explicit_source() -> None:
         models_download_utils.resolve_model_source("invalid-source", allow_auto=True)
 
 
+def test_local_model_repo_does_not_write_lock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = ModelRepo(name="readonly-repo", repos={"huggingface": "owner/repo"})
+    monkeypatch.setattr(models_download_utils.config.model, "base_dir", str(tmp_path))
+    monkeypatch.setattr(models_download_utils.config.model, "source", "local")
+    repo.local_dir().mkdir()
+    (repo.local_dir() / MODEL_COMPLETE_MARKER).touch()
+
+    assert models_download_utils.download_model_repo(repo) == repo.local_dir()
+    assert not (tmp_path / ".locks").exists()
+
+
+def test_local_model_files_do_not_write_lock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = ModelRepo(name="readonly-path", repos={"huggingface": "owner/repo"}, paths={"weights": "weights.bin"})
+    monkeypatch.setattr(models_download_utils.config.model, "base_dir", str(tmp_path))
+    monkeypatch.setattr(models_download_utils.config.model, "source", "local")
+    repo.local_dir().mkdir()
+    (repo.local_dir() / "weights.bin").write_bytes(b"weights")
+
+    assert models_download_utils.download_model_files(repo, [repo.weights]) == repo.local_dir()
+    assert not (tmp_path / ".locks").exists()
+
+
 def test_download_model_repo_uses_required_path_patterns(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

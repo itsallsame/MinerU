@@ -69,3 +69,7 @@ output/
 
 htmlcov/
 .zcode/
+
+# Offline dependency bundles and model weights are transported outside Git.
+wheelhouse/
+model-manifest.json

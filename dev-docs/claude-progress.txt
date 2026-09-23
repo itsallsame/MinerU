@@ -29,6 +29,16 @@ Changes:
 Verification: JSON parsed; total, actual and unique IDs all equal 241; six implementation phases defined.
 Next: Start P1 offline packaging after phase boundary report.
 
+=== 2026-09-23 Session 2 (P1 offline packaging in progress) ===
+Status: In progress; phase not complete
+Changes:
+- Added fork-source worker Dockerfile, internal Compose skeleton, model manifest/preflight tool and tests.
+- Updated local model lookup to avoid writing lock files into read-only mounts.
+Verification: 5 independent tests pass; Compose config syntax, shell syntax and diff checks pass.
+Limits: Docker daemon unavailable; full MinerU dependencies and target model/wheelhouse not installed; no Kylin/GPU result.
+Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
+Next: Complete P1 package and target build checks; leave all INF features false until individually verified.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

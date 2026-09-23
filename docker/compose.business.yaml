@@ -1,0 +1,37 @@
+services:
+  doclib-worker:
+    image: "${MINERU_WORKER_IMAGE:?Set a locally imported worker image tag}"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g
+    environment:
+      MINERU_HOME: /var/lib/mineru
+      MINERU_MODEL_BASE_DIR: /opt/mineru-models
+      MINERU_MODEL_MANIFEST: /etc/mineru/model-manifest.json
+      MINERU_MODEL_SOURCE: local
+      MINERU_MODEL_SMALL_BACKEND: torch
+      MINERU_MODEL_VLM_ENGINE: vllm
+      MINERU_MODEL_VLM_SERVER_URL: ""
+      MINERU_LLM_AIDED_FEATURES_TITLE_LEVELING: "false"
+      MINERU_LLM_AIDED_FEATURES_CROSS_PAGE_TABLE_CELL_MERGE: "false"
+      HF_HOME: /var/lib/mineru/hf-cache
+      TORCH_HOME: /var/lib/mineru/torch-cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+      MINERU_DOCLIB_UDS_ENABLED: "false"
+      MINERU_DOCLIB_TCP_ENABLED: "true"
+      MINERU_DOCLIB_TCP_HOST: 0.0.0.0
+      MINERU_DOCLIB_TCP_STRICT_PORT: "true"
+    volumes:
+      - "${MINERU_MODELS_HOST_DIR:?Set the model directory}:/opt/mineru-models:ro"
+      - "${MINERU_MODEL_MANIFEST_HOST_FILE:?Set the model manifest file}:/etc/mineru/model-manifest.json:ro"
+      - "${MINERU_DOCLIB_HOST_DIR:?Set the persistent Doclib directory}:/var/lib/mineru:rw"
+    gpus: all
+    networks:
+      - business-internal
+
+networks:
+  business-internal:
+    internal: true

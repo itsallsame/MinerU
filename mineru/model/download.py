@@ -344,6 +344,13 @@ def download_model_repo(
 ) -> Path:
     completion_paths = _repo_completion_paths(repo)
     relative_paths = [path.relative_path for path in completion_paths] if repo.download_mode == "required_paths" else None
+    # A production local model mount can be read-only. Checking its completion
+    # marker needs no download lock and must not create .locks beneath it.
+    if source is None and not local_as_auto and str(config.model.source).strip().lower() == "local":
+        result = verify_model_repo(repo)
+        if not result.ready:
+            _raise_not_ready(repo, result)
+        return result.root
     lock_path = repo.lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(lock_path)):
@@ -383,6 +390,11 @@ def download_model_files(
 
     model_paths = [path if isinstance(path, ModelPath) else repo.path(path) for path in paths]
     relative_paths = _relative_paths(repo, paths)
+    if source is None and not local_as_auto and str(config.model.source).strip().lower() == "local":
+        result = _verify_paths(repo, model_paths)
+        if not result.ready:
+            _raise_not_ready(repo, result)
+        return result.root
     lock_path = repo.lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(lock_path)):
