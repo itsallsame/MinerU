@@ -192,6 +192,10 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="看证据").first.click()
             page.get_by_text("当前定位内容与冻结片段一致").wait_for()
             page.locator(".evidence-snippet").get_by_text("标题：年度通知").wait_for()
+            assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
+            assert page.locator(".field-review.active").count() == 1
+            page.get_by_role("button", name="标题 · 机器候选").click()
+            assert page.locator(".field-review.active").get_attribute("data-field-code") == "title"
             page.get_by_role("button", name="尝试跳转当前原文页").click()
             assert page.locator("iframe.source-preview").get_attribute("src").endswith("#page=1")
             navigation_status = "changed"
@@ -200,6 +204,9 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             assert page.get_by_role("button", name="尝试跳转当前原文页").count() == 0
             page.get_by_role("button", name="接受候选").first.click()
             page.get_by_text("已复核：年度通知").wait_for()
+            page.get_by_role("button", name="查看已复核字段的证据").click()
+            assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
+            assert page.get_by_role("button", name="标题 · 已复核决定").count() == 1
             assert confirm_button.is_disabled(), "An open issue must still block confirmation"
             page.get_by_label("多个候选值冲突处理原因").fill("与原文一致")
             page.get_by_role("button", name="标记已解决").click()
@@ -221,6 +228,17 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             assert "标题：年度通知" in markdown and "evidence-1" in markdown
             assert "candidate-1" not in markdown
             assert [name for name, _payload in writes] == ["decision", "resolution", "confirmation"]
+            decisions.append({
+                "id": "decision-2", "run_id": run["id"], "field_code": "title",
+                "previous_value": "年度通知", "value": "规范化标题", "evidence_id": evidence["id"],
+                "basis": "manual_correction", "source": "api", "reason": "按业务规则规范化",
+                "created_at_ms": now + 1,
+            })
+            page.locator('select[aria-label="选择解析修订"]').select_option("rev-1")
+            page.get_by_text("已复核：规范化标题").wait_for()
+            page.get_by_role("button", name="查看已复核字段的证据").click()
+            page.get_by_text("该复核值不在冻结片段中逐字出现").wait_for()
+            assert page.locator(".evidence-snippet mark").count() == 0
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             assert not errors, errors

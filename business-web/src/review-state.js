@@ -27,6 +27,23 @@ export function canNavigateEvidence(evidence) {
   return evidence?.navigation_status === "current_match" && Number.isInteger(evidence.page_no) && evidence.page_no > 0;
 }
 
+export function evidenceHighlightParts(snippet, value, maxMatches = 20) {
+  if (!value || !snippet.includes(value)) return [{ text: snippet, match: false }];
+  const parts = [];
+  let start = 0;
+  let matches = 0;
+  while (matches < maxMatches) {
+    const found = snippet.indexOf(value, start);
+    if (found < 0) break;
+    if (found > start) parts.push({ text: snippet.slice(start, found), match: false });
+    parts.push({ text: value, match: true });
+    start = found + value.length;
+    matches += 1;
+  }
+  if (start < snippet.length) parts.push({ text: snippet.slice(start), match: false });
+  return parts;
+}
+
 export function confirmedResultMarkdown(result, template) {
   const labels = new Map((template?.fields || []).map((field) => [field.code, field.label]));
   const lines = [`# 确认成果 v${result.version}`, "", `解析修订：${result.revision_id}`, ""];

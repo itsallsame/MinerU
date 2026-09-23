@@ -1,5 +1,5 @@
 import { businessApi } from "./api.js";
-import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, latestDecisions } from "./review-state.js";
+import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "./review-state.js";
 
 const issueLabels = {
   required_missing: "必填字段缺失",
@@ -50,6 +50,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
     inspection: null, reading: null, outline: null, structure: null, error: "", busy: false, generation: 0,
     diff: null, diffOtherId: null, diffPreview: null,
+    selectedFieldCode: null, inspectionHighlightValue: null,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -67,6 +68,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.diff = null;
     state.diffOtherId = null;
     state.diffPreview = null;
+    state.selectedFieldCode = null;
+    state.inspectionHighlightValue = null;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -91,6 +94,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runId = runId;
     state.extraction = null;
     state.inspection = null;
+    state.selectedFieldCode = null;
+    state.inspectionHighlightValue = null;
     render();
     try {
       const extraction = await businessApi.extraction(runId);
@@ -120,6 +125,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runId = null;
     state.extraction = null;
     state.inspection = null;
+    state.selectedFieldCode = null;
+    state.inspectionHighlightValue = null;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -170,6 +177,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.results = [];
     state.audit = [];
     state.inspection = null;
+    state.selectedFieldCode = null;
+    state.inspectionHighlightValue = null;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -220,13 +229,25 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  async function inspectEvidence(evidenceId) {
+  async function inspectEvidence(evidenceId, fieldCode = null, value = null) {
     await perform(async () => {
-      state.inspection = await businessApi.inspectEvidence(evidenceId);
+      const inspection = await businessApi.inspectEvidence(evidenceId);
+      state.selectedFieldCode = fieldCode;
+      state.inspectionHighlightValue = value;
+      state.inspection = inspection;
     });
     if (state.inspection?.id === evidenceId) {
       root.querySelector(".evidence-inspection")?.scrollIntoView({ block: "center" });
     }
+  }
+
+  function focusField(fieldCode, value = null) {
+    state.selectedFieldCode = fieldCode;
+    state.inspectionHighlightValue = value;
+    render();
+    const card = [...root.querySelectorAll(".field-review")].find((node) => node.dataset.fieldCode === fieldCode);
+    card?.focus({ preventScroll: true });
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function readHistorical(locator) {
@@ -489,7 +510,33 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       }[info.navigation_status];
       const card = element("div", "evidence-inspection");
       card.append(element("p", "review-hint", `第 ${info.page_no} 页 · ${status}`));
-      card.append(element("pre", "evidence-snippet", info.snippet));
+      const snippet = element("pre", "evidence-snippet");
+      const parts = evidenceHighlightParts(info.snippet, state.inspectionHighlightValue);
+      for (const part of parts) snippet.append(element(part.match ? "mark" : "span", "", part.text));
+      card.append(snippet);
+      if (state.inspectionHighlightValue && !parts.some((part) => part.match)) {
+        card.append(element("p", "review-hint", "该复核值不在冻结片段中逐字出现；保留证据关联，但不伪造原文高亮。"));
+      }
+      const linked = new Map();
+      for (const candidate of state.extraction?.candidates || []) {
+        if (candidate.evidence_id === info.id) linked.set(candidate.field_code, {
+          value: candidate.value, kind: "机器候选",
+        });
+      }
+      for (const decision of latestDecisions(state.decisions).values()) {
+        if (decision.evidence_id === info.id) linked.set(decision.field_code, {
+          value: decision.value, kind: "已复核决定",
+        });
+      }
+      if (linked.size) {
+        card.append(element("p", "review-hint", "此冻结证据关联的字段："));
+        const links = element("div", "evidence-field-links");
+        for (const [fieldCode, relation] of linked) {
+          const label = state.template?.fields.find((field) => field.code === fieldCode)?.label || fieldCode;
+          links.append(button(`${label} · ${relation.kind}`, () => focusField(fieldCode, relation.value)));
+        }
+        card.append(links);
+      }
       const link = element("a", "evidence-link", "在新页面打开此证据 ↗");
       link.href = `#evidence=${encodeURIComponent(info.id)}`;
       link.target = "_blank";
@@ -514,19 +561,24 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     box.append(element("p", "draft-banner", "机器候选 · 未确认。只有明确复核决定才会进入成果。"));
     const latest = latestDecisions(state.decisions);
     for (const field of state.template.fields) {
-      const card = element("div", "field-review");
+      const card = element("div", `field-review ${state.selectedFieldCode === field.code ? "active" : ""}`);
+      card.dataset.fieldCode = field.code;
+      card.tabIndex = -1;
       const heading = element("div", "field-heading");
       heading.append(element("strong", "", field.label));
       if (field.required) heading.append(element("span", "required-tag", "必填"));
       card.append(heading);
       const chosen = latest.get(field.code);
-      if (chosen) card.append(element("p", "review-decision", `已复核：${chosen.value} · ${chosen.basis === "candidate_acceptance" ? "接受候选" : "人工修订"}`));
+      if (chosen) {
+        card.append(element("p", "review-decision", `已复核：${chosen.value} · ${chosen.basis === "candidate_acceptance" ? "接受候选" : "人工修订"}`));
+        card.append(button("查看已复核字段的证据", () => inspectEvidence(chosen.evidence_id, field.code, chosen.value), state.busy));
+      }
       const candidates = state.extraction.candidates.filter((item) => item.field_code === field.code);
       if (!candidates.length) card.append(element("p", "review-hint", "暂无机器候选；可在采集证据后人工填写。"));
       for (const candidate of candidates) {
         const row = element("div", "candidate-row");
         row.append(element("span", "", candidate.value));
-        row.append(button("看证据", () => inspectEvidence(candidate.evidence_id), state.busy));
+        row.append(button("看证据", () => inspectEvidence(candidate.evidence_id, field.code, candidate.value), state.busy));
         row.append(button("接受候选", () => perform(async () => {
           await businessApi.decideField(state.runId, field.code, candidate.value, candidate.evidence_id);
           await loadRun(state.runId);

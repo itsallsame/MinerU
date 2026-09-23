@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, latestDecisions } from "../src/review-state.js";
+import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "../src/review-state.js";
 
 const template = { fields: [{ code: "title", label: "标题", required: true }, { code: "issuer", label: "发文单位", required: false }] };
 const run = { run: { status: "done" }, issues: [] };
@@ -31,6 +31,18 @@ test("only verified current content may offer a page jump", () => {
   assert.equal(canNavigateEvidence({ navigation_status: "current_match", page_no: 2 }), true);
   assert.equal(canNavigateEvidence({ navigation_status: "changed", page_no: 2 }), false);
   assert.equal(canNavigateEvidence({ navigation_status: "unavailable", page_no: 2 }), false);
+});
+
+test("frozen evidence highlights only literal matches and caps repeated marks", () => {
+  assert.deepEqual(evidenceHighlightParts("标题：年度通知", "年度通知"), [
+    { text: "标题：", match: false }, { text: "年度通知", match: true },
+  ]);
+  assert.deepEqual(evidenceHighlightParts("标题：年度通知", "规范化通知"), [
+    { text: "标题：年度通知", match: false },
+  ]);
+  const parts = evidenceHighlightParts("a".repeat(100), "a");
+  assert.equal(parts.filter((part) => part.match).length, 20);
+  assert.equal(parts.map((part) => part.text).join(""), "a".repeat(100));
 });
 
 test("Markdown export contains only confirmed fields and evidence identities", () => {

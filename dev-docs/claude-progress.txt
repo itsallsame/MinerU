@@ -381,3 +381,12 @@ Changes:
 Verification: targeted mock and real Doclib historical-batch tests, full business 122 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright comparison and review regression passed.
 Evidence: dev-docs/evidence/2026-09-23-revision-diff.md
 Next: Complete remaining P4 source/field linking and resilience, four-class annotated acceptance, isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 36 (Frozen evidence field highlights) ===
+Status: In progress; FE-028 completed (52/241), FE-031 and wider P4/P6 gates remain open
+Changes:
+- Linked candidate and latest reviewed field cards to their frozen evidence, with literal-only bounded highlighting and no false match for normalized values.
+- Added evidence-to-field reverse navigation inside the review workbench; PDF page jump still requires current locator verification.
+Verification: Web 10 tests/8-asset build, Playwright candidate/reviewed/no-match/reverse navigation and review regression passed. First browser approval timed out; identical retry passed.
+Evidence: dev-docs/evidence/2026-09-23-field-evidence-highlight.md
+Next: Complete original-source-side field navigation, error recovery and accessibility, then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.

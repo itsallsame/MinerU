@@ -4069,9 +4069,9 @@
         "实现：字段证据高亮",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "字段候选及已复核决定可打开绑定的冻结证据；仅对片段中的逐字匹配值高亮，最多 20 处，人工规范化不匹配时明确说明；证据可反查关联字段。Web 单测/构建和 Playwright 复核回归通过。未声称 PDF 内嵌查看器的精确文字坐标高亮，FE-031 仍待完整原文侧联动。"
     },
     {
       "id": "FE-029",
