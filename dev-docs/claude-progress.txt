@@ -625,3 +625,10 @@ Changes: Added a single offline Chromium regression command covering all 18 synt
 Verification: Web 11 unit tests/8-asset build, 18 Playwright browser scenarios, Ruff on the runner and feature-count/diff validation passed on Mac. Real API/sample and Kylin/NVIDIA validation remain separate.
 Evidence: dev-docs/evidence/2026-09-24-browser-regression-suite.md
 Next: Await FE-033 structure-edit scope; continue FE-016 cancellation design and FE-046/047 audits, then real API/sample and offline target gates. Keep goal active.
+
+=== 2026-09-24 Session 58 (Revision comparison stale failures) ===
+Status: In progress; 64/241 passed; FE-047 remains incomplete
+Changes: Scoped failed diff and two-version page-read requests to their original comparison revision so an old 503 cannot contaminate a newly selected comparison. Added a delayed-failure Chromium regression; unified browser suite now has 19 cases.
+Verification: Web 11 Node tests/8-asset build, 19 Chromium scenarios, Ruff and diff checks passed on Mac using synthetic browser API responses. No real sample or Kylin target claim.
+Evidence: dev-docs/evidence/2026-09-24-revision-diff-race.md
+Next: Continue FE-047 asynchronous path audit; FE-033 awaits chosen edit scope; FE-016 needs true Doclib cancellation semantics. Keep goal active.

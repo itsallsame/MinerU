@@ -391,7 +391,13 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   async function compareRevisions(otherId, startPage = null) {
     await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
-      const page = await businessApi.diffRevisions(revisionId, otherId, startPage);
+      let page;
+      try {
+        page = await businessApi.diffRevisions(revisionId, otherId, startPage);
+      } catch (error) {
+        if (!isCurrent() || otherId !== state.diffOtherId) return;
+        throw error;
+      }
       if (!isCurrent() || otherId !== state.diffOtherId) return;
       state.diff = {
         items: startPage === null ? page.items : [...(state.diff?.items || []), ...page.items],
@@ -406,10 +412,17 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     await perform(async (isCurrent) => {
       const leftRevisionId = state.revisionId;
       const rightRevisionId = state.diffOtherId;
-      const [left, right] = await Promise.all([
-        item.left_locator ? businessApi.readRevision(leftRevisionId, item.left_locator, 30000) : null,
-        item.right_locator ? businessApi.readRevision(rightRevisionId, item.right_locator, 30000) : null,
-      ]);
+      let left;
+      let right;
+      try {
+        [left, right] = await Promise.all([
+          item.left_locator ? businessApi.readRevision(leftRevisionId, item.left_locator, 30000) : null,
+          item.right_locator ? businessApi.readRevision(rightRevisionId, item.right_locator, 30000) : null,
+        ]);
+      } catch (error) {
+        if (!isCurrent() || rightRevisionId !== state.diffOtherId) return;
+        throw error;
+      }
       if (!isCurrent() || rightRevisionId !== state.diffOtherId) return;
       if (left?.truncated || right?.truncated) throw new Error("页面过长，无法完整展示两版文本；不能据此判断全部差异。");
       state.diffPreview = { pageNo: item.page_no, left: left?.content ?? null, right: right?.content ?? null };
