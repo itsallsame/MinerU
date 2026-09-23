@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from ...doclib import DoclibInterface
 from ...doclib.locators import parse_content_cursor
@@ -46,6 +47,23 @@ class HistoricalRead:
     content: str
     truncated: bool
     next_locator: str | None
+
+
+@dataclass(frozen=True)
+class RevisionDiffItem:
+    page_no: int
+    status: Literal["same", "changed", "only_left", "only_right"]
+    left_locator: str | None
+    right_locator: str | None
+
+
+@dataclass(frozen=True)
+class RevisionDiffPage:
+    left_revision_id: str
+    right_revision_id: str
+    items: tuple[RevisionDiffItem, ...]
+    next_page: int | None
+    scanned_pages: int
 
 
 @dataclass(frozen=True)
@@ -209,6 +227,44 @@ class BusinessDiscovery:
             document_id=revision.document_id, revision_id=revision.id, locator=locator,
             tier=revision.tier, content=response.content, truncated=response.truncated,
             next_locator=next_locator,
+        )
+
+    def diff_revisions(
+        self, left_revision_id: str, right_revision_id: str, *, start_page: int | None = None
+    ) -> RevisionDiffPage:
+        left = self._store.get_revision(left_revision_id)
+        right = self._store.get_revision(right_revision_id)
+        if left is None or right is None:
+            raise DiscoveryError("revision_not_found")
+        if left.id == right.id or left.document_id != right.document_id or left.sha256 != right.sha256:
+            raise DiscoveryError("invalid_revision_comparison")
+        left_pages = parse_page_range_set(left.page_range)
+        right_pages = parse_page_range_set(right.page_range)
+        pages = sorted(left_pages | right_pages)
+        if start_page is not None and start_page not in pages:
+            raise DiscoveryError("invalid_revision_comparison")
+        start = pages.index(start_page) if start_page is not None else 0
+        window = pages[start:start + self._REVISION_SCAN_PAGES]
+        items: list[RevisionDiffItem] = []
+        for page_no in window:
+            left_locator = page_ref(left.short_id, left.tier, page_no) if page_no in left_pages else None
+            right_locator = page_ref(right.short_id, right.tier, page_no) if page_no in right_pages else None
+            if left_locator is None:
+                status = "only_right"
+            elif right_locator is None:
+                status = "only_left"
+            else:
+                left_read = self.read(left.id, left_locator, limit=30000)
+                right_read = self.read(right.id, right_locator, limit=30000)
+                if left_read.truncated or right_read.truncated:
+                    raise DiscoveryError("historical_content_truncated")
+                status = "same" if left_read.content == right_read.content else "changed"
+            items.append(RevisionDiffItem(page_no, status, left_locator, right_locator))
+        next_index = start + len(window)
+        return RevisionDiffPage(
+            left_revision_id=left.id, right_revision_id=right.id, items=tuple(items),
+            next_page=pages[next_index] if next_index < len(pages) else None,
+            scanned_pages=len(window),
         )
 
     def search_revision(self, revision_id: str, query: str, *, start_page: int | None = None) -> RevisionSearchPage:

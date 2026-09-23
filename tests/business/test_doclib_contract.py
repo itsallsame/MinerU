@@ -273,6 +273,10 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
     upload = ImmutableUploadStore(root, max_bytes=1024).store(io.BytesIO(source.read_bytes()), filename="revision.html")
     document = business.create_document(upload, original_name="revision.html")
     revision = business.add_completed_revision(document.id, parse=first_info, producer_version="4.0.6")
+    second_revision = business.add_completed_revision(document.id, parse=second_info, producer_version="4.0.7")
+    diff = BusinessDiscovery(store=business, doclib=client).diff_revisions(revision.id, second_revision.id)
+    assert [item.status for item in diff.items] == ["changed"]
+    assert diff.items[0].left_locator == diff.items[0].right_locator == locator
     block_page = BusinessDiscovery(store=business, doclib=client).search_blocks(revision.id, "Historical Lantern")
     assert len(block_page.items) == 1
     assert block_page.items[0].locator == historical_hits.matches[0].locator

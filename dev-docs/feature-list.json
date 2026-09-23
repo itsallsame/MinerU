@@ -4025,9 +4025,9 @@
         "实现：解析修订差异提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "同一业务文档两次历史解析按批次逐页比较完整机器文本，区分相同/不同/仅单版有页，每次 25 页续扫；Web 支持读取两版页面。截断或历史批次不可用时不输出误导性差异。后端、真实 Doclib、Web 与 Playwright 验证通过；不代表结构或人工成果差异。"
     },
     {
       "id": "FE-027",

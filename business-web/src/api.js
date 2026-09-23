@@ -50,6 +50,11 @@ export const businessApi = {
   readRevision: (id, locator, limit = 12000) => request(
     `/revisions/${encodeURIComponent(id)}/content?${new URLSearchParams({ locator, limit: String(limit) })}`,
   ),
+  diffRevisions: (id, otherId, startPage = null) => request(
+    `/revisions/${encodeURIComponent(id)}/diff?${new URLSearchParams({
+      other_revision_id: otherId, ...(startPage === null ? {} : { start_page: String(startPage) }),
+    })}`,
+  ),
   searchRevision: (id, query, startPage = null) => request(
     `/revisions/${encodeURIComponent(id)}/search?${new URLSearchParams({
       query, ...(startPage === null ? {} : { start_page: String(startPage) }),

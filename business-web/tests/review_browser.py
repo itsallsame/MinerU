@@ -28,6 +28,10 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
         "tier": "basic", "page_range": "1", "producer_version": "4.0.6",
         "model_ref": None, "created_at_ms": now,
     }
+    older_revision = {
+        **revision, "id": "rev-0", "page_range": "1-2", "producer_version": "4.0.5",
+        "created_at_ms": now - 1000,
+    }
     run = {
         "id": "run-1", "revision_id": revision["id"], "template_code": "official_document", "template_version": 1,
         "status": "done", "error_code": None, "created_at_ms": now, "updated_at_ms": now,
@@ -62,7 +66,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.route("**/api/business/documents?*", lambda route: fulfill(route, {
                 "items": [{"document": document, "task": task}], "total": 1, "limit": 20, "offset": 0,
             }))
-            page.route("**/api/business/documents/*/revisions", lambda route: fulfill(route, [revision]))
+            page.route("**/api/business/documents/*/revisions", lambda route: fulfill(route, [revision, older_revision]))
             page.route("**/api/business/documents/*/source", lambda route: route.fulfill(
                 status=200, content_type="application/pdf", body=b"%PDF-1.4\n",
             ))
@@ -87,6 +91,21 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 "document_id": document["id"], "revision_id": "rev-1", "locator": evidence["locator"],
                 "tier": "basic", "content": "# 年度通知目录", "truncated": False, "next_locator": None,
                 "state": "historical_parse_unconfirmed",
+            }))
+            page.route("**/api/business/revisions/rev-0/content?*", lambda route: fulfill(route, {
+                "document_id": document["id"], "revision_id": "rev-0", "locator": evidence["locator"],
+                "tier": "basic", "content": "# 旧版标题", "truncated": False, "next_locator": None,
+                "state": "historical_parse_unconfirmed",
+            }))
+            page.route("**/api/business/revisions/rev-1/diff?*", lambda route: fulfill(route, {
+                "left_revision_id": "rev-1", "right_revision_id": "rev-0", "scanned_pages": 2,
+                "next_page": None, "items": [
+                    {"page_no": 1, "status": "changed", "left_locator": evidence["locator"],
+                     "right_locator": evidence["locator"], "state": "historical_parse_unconfirmed"},
+                    {"page_no": 2, "status": "only_right", "left_locator": None,
+                     "right_locator": evidence["locator"].replace("page:1", "page:2"),
+                     "state": "historical_parse_unconfirmed"},
+                ],
             }))
             page.route("**/api/business/evidence/evidence-1", lambda route: fulfill(route, {
                 **evidence, "navigation_status": navigation_status,
@@ -151,6 +170,13 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 notice.pdf，已解析").click()
             page.get_by_text("机器候选 · 未确认").wait_for()
+            diff = page.locator(".review-section").filter(has=page.get_by_role("heading", name="解析修订逐页差异"))
+            diff.get_by_role("button", name="比较修订").click()
+            diff.get_by_text("第 1 页 · 页文本不同").wait_for()
+            assert diff.get_by_text("第 2 页 · 仅对比修订有此页").count() == 1
+            diff.get_by_role("button", name="读取两版此页").first.click()
+            diff.get_by_text("# 旧版标题").wait_for()
+            assert diff.get_by_text("# 年度通知目录").count() == 1
             page.get_by_role("button", name="读取标题目录").click()
             page.get_by_text("年度通知目录 · 第 1 页").wait_for()
             page.get_by_role("button", name="读取所在页").click()

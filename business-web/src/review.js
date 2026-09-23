@@ -49,6 +49,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     document: null, revisions: [], revisionId: null, runs: [], runId: null,
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
     inspection: null, reading: null, outline: null, structure: null, error: "", busy: false, generation: 0,
+    diff: null, diffOtherId: null, diffPreview: null,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -63,6 +64,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.diff = null;
+    state.diffOtherId = null;
+    state.diffPreview = null;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -119,6 +123,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.diff = null;
+    state.diffOtherId = null;
+    state.diffPreview = null;
     state.runs = [];
     state.template = null;
     state.decisions = [];
@@ -166,6 +173,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.diff = null;
+    state.diffOtherId = null;
+    state.diffPreview = null;
     state.error = "";
     root.hidden = false;
     render();
@@ -225,6 +235,83 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       const reading = await businessApi.readRevision(revisionId, locator);
       if (revisionId === state.revisionId) state.reading = reading;
     });
+  }
+
+  async function compareRevisions(otherId, startPage = null) {
+    await perform(async () => {
+      const revisionId = state.revisionId;
+      const page = await businessApi.diffRevisions(revisionId, otherId, startPage);
+      if (revisionId !== state.revisionId || otherId !== state.diffOtherId) return;
+      state.diff = {
+        items: startPage === null ? page.items : [...(state.diff?.items || []), ...page.items],
+        nextPage: page.next_page,
+        scannedPages: (startPage === null ? 0 : state.diff?.scannedPages || 0) + page.scanned_pages,
+      };
+      state.diffPreview = null;
+    });
+  }
+
+  async function readDiffPage(item) {
+    await perform(async () => {
+      const leftRevisionId = state.revisionId;
+      const rightRevisionId = state.diffOtherId;
+      const [left, right] = await Promise.all([
+        item.left_locator ? businessApi.readRevision(leftRevisionId, item.left_locator, 30000) : null,
+        item.right_locator ? businessApi.readRevision(rightRevisionId, item.right_locator, 30000) : null,
+      ]);
+      if (leftRevisionId !== state.revisionId || rightRevisionId !== state.diffOtherId) return;
+      if (left?.truncated || right?.truncated) throw new Error("页面过长，无法完整展示两版文本；不能据此判断全部差异。");
+      state.diffPreview = { pageNo: item.page_no, left: left?.content ?? null, right: right?.content ?? null };
+    });
+  }
+
+  function renderRevisionDiff() {
+    if (state.revisions.length < 2) return null;
+    const box = section("解析修订逐页差异");
+    box.append(element("p", "review-hint", "只比较同一业务文档两次历史解析的完整页文本。机器解析结果未人工确认；相同文本不代表结构或字段成果相同。每次最多扫描 25 页。"));
+    const controls = element("div", "review-tools");
+    const other = element("select");
+    other.setAttribute("aria-label", "对比的解析修订");
+    for (const revision of state.revisions.filter((item) => item.id !== state.revisionId)) {
+      const option = element("option", "", `${revision.tier.toUpperCase()} · 第 ${revision.page_range} 页 · ${new Date(revision.created_at_ms).toLocaleString("zh-CN")}`);
+      option.value = revision.id;
+      other.append(option);
+    }
+    if (!state.diffOtherId || ![...other.options].some((option) => option.value === state.diffOtherId)) {
+      state.diffOtherId = other.options[0].value;
+    }
+    other.value = state.diffOtherId;
+    other.addEventListener("change", () => {
+      state.diffOtherId = other.value;
+      state.diff = null;
+      state.diffPreview = null;
+      render();
+    });
+    controls.append(other, button("比较修订", () => compareRevisions(other.value), state.busy));
+    box.append(controls);
+    if (!state.diff) return box;
+    const labels = { same: "页文本相同", changed: "页文本不同", only_left: "仅当前修订有此页", only_right: "仅对比修订有此页" };
+    for (const item of state.diff.items) {
+      const row = element("div", "diff-page-row");
+      row.append(element("span", "", `第 ${item.page_no} 页 · ${labels[item.status] || item.status}`));
+      row.append(button("读取两版此页", () => readDiffPage(item), state.busy));
+      box.append(row);
+    }
+    box.append(element("p", "review-hint", `已扫描 ${state.diff.scannedPages} 页${state.diff.nextPage === null ? " · 已到末页" : " · 后续仍有页面"}。`));
+    if (state.diff.nextPage !== null) {
+      box.append(button("继续比较后续页", () => compareRevisions(state.diffOtherId, state.diff.nextPage), state.busy));
+    }
+    if (state.diffPreview) {
+      const preview = element("div", "diff-preview");
+      for (const [label, content] of [["当前修订", state.diffPreview.left], ["对比修订", state.diffPreview.right]]) {
+        const column = element("div");
+        column.append(element("strong", "", `${label} · 第 ${state.diffPreview.pageNo} 页`));
+        column.append(element("pre", "", content ?? "此修订没有该页。"));
+        preview.append(column);
+      }
+      box.append(preview);
+    }
+    return box;
   }
 
   async function loadOutline(startPage = null) {
@@ -610,7 +697,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
-    root.append(renderOutline(), renderStructure(), renderReading(), renderEvidence());
+    const diff = renderRevisionDiff();
+    root.append(...(diff ? [diff] : []), renderOutline(), renderStructure(), renderReading(), renderEvidence());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;

@@ -372,3 +372,12 @@ Changes:
 Verification: targeted backend 9 passed, full business 120 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright paging/safe text/run navigation/390px viewport passed.
 Evidence: dev-docs/evidence/2026-09-23-global-audit-web.md
 Next: Continue other P4 UX, four-class annotated acceptance, and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 35 (Historical revision page-text difference) ===
+Status: In progress; FE-026 completed (51/241), wider P4/P6 gates remain open
+Changes:
+- Added same-business-document, parse-pinned 25-page comparison of historical machine text with explicit same/changed/one-sided states and continuation.
+- Added Web review comparison and side-by-side page reads, with truncation and stale historical data failing closed rather than producing partial equivalence claims.
+Verification: targeted mock and real Doclib historical-batch tests, full business 122 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright comparison and review regression passed.
+Evidence: dev-docs/evidence/2026-09-23-revision-diff.md
+Next: Complete remaining P4 source/field linking and resilience, four-class annotated acceptance, isolated Kylin/NVIDIA gates. Keep goal active.

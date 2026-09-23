@@ -111,6 +111,84 @@ def test_revision_read_uses_historical_parse_id_and_returns_safe_continuation(tm
     assert too_large.status_code == 422
 
 
+def test_revision_diff_is_parse_pinned_paged_and_fails_on_truncation(tmp_path: Path) -> None:
+    store, doclib, document_id, _other_document, old_id, foreign_id = _fixture(tmp_path)
+    source = store.get_document(document_id)
+    assert source is not None
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=source.sha256, short_id=source.sha256[:12], tier="flash", page_range=str(page_no),
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((8, 1), (9, 2)))
+    newer = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.7")
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        assert limit == 30000
+        assert (parse_id, locator.endswith("page:1")) in ((7, True), (8, True))
+        return DocContentResponse(
+            sha256=source.sha256, short_id=source.sha256[:12], tier="flash",
+            content="旧标题" if parse_id == 7 else "新标题",
+            request_scope=ContentRequestScope(locator=locator),
+        )
+
+    doclib.read_parse_content.side_effect = read
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    page = discovery.diff_revisions(old_id, newer.id)
+    assert [item.status for item in page.items] == ["changed", "only_right"]
+    assert page.items[0].left_locator == f"doc:{source.sha256[:12]}/tier:flash/page:1"
+    assert page.items[1].left_locator is None
+    assert page.next_page is None and page.scanned_pages == 2
+    assert [call.args[0] for call in doclib.read_parse_content.call_args_list] == [7, 8]
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{old_id}/diff", params={"other_revision_id": newer.id})
+    assert response.status_code == 200
+    assert [item["status"] for item in response.json()["items"]] == ["changed", "only_right"]
+    assert all(item["state"] == "historical_parse_unconfirmed" for item in response.json()["items"])
+    assert "parse_id" not in response.text and "path" not in response.text
+    assert api.get(f"/api/business/revisions/{old_id}/diff", params={"other_revision_id": foreign_id}).status_code == 422
+    assert api.get(f"/api/business/revisions/{old_id}/diff", params={"other_revision_id": old_id}).status_code == 422
+    assert api.get(f"/api/business/revisions/{old_id}/diff", params={
+        "other_revision_id": newer.id, "start_page": 3,
+    }).status_code == 422
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: DocContentResponse(
+        sha256=source.sha256, short_id=source.sha256[:12], tier="flash", content="same",
+        request_scope=ContentRequestScope(locator=locator), truncated=parse_id == 8,
+    )
+    assert api.get(f"/api/business/revisions/{old_id}/diff", params={"other_revision_id": newer.id}).status_code == 409
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: DocContentResponse(
+        sha256=source.sha256, short_id=source.sha256[:12], tier="flash", content="same",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    assert [item.status for item in discovery.diff_revisions(old_id, newer.id).items] == ["same", "only_right"]
+
+
+def test_revision_diff_continues_after_25_pages(tmp_path: Path) -> None:
+    store, doclib, document_id, _other_document, old_id, _foreign_id = _fixture(tmp_path)
+    source = store.get_document(document_id)
+    assert source is not None
+    parse = ParseInfo(
+        id=8, sha256=source.sha256, short_id=source.sha256[:12], tier="flash", page_range="1-26",
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    )
+    newer = store.add_completed_revision(document_id, parse=parse, producer_version="4.0.7")
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: DocContentResponse(
+        sha256=source.sha256, short_id=source.sha256[:12], tier="flash", content="same",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    first = discovery.diff_revisions(old_id, newer.id)
+    assert len(first.items) == first.scanned_pages == 25 and first.next_page == 26
+    assert first.items[0].status == "same"
+    assert all(item.status == "only_right" for item in first.items[1:])
+    second = discovery.diff_revisions(old_id, newer.id, start_page=first.next_page)
+    assert second.scanned_pages == 1 and second.next_page is None
+    assert second.items[0].page_no == 26 and second.items[0].status == "only_right"
+
+
 def test_progressive_read_crosses_historical_parse_batch_boundary(tmp_path: Path) -> None:
     store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
     sha = store.get_document(document_id).sha256

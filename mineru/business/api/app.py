@@ -58,6 +58,7 @@ from ..services import (
     NavigationStatus,
     RevisionSearchPage,
     RevisionBlockSearchPage,
+    RevisionDiffPage,
     RevisionOutlinePage,
     BusinessStructurePage,
     StructureBlock,
@@ -431,6 +432,30 @@ class HistoricalReadView(BaseModel):
         return cls(**vars(read))
 
 
+class RevisionDiffItemView(BaseModel):
+    page_no: int
+    status: Literal["same", "changed", "only_left", "only_right"]
+    left_locator: str | None
+    right_locator: str | None
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+
+class RevisionDiffPageView(BaseModel):
+    left_revision_id: str
+    right_revision_id: str
+    items: list[RevisionDiffItemView]
+    next_page: int | None
+    scanned_pages: int
+
+    @classmethod
+    def from_page(cls, page: RevisionDiffPage) -> RevisionDiffPageView:
+        return cls(
+            left_revision_id=page.left_revision_id, right_revision_id=page.right_revision_id,
+            items=[RevisionDiffItemView(**vars(item)) for item in page.items],
+            next_page=page.next_page, scanned_pages=page.scanned_pages,
+        )
+
+
 class RevisionSearchHitView(BaseModel):
     locator: str
     page_no: int
@@ -642,6 +667,25 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return RevisionSearchView.from_page(discovery.search_revision(revision_id, query, start_page=start_page))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/diff", response_model=RevisionDiffPageView)
+    def diff_revisions(
+        revision_id: str, other_revision_id: str,
+        start_page: Annotated[int | None, Query(ge=1)] = None,
+    ) -> RevisionDiffPageView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return RevisionDiffPageView.from_page(
+                discovery.diff_revisions(revision_id, other_revision_id, start_page=start_page)
+            )
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else
