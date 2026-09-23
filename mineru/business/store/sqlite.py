@@ -17,10 +17,19 @@ from ...doclib.locators import parse_content_cursor
 from ...doclib.types import ParseInfo
 from ...types import Tier
 from ..documents.uploads import StoredUpload
-from ..domain import BusinessDocument, EvidenceSnapshot, IngestTask, ParseRevision
+from ..domain import (
+    BUILTIN_TEMPLATES,
+    BusinessDocument,
+    EvidenceSnapshot,
+    IngestTask,
+    ParseRevision,
+    TemplateField,
+    TemplateVersion,
+    validate_template,
+)
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 class BusinessStoreError(ValueError):
@@ -68,7 +77,7 @@ class BusinessStore:
                         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                     )
                 }
-                if tables != {"documents", "tasks", "revisions", "evidence"}:
+                if tables != {"documents", "tasks", "revisions", "evidence", "templates", "template_versions"}:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
             if version != 0:
@@ -129,10 +138,117 @@ class BusinessStore:
                         created_at_ms INTEGER NOT NULL
                     );
                     CREATE INDEX evidence_revision_created ON evidence(revision_id, created_at_ms);
-                    PRAGMA user_version = 1;
+                    CREATE TABLE templates (
+                        code TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        built_in INTEGER NOT NULL CHECK(built_in IN (0, 1)),
+                        enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+                        current_version INTEGER NOT NULL CHECK(current_version > 0)
+                    );
+                    CREATE TABLE template_versions (
+                        code TEXT NOT NULL REFERENCES templates(code) ON DELETE RESTRICT,
+                        version INTEGER NOT NULL CHECK(version > 0),
+                        name TEXT NOT NULL,
+                        fields_json TEXT NOT NULL,
+                        created_at_ms INTEGER NOT NULL,
+                        PRIMARY KEY (code, version)
+                    );
+                    PRAGMA user_version = 2;
                     COMMIT;
                     """
                 )
+                for code, name, fields in BUILTIN_TEMPLATES:
+                    self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
+
+    @staticmethod
+    def _fields_json(fields: tuple[TemplateField, ...]) -> str:
+        return json.dumps([vars(field) for field in fields], ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _template_from_row(row: sqlite3.Row) -> TemplateVersion:
+        return TemplateVersion(
+            code=row["code"],
+            name=row["version_name"],
+            version=row["version"],
+            built_in=bool(row["built_in"]),
+            enabled=bool(row["enabled"]),
+            fields=tuple(TemplateField(**field) for field in json.loads(row["fields_json"])),
+            created_at_ms=row["created_at_ms"],
+        )
+
+    @staticmethod
+    def _insert_template(
+        database: sqlite3.Connection, *, code: str, name: str, fields: tuple[TemplateField, ...], built_in: bool
+    ) -> None:
+        validate_template(code, name, fields)
+        now = _now_ms()
+        database.execute("INSERT INTO templates VALUES (?, ?, ?, 1, 1)", (code, name, int(built_in)))
+        database.execute(
+            "INSERT INTO template_versions VALUES (?, 1, ?, ?, ?)",
+            (code, name, BusinessStore._fields_json(fields), now),
+        )
+
+    def create_template(self, *, code: str, name: str, fields: tuple[TemplateField, ...]) -> TemplateVersion:
+        validate_template(code, name, fields)
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            if database.execute("SELECT 1 FROM templates WHERE code=?", (code,)).fetchone():
+                raise BusinessStoreError("Template code already exists")
+            self._insert_template(database, code=code, name=name, fields=fields, built_in=False)
+        template = self.get_template(code)
+        assert template is not None
+        return template
+
+    def update_template(self, code: str, *, name: str, fields: tuple[TemplateField, ...]) -> TemplateVersion:
+        validate_template(code, name, fields)
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute("SELECT * FROM templates WHERE code=?", (code,)).fetchone()
+            if row is None:
+                raise BusinessStoreError("Template not found")
+            if row["built_in"]:
+                raise BusinessStoreError("Built-in template cannot be edited")
+            if not row["enabled"]:
+                raise BusinessStoreError("Disabled template cannot be edited")
+            next_version = row["current_version"] + 1
+            database.execute(
+                "INSERT INTO template_versions VALUES (?, ?, ?, ?, ?)",
+                (code, next_version, name, self._fields_json(fields), _now_ms()),
+            )
+            database.execute(
+                "UPDATE templates SET name=?, current_version=? WHERE code=?", (name, next_version, code)
+            )
+        template = self.get_template(code)
+        assert template is not None
+        return template
+
+    def disable_template(self, code: str) -> TemplateVersion:
+        with closing(self._connect()) as database, database:
+            cursor = database.execute("UPDATE templates SET enabled=0 WHERE code=? AND built_in=0", (code,))
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Only custom templates can be disabled")
+        template = self.get_template(code)
+        assert template is not None
+        return template
+
+    def get_template(self, code: str, *, version: int | None = None) -> TemplateVersion | None:
+        with closing(self._connect()) as database:
+            row = database.execute(
+                "SELECT t.code, t.built_in, t.enabled, v.version, v.name AS version_name, "
+                "v.fields_json, v.created_at_ms FROM templates t JOIN template_versions v "
+                "ON v.code=t.code AND v.version=COALESCE(?, t.current_version) WHERE t.code=?",
+                (version, code),
+            ).fetchone()
+        return self._template_from_row(row) if row is not None else None
+
+    def list_templates(self) -> tuple[TemplateVersion, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT t.code, t.built_in, t.enabled, v.version, v.name AS version_name, "
+                "v.fields_json, v.created_at_ms FROM templates t JOIN template_versions v "
+                "ON v.code=t.code AND v.version=t.current_version ORDER BY t.code"
+            ).fetchall()
+        return tuple(self._template_from_row(row) for row in rows)
 
     def create_document(self, upload: StoredUpload, *, original_name: str) -> BusinessDocument:
         document = self._new_document(upload, original_name=original_name)

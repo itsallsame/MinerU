@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ...types import Tier
 from ..documents import UploadError
-from ..domain import BusinessDocument, EvidenceSnapshot, IngestTask, ParseRevision
+from ..domain import BusinessDocument, EvidenceSnapshot, FieldType, IngestTask, ParseRevision, TemplateField, TemplateVersion
 from ..services import (
     DocumentWorkflow,
     DocumentWorkflowError,
@@ -19,7 +19,48 @@ from ..services import (
     EvidenceWriter,
     NavigationStatus,
 )
-from ..store import BusinessStore
+from ..store import BusinessStore, BusinessStoreError
+
+
+class TemplateFieldView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    type: FieldType = "text"
+    required: bool = False
+
+
+class TemplateWriteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    fields: list[TemplateFieldView]
+
+    def domain_fields(self) -> tuple[TemplateField, ...]:
+        return tuple(TemplateField(**field.model_dump()) for field in self.fields)
+
+
+class TemplateCreateRequest(TemplateWriteRequest):
+    code: str
+
+
+class TemplateView(BaseModel):
+    code: str
+    name: str
+    version: int
+    built_in: bool
+    enabled: bool
+    fields: tuple[TemplateFieldView, ...]
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, template: TemplateVersion) -> TemplateView:
+        return cls(
+            code=template.code, name=template.name, version=template.version, built_in=template.built_in,
+            enabled=template.enabled, fields=tuple(TemplateFieldView(**vars(field)) for field in template.fields),
+            created_at_ms=template.created_at_ms,
+        )
 
 
 class DocumentView(BaseModel):
@@ -126,6 +167,45 @@ def create_app(
     """Build the shared open API; network placement is a deployment boundary."""
     app = FastAPI(title="MinerU Business Documents", version="0.1.0")
 
+    @app.get("/api/business/templates", response_model=list[TemplateView])
+    def list_templates() -> list[TemplateView]:
+        return [TemplateView.from_record(template) for template in store.list_templates()]
+
+    @app.post("/api/business/templates", response_model=TemplateView, status_code=201)
+    def create_template(request: TemplateCreateRequest) -> TemplateView:
+        try:
+            template = store.create_template(code=request.code, name=request.name, fields=request.domain_fields())
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return TemplateView.from_record(template)
+
+    @app.get("/api/business/templates/{code}", response_model=TemplateView)
+    def get_template(code: str, version: int | None = None) -> TemplateView:
+        template = store.get_template(code, version=version)
+        if template is None:
+            raise HTTPException(status_code=404, detail="Template version not found")
+        return TemplateView.from_record(template)
+
+    @app.put("/api/business/templates/{code}", response_model=TemplateView)
+    def update_template(code: str, request: TemplateWriteRequest) -> TemplateView:
+        try:
+            template = store.update_template(code, name=request.name, fields=request.domain_fields())
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return TemplateView.from_record(template)
+
+    @app.post("/api/business/templates/{code}/disable", response_model=TemplateView)
+    def disable_template(code: str) -> TemplateView:
+        try:
+            template = store.disable_template(code)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return TemplateView.from_record(template)
+
     @app.post("/api/business/documents", response_model=SubmissionView, status_code=202)
     def submit_document(file: Annotated[UploadFile, File()], tier: Annotated[Tier | None, Form()] = None) -> SubmissionView:
         if not file.filename:
@@ -206,5 +286,9 @@ __all__ = [
     "RevisionView",
     "SubmissionView",
     "TaskView",
+    "TemplateCreateRequest",
+    "TemplateFieldView",
+    "TemplateView",
+    "TemplateWriteRequest",
     "create_app",
 ]
