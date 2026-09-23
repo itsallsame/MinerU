@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 66,
+  "completed_features": 67,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5106,9 +5106,9 @@
         "实现：Doclib契约回归",
         "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Mac Doclib 契约回归：业务 175 通过/1 个 opt-in 跳过，上游单测 2798 通过/4 跳过；独立 Doclib 进程、身份/缓存/历史定位、共享上传、格式与网关边界均由现有测试覆盖。上游运行使用 --tb=short 仅缩短失败展示；测试范围不变。跨容器、麒麟/NVIDIA、断网与真实样本质量未验收。证据：dev-docs/evidence/2026-09-24-doclib-contract-regression.md"
     },
     {
       "id": "QA-004",

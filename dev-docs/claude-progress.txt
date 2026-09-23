@@ -681,3 +681,10 @@ Changes: Added deterministic worker lifecycle/error tests for invalid polling, r
 Verification: New 4 tests and Ruff passed; full Mac business suite 175 passed/1 opt-in skipped. Initial restricted run failed only because local socket binding was denied; authorized local-socket rerun passed. No Kylin/GPU or annotated-sample claim.
 Evidence: dev-docs/evidence/2026-09-24-extraction-worker-lifecycle.md
 Next: Strengthen Doclib and API contract regression, then run real four-class samples and target Kylin/NVIDIA acceptance when available. Keep goal active.
+
+=== 2026-09-24 Session 65 (QA-003 Doclib contract regression) ===
+Status: In progress; QA-003 verified complete on Mac (67/241 passed); P6 remains incomplete
+Changes: Audited existing live Doclib/business gateway and upstream Doclib contract test scope; recorded coverage matrix and target-environment exclusions. No production code change or user/permission system added.
+Verification: Business 175 passed/1 opt-in skipped; upstream unittest 2798 passed/4 skipped on Mac. Restricted first upstream run failed due local socket permission; authorized rerun of same test set with short traceback passed. No Kylin/GPU/air-gap claim.
+Evidence: dev-docs/evidence/2026-09-24-doclib-contract-regression.md
+Next: QA-004 business API contract regression, then real four-class annotated samples and target Kylin/NVIDIA deployment gates. Keep goal active.
