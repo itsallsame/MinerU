@@ -533,3 +533,13 @@ Changes:
 Verification: Web 10 unit tests/8-asset offline build; Playwright template keyboard/CRUD and delayed-write race scenarios passed with simulated API. No screen-reader or target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-template-keyboard-status.md
 Next: Continue full FE-046 traversal and screen-reader checks, FE-047 recovery, then real samples and Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 52 (Task polling context and completion refresh) ===
+Status: In progress; FE-013 verified complete (55/241 passed), P4/P1/P6 gates remain open
+Changes:
+- Bound task polling to the list and selection context that started it; stale task failures and completions no longer disturb newer views.
+- Included error-code changes in refresh detection and retained current-document revision reload when a task finishes.
+- Corrected feature-list completed_features from stale 48 to the actual 55 after FE-013 verification.
+Verification: Web 10 unit tests/8-asset offline build; Playwright selected completion, stale selection, filter-change error, upload/retry and outage recovery scenarios passed with simulated API. No real samples or target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-task-polling-context.md
+Next: Continue P4 failure/retry/cancel and review-edit gaps, then four-class samples and isolated Kylin/NVIDIA gates. Keep goal active.

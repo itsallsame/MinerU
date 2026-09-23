@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 48,
+  "completed_features": 55,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3739,9 +3739,9 @@
         "实现：任务进度轮询",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Playwright 验证任务完成后列表与当前修订刷新、用户切换文档/筛选后旧轮询结果和错误不污染新视图；前端单测与离线构建通过。证据：dev-docs/evidence/2026-09-23-task-polling-context.md"
     },
     {
       "id": "FE-014",

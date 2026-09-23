@@ -766,20 +766,28 @@ async function pollTasks() {
   if (state.polling || state.uploading || !state.items.length) return;
   const pending = state.items.filter((item) => ["uploaded", "submitted"].includes(item.task?.status));
   if (!pending.length) return;
+  const listRequest = state.listRequest;
+  const selectionRequest = state.selectionRequest;
+  const selectedId = state.selectedId;
   state.polling = true;
   try {
     let changed = false;
     for (const item of pending) {
+      if (listRequest !== state.listRequest) return;
       try {
         const updated = await businessApi.task(item.task.id);
-        if (updated.status !== item.task.status || updated.actual_tier !== item.task.actual_tier) changed = true;
+        if (listRequest !== state.listRequest) return;
+        if (updated.status !== item.task.status || updated.actual_tier !== item.task.actual_tier
+          || updated.error_code !== item.task.error_code) changed = true;
       } catch (error) {
+        if (listRequest !== state.listRequest) return;
         showError(`任务状态暂不可用：${error.message}`);
       }
     }
-    if (changed) {
-      await refreshDocuments();
-      if (state.selectedId) await selectDocument(state.selectedId);
+    if (changed && listRequest === state.listRequest) {
+      const loaded = await refreshDocuments();
+      if (loaded && selectedId && state.selectedId === selectedId
+        && selectionRequest === state.selectionRequest) await selectDocument(selectedId);
     }
   } finally {
     state.polling = false;
