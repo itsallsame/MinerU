@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-ExtractionStatus = Literal["running", "done", "failed"]
+ExtractionStatus = Literal["queued", "running", "done", "failed"]
 IssueCode = Literal["required_missing", "conflicting_candidates", "coverage_incomplete"]
 
 
@@ -17,6 +17,9 @@ class ExtractionRun:
     template_version: int
     status: ExtractionStatus
     error_code: str | None
+    claim_token: str | None
+    lease_until_ms: int | None
+    attempts: int
     created_at_ms: int
     updated_at_ms: int
 

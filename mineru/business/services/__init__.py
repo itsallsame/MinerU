@@ -3,6 +3,7 @@
 from .documents import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
 from .evidence import EvidenceCaptureError, EvidenceInspection, EvidenceReader, EvidenceWriter, NavigationStatus
 from .extractions import FieldExtraction
+from .extraction_worker import ExtractionWorker
 
 __all__ = [
     "DocumentSubmission",
@@ -12,6 +13,7 @@ __all__ = [
     "EvidenceInspection",
     "EvidenceReader",
     "EvidenceWriter",
+    "ExtractionWorker",
     "FieldExtraction",
     "NavigationStatus",
 ]

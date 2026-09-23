@@ -184,6 +184,16 @@ Verification: Full business suite 80 passed/2 warnings on Mac with local sockets
 Evidence: dev-docs/evidence/2026-09-23-p3-review-confirmation.md
 Next: Make extraction durable/asynchronous, then implement business Web and own Skill against the same open API; target hardware and real-sample gates remain pending.
 
+=== 2026-09-23 Session 17 (Durable asynchronous extraction queue) ===
+Status: In progress; P3 richer extraction and P4/P5/P6 remain open
+Changes:
+- Switched extraction HTTP creation to queued 202, with a lifespan-managed business worker thread and a separate Doclib client.
+- Added transactional lease/token ownership, bounded retries, restart reclaim and stale-worker write rejection; reruns discard previous partial candidates.
+- Added queue/restart/lifespan tests and retained the open no-user API.
+Verification: Full business suite 84 passed/2 warnings on Mac with local sockets; Ruff passed.
+Evidence: dev-docs/evidence/2026-09-23-p3-durable-extraction-queue.md
+Next: Business Web and own Skill against the unified API; richer extraction, real-sample quality and Kylin offline target gates remain open.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

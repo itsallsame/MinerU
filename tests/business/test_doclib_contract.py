@@ -169,7 +169,10 @@ def test_business_field_candidate_uses_historical_doclib_page(
     assert "年度通知" in payload
     current_json.write_text(payload.replace("年度通知", "当前通知"))
     writer = EvidenceWriter(store=business, doclib=client)
-    run = FieldExtraction(store=business, doclib=client, evidence_writer=writer).run(revision.id)
+    extraction = FieldExtraction(store=business, doclib=client, evidence_writer=writer)
+    extraction.enqueue(revision.id)
+    run = extraction.process_next()
+    assert run is not None
     assert run.status == "done"
     candidates = business.list_field_candidates(run.id)
     assert {(item.field_code, item.value) for item in candidates} == {

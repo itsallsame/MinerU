@@ -24,12 +24,32 @@ class FieldExtraction:
         self._doclib = doclib
         self._evidence_writer = evidence_writer
 
-    def run(self, revision_id: str) -> ExtractionRun:
-        run = self._store.create_extraction(revision_id)
+    def enqueue(self, revision_id: str) -> ExtractionRun:
+        return self._store.enqueue_extraction(revision_id)
+
+    def process_next(self) -> ExtractionRun | None:
+        run = self._store.claim_next_extraction()
+        if run is None:
+            return None
+        return self._process_claimed(run)
+
+    def _fail(self, run: ExtractionRun, error_code: str) -> ExtractionRun:
+        assert run.claim_token is not None
+        try:
+            return self._store.fail_extraction(run.id, claim_token=run.claim_token, error_code=error_code)
+        except BusinessStoreError:
+            latest = self._store.get_extraction(run.id)
+            assert latest is not None
+            return latest  # A newer worker may own this run after lease expiry.
+
+    def _process_claimed(self, run: ExtractionRun) -> ExtractionRun:
+        assert run.claim_token is not None
+        revision_id = run.revision_id
         revision = self._store.get_revision(revision_id)
         template = self._store.get_template(run.template_code, version=run.template_version)
         assert revision is not None and template is not None
         try:
+            self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
             parse = self._doclib.get_parse(revision.doclib_parse_id)
             if (
                 parse.status not in ("done", "superseded")
@@ -37,16 +57,18 @@ class FieldExtraction:
                 or parse.short_id != revision.short_id
                 or parse.tier != revision.tier
             ):
-                return self._store.fail_extraction(run.id, error_code="historical_parse_mismatch")
+                return self._fail(run, "historical_parse_mismatch")
             page_numbers = sorted(parse_page_range_set(parse.page_range))
             if not page_numbers or len(page_numbers) > _MAX_PAGES:
-                return self._store.fail_extraction(run.id, error_code="page_range_unsupported")
+                return self._fail(run, "page_range_unsupported")
             doc = self._doclib.get_doc(revision.sha256)
+            self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
             page_count = doc.page_count
             complete_coverage = isinstance(page_count, int) and page_count > 0 and page_numbers == list(
                 range(1, page_count + 1)
             )
             for page_no in page_numbers:
+                self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
                 locator = page_ref(revision.short_id, revision.tier, page_no)
                 page = self._doclib.read_parse_content(revision.doclib_parse_id, locator, limit=_PAGE_LIMIT)
                 if (
@@ -56,7 +78,7 @@ class FieldExtraction:
                     or page.tier != revision.tier
                     or page.request_scope.locator != locator
                 ):
-                    return self._store.fail_extraction(run.id, error_code="historical_content_incomplete")
+                    return self._fail(run, "historical_content_incomplete")
                 matches = [
                     (field.code, value)
                     for field in template.fields
@@ -64,16 +86,20 @@ class FieldExtraction:
                 ]
                 if not matches:
                     continue
+                self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
                 evidence = self._evidence_writer.capture(revision_id, locator=locator)
                 for field_code, value in matches:
                     self._store.add_field_candidate(
-                        run.id, field_code=field_code, value=value, evidence_id=evidence.id
+                        run.id, claim_token=run.claim_token, field_code=field_code,
+                        value=value, evidence_id=evidence.id,
                     )
-            return self._store.finish_extraction(run.id, complete_coverage=complete_coverage)
+            return self._store.finish_extraction(
+                run.id, claim_token=run.claim_token, complete_coverage=complete_coverage
+            )
         except BusinessStoreError:
-            return self._store.fail_extraction(run.id, error_code="candidate_integrity_failed")
+            return self._fail(run, "candidate_integrity_failed")
         except (MineruError, EvidenceCaptureError, ValueError):
-            return self._store.fail_extraction(run.id, error_code="historical_content_unavailable")
+            return self._fail(run, "historical_content_unavailable")
 
 
 def _label_values(content: str, field: TemplateField) -> tuple[str, ...]:

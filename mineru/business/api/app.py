@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -34,6 +36,7 @@ from ..services import (
     EvidenceInspection,
     EvidenceReader,
     EvidenceWriter,
+    ExtractionWorker,
     FieldExtraction,
     NavigationStatus,
 )
@@ -157,7 +160,11 @@ class ExtractionRunView(BaseModel):
 
     @classmethod
     def from_record(cls, run: ExtractionRun) -> ExtractionRunView:
-        return cls(**vars(run))
+        return cls(
+            id=run.id, revision_id=run.revision_id, template_code=run.template_code,
+            template_version=run.template_version, status=run.status, error_code=run.error_code,
+            created_at_ms=run.created_at_ms, updated_at_ms=run.updated_at_ms,
+        )
 
 
 class FieldCandidateView(BaseModel):
@@ -340,9 +347,20 @@ class EvidenceCaptureRequest(BaseModel):
 def create_app(
     *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader,
     evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
+    extraction_worker: ExtractionWorker | None = None,
 ) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
-    app = FastAPI(title="MinerU Business Documents", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if extraction_worker is not None:
+            extraction_worker.start()
+        try:
+            yield
+        finally:
+            if extraction_worker is not None:
+                extraction_worker.stop()
+
+    app = FastAPI(title="MinerU Business Documents", version="0.1.0", lifespan=lifespan)
 
     @app.post(
         "/api/business/extractions/{run_id}/fields/{field_code}/decisions",
@@ -407,12 +425,12 @@ def create_app(
             raise HTTPException(status_code=404, detail="Extraction not found")
         return [AuditEventView.from_record(item) for item in store.list_audit_events(run_id)]
 
-    @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=201)
+    @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=202)
     def extract_fields(revision_id: str) -> ExtractionRunView:
         if field_extraction is None:
             raise HTTPException(status_code=503, detail="Field extraction is not configured")
         try:
-            run = field_extraction.run(revision_id)
+            run = field_extraction.enqueue(revision_id)
         except BusinessStoreError as exc:
             status_code = 404 if str(exc) == "Parse revision not found" else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc

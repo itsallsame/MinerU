@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from ...doclib import DoclibClient
 from ...version import __version__
 from ..documents import DoclibGateway, ImmutableUploadStore
-from ..services import DocumentWorkflow, EvidenceReader, EvidenceWriter, FieldExtraction
+from ..services import DocumentWorkflow, EvidenceReader, EvidenceWriter, ExtractionWorker, FieldExtraction
 from ..store import BusinessStore
 from .app import create_app
 
@@ -72,12 +72,16 @@ def build_app(config: ServerConfig) -> FastAPI:
         producer_version=__version__,
     )
     evidence_writer = EvidenceWriter(store=store, doclib=doclib)
+    extraction_doclib = DoclibClient(base_url=config.doclib_url)
+    extraction_writer = EvidenceWriter(store=store, doclib=extraction_doclib)
+    extraction = FieldExtraction(store=store, doclib=extraction_doclib, evidence_writer=extraction_writer)
     return create_app(
         workflow=workflow,
         store=store,
         evidence_reader=EvidenceReader(store=store, doclib=doclib),
         evidence_writer=evidence_writer,
-        field_extraction=FieldExtraction(store=store, doclib=doclib, evidence_writer=evidence_writer),
+        field_extraction=extraction,
+        extraction_worker=ExtractionWorker(extraction),
     )
 
 

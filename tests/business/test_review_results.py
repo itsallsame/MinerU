@@ -30,10 +30,14 @@ def _run(tmp_path: Path, *, snippet: str, candidate_values: tuple[str, ...] = ()
     evidence = store.capture_evidence(
         revision.id, locator=f"doc:{upload.sha256[:12]}/tier:flash/page:1", snippet=snippet
     )
-    run = store.create_extraction(revision.id)
+    store.enqueue_extraction(revision.id)
+    run = store.claim_next_extraction()
+    assert run is not None and run.claim_token is not None
     for value in candidate_values:
-        store.add_field_candidate(run.id, field_code="title", value=value, evidence_id=evidence.id)
-    store.finish_extraction(run.id, complete_coverage=True)
+        store.add_field_candidate(
+            run.id, claim_token=run.claim_token, field_code="title", value=value, evidence_id=evidence.id
+        )
+    store.finish_extraction(run.id, claim_token=run.claim_token, complete_coverage=True)
     return store, run.id, evidence.id
 
 
@@ -126,8 +130,10 @@ def test_incomplete_coverage_cannot_be_waived(tmp_path: Path) -> None:
         status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
     )
     revision = store.add_completed_revision(document.id, parse=parse, producer_version="4.0.6")
-    run = store.create_extraction(revision.id)
-    store.finish_extraction(run.id, complete_coverage=False)
+    store.enqueue_extraction(revision.id)
+    run = store.claim_next_extraction()
+    assert run is not None and run.claim_token is not None
+    store.finish_extraction(run.id, claim_token=run.claim_token, complete_coverage=False)
     issue = store.list_quality_issues(run.id)[0]
     assert issue.code == "coverage_incomplete"
     with pytest.raises(BusinessStoreError, match="cannot be waived"):

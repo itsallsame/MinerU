@@ -38,7 +38,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 5
+_SCHEMA_VERSION = 6
 
 
 class BusinessStoreError(ValueError):
@@ -177,14 +177,21 @@ class BusinessStore:
                         revision_id TEXT NOT NULL REFERENCES revisions(id) ON DELETE RESTRICT,
                         template_code TEXT NOT NULL,
                         template_version INTEGER NOT NULL,
-                        status TEXT NOT NULL CHECK(status IN ('running', 'done', 'failed')),
+                        status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'done', 'failed')),
                         error_code TEXT,
+                        claim_token TEXT,
+                        lease_until_ms INTEGER,
+                        attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
                         created_at_ms INTEGER NOT NULL,
                         updated_at_ms INTEGER NOT NULL,
+                        CHECK ((status = 'running' AND claim_token IS NOT NULL AND lease_until_ms IS NOT NULL)
+                            OR (status != 'running' AND claim_token IS NULL AND lease_until_ms IS NULL)),
                         FOREIGN KEY (template_code, template_version)
                             REFERENCES template_versions(code, version) ON DELETE RESTRICT
                     );
                     CREATE INDEX extraction_runs_revision_created ON extraction_runs(revision_id, created_at_ms);
+                    CREATE UNIQUE INDEX extraction_runs_one_active_revision
+                        ON extraction_runs(revision_id) WHERE status IN ('queued', 'running');
                     CREATE TABLE field_candidates (
                         id TEXT PRIMARY KEY,
                         run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
@@ -263,7 +270,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 5")
+                database.execute("PRAGMA user_version = 6")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -356,8 +363,8 @@ class BusinessStore:
             ).fetchall()
         return tuple(self._template_from_row(row) for row in rows)
 
-    def create_extraction(self, revision_id: str) -> ExtractionRun:
-        """Freeze the document's chosen template version against one parse revision."""
+    def enqueue_extraction(self, revision_id: str) -> ExtractionRun:
+        """Persist a run; repeated requests share one active run per revision."""
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute(
@@ -368,18 +375,72 @@ class BusinessStore:
                 raise BusinessStoreError("Parse revision not found")
             if row["template_code"] is None or row["template_version"] is None:
                 raise BusinessStoreError("Document has no selected template")
+            existing = database.execute(
+                "SELECT * FROM extraction_runs WHERE revision_id=? AND status IN ('queued', 'running')",
+                (revision_id,),
+            ).fetchone()
+            if existing is not None:
+                return ExtractionRun(**dict(existing))
             now = _now_ms()
             run = ExtractionRun(
                 id=uuid.uuid4().hex, revision_id=revision_id,
                 template_code=row["template_code"], template_version=row["template_version"],
-                status="running", error_code=None, created_at_ms=now, updated_at_ms=now,
+                status="queued", error_code=None, claim_token=None, lease_until_ms=None,
+                attempts=0, created_at_ms=now, updated_at_ms=now,
             )
             database.execute(
-                "INSERT INTO extraction_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO extraction_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (run.id, run.revision_id, run.template_code, run.template_version,
-                 run.status, run.error_code, run.created_at_ms, run.updated_at_ms),
+                 run.status, run.error_code, run.claim_token, run.lease_until_ms, run.attempts,
+                 run.created_at_ms, run.updated_at_ms),
             )
         return run
+
+    def claim_next_extraction(self, *, lease_ms: int = 180000, max_attempts: int = 3) -> ExtractionRun | None:
+        if lease_ms < 1 or max_attempts < 1:
+            raise BusinessStoreError("Extraction lease and attempts must be positive")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            now = _now_ms()
+            database.execute(
+                "UPDATE extraction_runs SET status='failed', error_code='worker_retries_exhausted', "
+                "claim_token=NULL, lease_until_ms=NULL, updated_at_ms=? "
+                "WHERE status='running' AND lease_until_ms<=? AND attempts>=?",
+                (now, now, max_attempts),
+            )
+            row = database.execute(
+                "SELECT * FROM extraction_runs WHERE status='queued' OR "
+                "(status='running' AND lease_until_ms<=? AND attempts<?) "
+                "ORDER BY created_at_ms, rowid LIMIT 1",
+                (now, max_attempts),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["status"] == "running":
+                # A crashed lease may have left unconfirmed partial candidates. Never mix attempts.
+                database.execute("DELETE FROM field_candidates WHERE run_id=?", (row["id"],))
+            token = uuid.uuid4().hex
+            database.execute(
+                "UPDATE extraction_runs SET status='running', claim_token=?, lease_until_ms=?, "
+                "attempts=attempts+1, updated_at_ms=? WHERE id=?",
+                (token, now + lease_ms, now, row["id"]),
+            )
+            claimed = database.execute("SELECT * FROM extraction_runs WHERE id=?", (row["id"],)).fetchone()
+        assert claimed is not None
+        return ExtractionRun(**dict(claimed))
+
+    def renew_extraction_lease(self, run_id: str, *, claim_token: str, lease_ms: int = 180000) -> None:
+        if lease_ms < 1:
+            raise BusinessStoreError("Extraction lease must be positive")
+        now = _now_ms()
+        with closing(self._connect()) as database, database:
+            cursor = database.execute(
+                "UPDATE extraction_runs SET lease_until_ms=?, updated_at_ms=? "
+                "WHERE id=? AND status='running' AND claim_token=? AND lease_until_ms>?",
+                (now + lease_ms, now, run_id, claim_token, now),
+            )
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Extraction claim is no longer active")
 
     def get_extraction(self, run_id: str) -> ExtractionRun | None:
         with closing(self._connect()) as database:
@@ -395,7 +456,7 @@ class BusinessStore:
         return tuple(ExtractionRun(**dict(row)) for row in rows)
 
     def add_field_candidate(
-        self, run_id: str, *, field_code: str, value: str, evidence_id: str
+        self, run_id: str, *, claim_token: str, field_code: str, value: str, evidence_id: str
     ) -> FieldCandidate:
         """Only a frozen snippet from this run's revision can support a candidate."""
         if not value.strip() or len(value) > 2000:
@@ -403,12 +464,16 @@ class BusinessStore:
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute(
-                "SELECT x.status, x.template_code, x.template_version, x.revision_id, e.snippet, e.revision_id AS "
+                "SELECT x.status, x.claim_token, x.lease_until_ms, x.template_code, x.template_version, "
+                "x.revision_id, e.snippet, e.revision_id AS "
                 "evidence_revision_id FROM extraction_runs x JOIN evidence e ON e.id=? WHERE x.id=?",
                 (evidence_id, run_id),
             ).fetchone()
-            if row is None or row["status"] != "running" or row["evidence_revision_id"] != row["revision_id"]:
-                raise BusinessStoreError("Candidate requires running extraction and evidence from the same revision")
+            if (
+                row is None or row["status"] != "running" or row["claim_token"] != claim_token
+                or row["lease_until_ms"] <= _now_ms() or row["evidence_revision_id"] != row["revision_id"]
+            ):
+                raise BusinessStoreError("Candidate requires active claim and evidence from the same revision")
             fields_row = database.execute(
                 "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
                 (row["template_code"], row["template_version"]),
@@ -437,13 +502,16 @@ class BusinessStore:
             ).fetchall()
         return tuple(FieldCandidate(**dict(row)) for row in rows)
 
-    def finish_extraction(self, run_id: str, *, complete_coverage: bool) -> ExtractionRun:
+    def finish_extraction(self, run_id: str, *, claim_token: str, complete_coverage: bool) -> ExtractionRun:
         """Generate blocking quality issues only after every source page was scanned."""
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
-            if row is None or row["status"] != "running":
-                raise BusinessStoreError("Extraction is not running")
+            if (
+                row is None or row["status"] != "running" or row["claim_token"] != claim_token
+                or row["lease_until_ms"] <= _now_ms()
+            ):
+                raise BusinessStoreError("Extraction claim is no longer active")
             fields_row = database.execute(
                 "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
                 (row["template_code"], row["template_version"]),
@@ -475,22 +543,25 @@ class BusinessStore:
                         (uuid.uuid4().hex, run_id, field["code"], issue_code, now),
                     )
             database.execute(
-                "UPDATE extraction_runs SET status='done', updated_at_ms=? WHERE id=?", (now, run_id)
+                "UPDATE extraction_runs SET status='done', claim_token=NULL, lease_until_ms=NULL, "
+                "updated_at_ms=? WHERE id=?", (now, run_id)
             )
         result = self.get_extraction(run_id)
         assert result is not None
         return result
 
-    def fail_extraction(self, run_id: str, *, error_code: str) -> ExtractionRun:
+    def fail_extraction(self, run_id: str, *, claim_token: str, error_code: str) -> ExtractionRun:
         if not error_code.strip():
             raise BusinessStoreError("Extraction failure code is required")
         with closing(self._connect()) as database, database:
             cursor = database.execute(
-                "UPDATE extraction_runs SET status='failed', error_code=?, updated_at_ms=? "
-                "WHERE id=? AND status='running'", (error_code, _now_ms(), run_id),
+                "UPDATE extraction_runs SET status='failed', error_code=?, claim_token=NULL, "
+                "lease_until_ms=NULL, updated_at_ms=? "
+                "WHERE id=? AND status='running' AND claim_token=? AND lease_until_ms>?",
+                (error_code, _now_ms(), run_id, claim_token, _now_ms()),
             )
             if cursor.rowcount != 1:
-                raise BusinessStoreError("Extraction is not running")
+                raise BusinessStoreError("Extraction claim is no longer active")
         result = self.get_extraction(run_id)
         assert result is not None
         return result
