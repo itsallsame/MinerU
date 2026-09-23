@@ -409,3 +409,13 @@ Changes:
 Verification: Web 10 tests/8-asset build, Playwright outage/recovery and quality/audit/template regressions passed; git diff check passed.
 Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
 Next: Finish FE-047 panel-level retry/race handling and FE-048 missing-resource feedback; then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 39 (Review-panel failure recovery) ===
+Status: In progress; FE-047 further advanced but still 53/241 passed; FE-048 and wider P4/P6 gates remain open
+Changes:
+- Added explicit retry and stale-selection protection for detail revision-list loading.
+- Added fail-closed retry states for review revision metadata and extraction-run reads; a failed run no longer appears perpetually loading.
+- Kept all recovery on the open business API without identity, role, token or permission logic.
+Verification: Web 10 tests/8-asset build; Playwright three-level review recovery, evidence deep-link, and service outage recovery passed.
+Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
+Next: Resolve remaining cross-document async races and search/audit retry UX; then FE-048 missing-resource feedback, four-class samples and Kylin/NVIDIA field gates. Keep goal active.

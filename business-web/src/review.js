@@ -53,6 +53,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     selectedFieldCode: null, inspectionHighlightValue: null,
     sourcePageNo: null,
     revisionLoading: false, runLoading: false,
+    revisionLoadFailed: false, runLoadFailed: false, targetRunId: null,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -75,6 +76,11 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.sourcePageNo = null;
     state.revisionLoading = false;
     state.runLoading = false;
+    state.revisionLoadFailed = false;
+    state.runLoadFailed = false;
+    state.targetRunId = null;
+    state.busy = false;
+    state.error = "";
     root.replaceChildren();
     root.hidden = true;
   }
@@ -99,6 +105,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runId = runId;
     state.extraction = null;
     state.runLoading = true;
+    state.runLoadFailed = false;
+    state.error = "";
     state.inspection = null;
     state.selectedFieldCode = null;
     state.inspectionHighlightValue = null;
@@ -122,6 +130,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     } catch (error) {
       if (generation !== state.generation) return;
       state.runLoading = false;
+      state.runLoadFailed = true;
       state.error = `复核数据读取失败：${error.message}`;
       render();
     }
@@ -130,6 +139,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   async function selectRevision(revisionId, targetRunId = null) {
     const generation = ++state.generation;
     state.revisionId = revisionId;
+    state.targetRunId = targetRunId;
     state.runId = null;
     state.extraction = null;
     state.inspection = null;
@@ -148,7 +158,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.audit = [];
     state.evidence = [];
     state.revisionLoading = true;
+    state.revisionLoadFailed = false;
     state.runLoading = false;
+    state.runLoadFailed = false;
+    state.error = "";
     render();
     try {
       const [runs, evidence] = await Promise.all([
@@ -170,6 +183,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     } catch (error) {
       if (generation !== state.generation) return;
       state.revisionLoading = false;
+      state.revisionLoadFailed = true;
       state.error = `解析修订读取失败：${error.message}`;
       render();
     }
@@ -194,6 +208,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.sourcePageNo = null;
     state.revisionLoading = false;
     state.runLoading = false;
+    state.revisionLoadFailed = false;
+    state.runLoadFailed = false;
+    state.targetRunId = null;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -789,6 +806,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       root.append(element("p", "review-hint", "文档尚无完成的解析修订；请等待任务完成后再提取字段。"));
       return;
     }
+    if (state.revisionLoadFailed) {
+      root.append(button("重试读取解析修订", () => selectRevision(state.revisionId, state.targetRunId)));
+      return;
+    }
     const tools = element("div", "review-tools");
     const revisionSelect = element("select");
     revisionSelect.setAttribute("aria-label", "选择解析修订");
@@ -815,7 +836,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     tools.append(button(
       state.runs.length ? "重新生成字段候选" : "生成字段候选",
       startExtraction,
-      state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
+      state.busy || state.revisionLoading || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
     const sourceLinks = renderSourceFieldIndex();
@@ -830,7 +851,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       return;
     }
     if (!state.extraction) {
-      root.append(element("p", "review-hint", "正在读取提取运行…"));
+      if (state.runLoadFailed) root.append(button("重试读取提取运行", () => loadRun(state.runId)));
+      else root.append(element("p", "review-hint", "正在读取提取运行…"));
       return;
     }
     if (["queued", "running"].includes(state.extraction.run.status)) {

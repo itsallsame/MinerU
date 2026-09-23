@@ -13,7 +13,10 @@ const state = {
   items: [],
   selectedId: null,
   selectedSearchDocument: null,
+  selectedReviewTarget: {},
   revisions: [],
+  revisionsError: "",
+  selectionRequest: 0,
   listRequest: 0,
   workspaceRequest: 0,
   searchRequest: 0,
@@ -302,7 +305,9 @@ async function refreshDocuments() {
     clearError();
     if (state.selectedId && !state.selectedSearchDocument && !state.items.some((item) => item.document.id === state.selectedId)) {
       state.selectedId = null;
+      state.selectionRequest += 1;
       state.revisions = [];
+      state.revisionsError = "";
       review.clear();
       const detail = byId("detail-content");
       detail.className = "detail-empty";
@@ -325,6 +330,8 @@ async function refreshDocuments() {
     state.total = 0;
     state.selectedId = null;
     state.selectedSearchDocument = null;
+    state.selectionRequest += 1;
+    state.revisionsError = "";
     state.revisions = [];
     review.clear();
     byId("total-count").textContent = "文档数量未知";
@@ -454,7 +461,13 @@ function renderDetail() {
 
   const revisions = element("section", "detail-section");
   revisions.append(element("h3", "", "解析修订"));
-  if (state.revisions.length) {
+  if (state.revisionsError) {
+    revisions.append(element("p", "error-banner", state.revisionsError));
+    const retry = element("button", "secondary-button", "重试读取修订记录");
+    retry.type = "button";
+    retry.addEventListener("click", () => selectDocument(record.id, state.selectedSearchDocument, state.selectedReviewTarget));
+    revisions.append(retry);
+  } else if (state.revisions.length) {
     for (const revision of state.revisions) {
       const row = element("div", "revision-item", `${revision.tier.toUpperCase()} · 第 ${revision.page_range} 页 · MinerU ${revision.producer_version}`);
       row.append(element("small", "", new Date(revision.created_at_ms).toLocaleString("zh-CN")));
@@ -467,23 +480,35 @@ function renderDetail() {
 }
 
 async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
+  const requestNumber = ++state.selectionRequest;
   if (state.selectedId !== id) state.sourcePageNo = 1;
   state.selectedId = id;
   state.selectedSearchDocument = searchDocument;
+  state.selectedReviewTarget = reviewTarget;
   state.revisions = [];
+  state.revisionsError = "";
   review.clear();
   renderDocuments();
   renderDetail();
+  let revisions;
   try {
-    const revisions = await businessApi.revisions(id);
-    if (state.selectedId !== id) return;
-    state.revisions = revisions;
-    renderDetail();
-    const item = state.items.find((entry) => entry.document.id === id)
-      || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
-    if (item) await review.setDocument(item.document, revisions, reviewTarget);
+    revisions = await businessApi.revisions(id);
   } catch (error) {
-    if (state.selectedId === id) showError(`修订记录不可用：${error.message}`);
+    if (requestNumber !== state.selectionRequest) return;
+    state.revisionsError = `修订记录不可用：${error.message}`;
+    renderDetail();
+    return;
+  }
+  if (requestNumber !== state.selectionRequest) return;
+  state.revisions = revisions;
+  renderDetail();
+  const item = state.items.find((entry) => entry.document.id === id)
+    || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
+  if (!item) return;
+  try {
+    await review.setDocument(item.document, revisions, reviewTarget);
+  } catch (error) {
+    if (requestNumber === state.selectionRequest) showError(`复核工作台无法打开：${error.message}`);
   }
 }
 
