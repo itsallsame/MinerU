@@ -294,3 +294,13 @@ Changes:
 Verification: 108 business tests passed/2 dependency warnings; Web 7 tests and 7-asset build passed; Playwright discovery flow passed against the built bundle; Skill quick validation, Ruff and diff checks passed.
 Evidence: dev-docs/evidence/2026-09-23-revision-page-search.md
 Next: Add structure and block-level evidence/search review, four-class annotated sample acceptance, template/quality UX, then isolated Kylin/NVIDIA target checks. Keep goal active.
+
+=== 2026-09-23 Session 27 (Open template-management Web) ===
+Status: In progress; FE-041/FE-042 completed, P4/P1/P6 wider gates remain open
+Changes:
+- Added same-origin template manager for read-only built-ins, custom create/version/disable and ordered field configuration; no user or permission model.
+- Kept old template versions immutable and reflected new/disabled options in upload/filter controls.
+- Marked FE-041 and FE-042 complete after prescribed frontend test/build plus browser verification; feature count is now 46/241.
+Verification: Web 9 tests, 8-asset offline build, Playwright template CRUD/field order/narrow-width plus discovery/evidence-link/review regressions, 5 existing backend template tests, feature-count consistency and diff checks passed. Two dependency deprecation warnings remain.
+Evidence: dev-docs/evidence/2026-09-23-template-management-web.md
+Next: P4 structure/block-level evidence, quality statistics and real four-class samples; then isolated Kylin/NVIDIA target checks. Do not mark P4 or production complete.

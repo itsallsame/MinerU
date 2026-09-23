@@ -37,6 +37,11 @@ const postJson = (path, body) => request(path, {
 export const businessApi = {
   capabilities: () => request("/capabilities"),
   templates: () => request("/templates"),
+  createTemplate: (definition) => postJson("/templates", definition),
+  updateTemplate: (code, definition) => request(`/templates/${encodeURIComponent(code)}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(definition),
+  }),
+  disableTemplate: (code) => request(`/templates/${encodeURIComponent(code)}/disable`, { method: "POST" }),
   search: (query, limit = 20) => request(`/search?${new URLSearchParams({ query, limit: String(limit) })}`),
   readRevision: (id, locator, limit = 12000) => request(
     `/revisions/${encodeURIComponent(id)}/content?${new URLSearchParams({ locator, limit: String(limit) })}`,

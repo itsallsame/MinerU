@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 44,
+  "completed_features": 46,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4355,9 +4355,9 @@
         "实现：模板管理页面",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "内置模板只读；自定义模板创建、追加版本、停用与上传选项同步。Mac Web 单元、离线构建及 Playwright 合成 API 浏览器流程通过；目标机与真实业务数据未验收。"
     },
     {
       "id": "FE-042",
@@ -4377,9 +4377,9 @@
         "实现：自定义字段配置页面",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "字段代码、名称、text/date/list、必填及顺序可配置；客户端校验和 Playwright 字段排序/提交断言通过。复杂提取策略与质量阈值不在此项实现范围。"
     },
     {
       "id": "FE-043",

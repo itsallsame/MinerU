@@ -1,6 +1,7 @@
 import { businessApi } from "./api.js";
 import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskLabel, tierForFile } from "./domain.js";
 import { createReviewWorkbench } from "./review.js";
+import { createTemplateManager } from "./templates.js";
 
 const byId = (id) => document.getElementById(id);
 const state = {
@@ -28,6 +29,15 @@ const review = createReviewWorkbench(byId("workbench"), {
     frame.src = `${businessApi.sourceUrl(item.document.id)}#page=${evidence.page_no}`;
     frame.scrollIntoView({ behavior: "smooth", block: "center" });
     return true;
+  },
+});
+const templateManager = createTemplateManager(byId("template-manager-content"), {
+  onChanged: async () => {
+    state.templates = await businessApi.templates();
+    populateTemplateSelects();
+    templateManager.setTemplates(state.templates);
+    renderDocuments();
+    renderDetail();
   },
 });
 
@@ -74,6 +84,7 @@ function populateTemplateSelects() {
   const upload = byId("upload-template");
   const filter = byId("template-filter");
   for (const select of [upload, filter]) {
+    const previous = select.value;
     select.replaceChildren(select.firstElementChild);
     for (const template of state.templates) {
       const option = element("option", "", template.name);
@@ -81,6 +92,7 @@ function populateTemplateSelects() {
       option.disabled = select === upload && !template.enabled;
       select.append(option);
     }
+    if ([...select.options].some((option) => option.value === previous && !option.disabled)) select.value = previous;
   }
 }
 
@@ -99,6 +111,7 @@ async function bootstrap() {
   if (templates.status === "fulfilled") {
     state.templates = templates.value;
     populateTemplateSelects();
+    templateManager.setTemplates(state.templates);
   } else {
     showError(`模板列表暂不可用：${templates.reason.message}`);
   }
