@@ -8,4 +8,6 @@
 
 全业务套件第一次运行是 150 通过、1 失败（新增测试扩展前）；单独复跑仍失败：`test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib` 的任务以 `parse_batch_invalid` 结束。该测试走 Mac 本地 Doclib 示例 PDF，并非本工具代码路径；尚未确认根因，不能把全业务回归写为通过。其他 150 项通过不抵消该失败。
 
-边界与下一步：预检不验证发布清单的文件哈希，运行前必须独立执行 `verify_offline_release`；它也不证明物理断网、vLLM 完整加载、解析准确率、显存/吞吐、备份回退。获得批准的 Linux amd64 离线镜像、模型和麒麟 NVIDIA 机器后，先执行制品复核，再在断网环境启动并运行此工具，随后做真实四类样本和故障演练。另需调查 Mac 示例 PDF 的 `parse_batch_invalid` 回归。
+后续已定位并修复该间歇性重复批次问题；见 [重复页批次证据](2026-09-23-duplicate-parse-batches.md)。本段保留首次运行事实，不代表当前测试状态。
+
+边界与下一步：预检不验证发布清单的文件哈希，运行前必须独立执行 `verify_offline_release`；它也不证明物理断网、vLLM 完整加载、解析准确率、显存/吞吐、备份回退。获得批准的 Linux amd64 离线镜像、模型和麒麟 NVIDIA 机器后，先执行制品复核，再在断网环境启动并运行此工具，随后做真实四类样本和故障演练。

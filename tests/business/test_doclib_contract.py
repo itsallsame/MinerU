@@ -455,7 +455,12 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
         time.sleep(0.2)
     else:
         raise AssertionError("Repository PDF business parse did not reach a terminal state")
-    assert task["status"] == "done", task
+    if task["status"] != "done":
+        saved_task = store.get_task(task_id)
+        assert saved_task is not None
+        parses = [doclib.get_parse(parse_id) for parse_id in saved_task.parse_ids]
+        details = [(parse.id, parse.status, parse.page_range, parse.tier) for parse in parses]
+        raise AssertionError(f"Business task failed: {task['error_code']}; parse batches: {details}")
     revisions = client.get(f"/api/business/documents/{document['id']}/revisions").json()
     assert len(revisions) == 1 and revisions[0]["tier"] == "flash"
     assert revisions[0]["page_range"] == "1-13"

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ...doclib import DoclibInterface
+from ...doclib.types import ParseInfo
 from ...errors import MineruError
 from ...parser.page_range import parse_page_range_set
 from ...types import Tier
@@ -17,6 +18,23 @@ from ..store import BusinessStore, BusinessStoreError
 
 class DocumentWorkflowError(RuntimeError):
     """A workflow invariant failed; the caller should not expose internals."""
+
+
+def _distinct_completed_batches(parses: list[ParseInfo]) -> tuple[ParseInfo, ...]:
+    """Prefer the newest completed result for an identical page set.
+
+    Doclib may queue the same range twice when its automatic ingest and an
+    explicit all-pages request race. Partial overlaps remain invalid and are
+    rejected by BusinessStore rather than silently discarding pages.
+    """
+    by_pages: dict[tuple[str, str, Tier, frozenset[int]], ParseInfo] = {}
+    for parse in parses:
+        pages = frozenset(parse_page_range_set(parse.page_range))
+        key = (parse.sha256, parse.short_id, parse.tier, pages)
+        previous = by_pages.get(key)
+        if previous is None or (parse.done_at or 0, parse.id) > (previous.done_at or 0, previous.id):
+            by_pages[key] = parse
+    return tuple(by_pages.values())
 
 
 @dataclass(frozen=True)
@@ -119,7 +137,7 @@ class DocumentWorkflow:
                 return self._store.mark_task_failed(task.id, error_code="parse_coverage_incomplete")
         try:
             self._store.add_completed_revision(
-                task.document_id, parse=tuple(parses), producer_version=self._producer_version
+                task.document_id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version
             )
         except BusinessStoreError:
             return self._store.mark_task_failed(task.id, error_code="parse_batch_invalid")

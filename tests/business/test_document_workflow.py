@@ -119,6 +119,45 @@ def test_pdf_all_pages_become_one_logical_revision_across_parse_batches(tmp_path
     assert revisions[0].parse_id_for_page(14) is None
 
 
+def test_duplicate_completed_pdf_range_uses_newest_batch_without_losing_pages(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path).model_copy(
+        update={"created_parse_ids": [7, 8, 9]}
+    )
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"%PDF-1.7\nlong document"), filename="report.pdf", tier="flash")
+    client.get_parse.side_effect = lambda parse_id: _parse_info(
+        submitted.document.sha256,
+        parse_id=parse_id,
+        page_range="1-10" if parse_id in (7, 8) else "11-13",
+        short_id=submitted.document.sha256[:7],
+    )
+    client.get_doc.return_value.page_count = 13
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    assert revision.page_range == "1-13"
+    assert revision.parse_id_for_page(1) == 8
+    assert revision.parse_id_for_page(13) == 9
+    assert submitted.task.parse_ids == (7, 8, 9)
+
+
+def test_same_range_with_conflicting_parse_identity_still_fails(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path).model_copy(
+        update={"created_parse_ids": [7, 8]}
+    )
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Lantern</h1>"), filename="report.html")
+    client.get_parse.side_effect = lambda parse_id: _parse_info(
+        submitted.document.sha256,
+        parse_id=parse_id,
+        short_id=submitted.document.sha256[:12] if parse_id == 7 else "different-id",
+    )
+    failed = workflow.refresh(submitted.task.id)
+    assert failed.status == "failed" and failed.error_code == "parse_batch_invalid"
+    assert store.list_revisions(submitted.document.id) == ()
+
+
 def test_pdf_missing_pages_fail_without_creating_a_completed_revision(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
@@ -141,7 +180,7 @@ def test_overlapping_batches_fail_as_retryable_task_without_a_revision(tmp_path:
     workflow, store, _shared = _workflow(tmp_path, client)
     submitted = workflow.submit(io.BytesIO(b"<h1>Lantern</h1>"), filename="report.html")
     client.get_parse.side_effect = lambda parse_id: _parse_info(
-        submitted.document.sha256, parse_id=parse_id, page_range="1"
+        submitted.document.sha256, parse_id=parse_id, page_range="1-2" if parse_id == 7 else "2-3"
     )
     failed = workflow.refresh(submitted.task.id)
     assert failed.status == "failed" and failed.error_code == "parse_batch_invalid"
