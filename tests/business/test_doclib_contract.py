@@ -20,6 +20,7 @@ from pptx import Presentation
 from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
+from mineru.business.services import EvidenceReader
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
@@ -167,6 +168,7 @@ def test_business_evidence_references_real_doclib_parse(live_doclib: tuple[Docli
     assert evidence.document_id == document.id
     assert evidence.snippet == snippet
     assert BusinessStore(database_dir / "business.sqlite3").get_evidence(evidence.id) == evidence
+    assert EvidenceReader(store=business, doclib=client).inspect(evidence.id).navigation_status == "current_match"
 
 
 def test_doclib_content_identity_is_hash_based(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

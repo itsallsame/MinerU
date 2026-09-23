@@ -99,6 +99,9 @@ def test_completed_revision_and_frozen_evidence_survive_reparse_and_restart(tmp_
     assert reopened.get_revision(first.id) == first
     assert reopened.get_revision(second.id) == second
     assert reopened.get_evidence(evidence.id) == evidence
+    assert {record.id for record in reopened.list_revisions(document.id)} == {first.id, second.id}
+    assert reopened.list_evidence(first.id) == (evidence,)
+    assert reopened.list_evidence(second.id) == ()
 
 
 def test_revision_and_locator_must_match_document_identity(tmp_path: Path) -> None:

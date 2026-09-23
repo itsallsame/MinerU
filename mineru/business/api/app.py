@@ -9,8 +9,8 @@ from pydantic import BaseModel
 
 from ...types import Tier
 from ..documents import UploadError
-from ..domain import BusinessDocument, IngestTask
-from ..services import DocumentWorkflow, DocumentWorkflowError
+from ..domain import BusinessDocument, EvidenceSnapshot, IngestTask, ParseRevision
+from ..services import DocumentWorkflow, DocumentWorkflowError, EvidenceInspection, EvidenceReader, NavigationStatus
 from ..store import BusinessStore
 
 
@@ -61,7 +61,52 @@ class SubmissionView(BaseModel):
     task: TaskView
 
 
-def create_app(*, workflow: DocumentWorkflow, store: BusinessStore) -> FastAPI:
+class RevisionView(BaseModel):
+    id: str
+    document_id: str
+    tier: Tier
+    producer_version: str
+    model_ref: str | None
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, revision: ParseRevision) -> RevisionView:
+        return cls(
+            id=revision.id,
+            document_id=revision.document_id,
+            tier=revision.tier,
+            producer_version=revision.producer_version,
+            model_ref=revision.model_ref,
+            created_at_ms=revision.created_at_ms,
+        )
+
+
+class EvidenceView(BaseModel):
+    id: str
+    revision_id: str
+    document_id: str
+    locator: str
+    page_no: int
+    block_no: int | None
+    bbox: tuple[float, float, float, float] | None
+    snippet: str
+    snippet_sha256: str
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, evidence: EvidenceSnapshot) -> EvidenceView:
+        return cls(**vars(evidence))
+
+
+class EvidenceInspectionView(EvidenceView):
+    navigation_status: NavigationStatus
+
+    @classmethod
+    def from_inspection(cls, inspection: EvidenceInspection) -> EvidenceInspectionView:
+        return cls(**vars(inspection.snapshot), navigation_status=inspection.navigation_status)
+
+
+def create_app(*, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     app = FastAPI(title="MinerU Business Documents", version="0.1.0")
 
@@ -87,6 +132,25 @@ def create_app(*, workflow: DocumentWorkflow, store: BusinessStore) -> FastAPI:
             raise HTTPException(status_code=404, detail="Document not found")
         return DocumentView.from_record(document)
 
+    @app.get("/api/business/documents/{document_id}/revisions", response_model=list[RevisionView])
+    def list_revisions(document_id: str) -> list[RevisionView]:
+        if store.get_document(document_id) is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return [RevisionView.from_record(revision) for revision in store.list_revisions(document_id)]
+
+    @app.get("/api/business/revisions/{revision_id}/evidence", response_model=list[EvidenceView])
+    def list_evidence(revision_id: str) -> list[EvidenceView]:
+        if store.get_revision(revision_id) is None:
+            raise HTTPException(status_code=404, detail="Revision not found")
+        return [EvidenceView.from_record(evidence) for evidence in store.list_evidence(revision_id)]
+
+    @app.get("/api/business/evidence/{evidence_id}", response_model=EvidenceInspectionView)
+    def inspect_evidence(evidence_id: str) -> EvidenceInspectionView:
+        inspection = evidence_reader.inspect(evidence_id)
+        if inspection is None:
+            raise HTTPException(status_code=404, detail="Evidence not found")
+        return EvidenceInspectionView.from_inspection(inspection)
+
     @app.get("/api/business/tasks/{task_id}", response_model=TaskView)
     def get_task(task_id: str) -> TaskView:
         try:
@@ -109,4 +173,12 @@ def create_app(*, workflow: DocumentWorkflow, store: BusinessStore) -> FastAPI:
     return app
 
 
-__all__ = ["DocumentView", "SubmissionView", "TaskView", "create_app"]
+__all__ = [
+    "DocumentView",
+    "EvidenceInspectionView",
+    "EvidenceView",
+    "RevisionView",
+    "SubmissionView",
+    "TaskView",
+    "create_app",
+]

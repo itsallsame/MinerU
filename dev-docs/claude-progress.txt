@@ -123,6 +123,16 @@ Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
 Limits: no real offline image build or target GPU/model validation; frontend, Skill and product workflow remain incomplete.
 Next: Continue P3 evidence-service contract and API, then frontend/Skill; return to P1/P6 target checks when hardware artifacts exist.
 
+=== 2026-09-23 Session 11 (Frozen evidence read contract) ===
+Status: In progress; P3 write-side truth, template/review/result workflows remain open
+Changes:
+- Added revision/evidence list queries and open business API endpoints, plus frozen evidence detail with current Doclib locator match/changed/unavailable status.
+- Kept Doclib parse IDs and filesystem paths out of API responses; documented that a matching locator is not proof of the historical parse version.
+Verification: 55 business tests pass with local socket permission, including live Doclib HTML evidence match; ruff checks pass.
+Evidence: dev-docs/evidence/2026-09-23-p3-evidence-read.md
+Limits: no server-side authenticated-by-source evidence capture, no parse-ID-specific content API, no pagination/capacity proof, no target Kylin model-backed test.
+Next: Design and implement version-aware evidence capture/field candidates, with explicit treatment of Doclib locator's missing parse ID.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

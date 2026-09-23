@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from ...doclib import DoclibClient
 from ...version import __version__
 from ..documents import DoclibGateway, ImmutableUploadStore
-from ..services import DocumentWorkflow
+from ..services import DocumentWorkflow, EvidenceReader
 from ..store import BusinessStore
 from .app import create_app
 
@@ -71,7 +71,7 @@ def build_app(config: ServerConfig) -> FastAPI:
         doclib=doclib,
         producer_version=__version__,
     )
-    return create_app(workflow=workflow, store=store)
+    return create_app(workflow=workflow, store=store, evidence_reader=EvidenceReader(store=store, doclib=doclib))
 
 
 def main() -> None:

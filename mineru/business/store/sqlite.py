@@ -320,6 +320,13 @@ class BusinessStore:
             row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
         return ParseRevision(**dict(row)) if row is not None else None
 
+    def list_revisions(self, document_id: str) -> tuple[ParseRevision, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM revisions WHERE document_id=? ORDER BY created_at_ms DESC, id DESC", (document_id,)
+            ).fetchall()
+        return tuple(ParseRevision(**dict(row)) for row in rows)
+
     def capture_evidence(
         self,
         revision_id: str,
@@ -381,6 +388,21 @@ class BusinessStore:
         bbox_json = payload.pop("bbox_json")
         payload["bbox"] = tuple(json.loads(bbox_json)) if bbox_json is not None else None
         return EvidenceSnapshot(**payload)
+
+    def list_evidence(self, revision_id: str) -> tuple[EvidenceSnapshot, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT e.*, r.document_id FROM evidence e JOIN revisions r ON r.id=e.revision_id "
+                "WHERE e.revision_id=? ORDER BY e.created_at_ms DESC, e.id DESC",
+                (revision_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            payload = dict(row)
+            bbox_json = payload.pop("bbox_json")
+            payload["bbox"] = tuple(json.loads(bbox_json)) if bbox_json is not None else None
+            result.append(EvidenceSnapshot(**payload))
+        return tuple(result)
 
 
 __all__ = ["BusinessStore", "BusinessStoreError"]
