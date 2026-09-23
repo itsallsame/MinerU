@@ -57,6 +57,7 @@ from ..services import (
     NavigationStatus,
     RevisionSearchPage,
     RevisionOutlinePage,
+    BusinessStructurePage,
 )
 from ..store import BusinessStore, BusinessStoreError
 
@@ -439,6 +440,30 @@ class RevisionOutlineView(BaseModel):
         )
 
 
+class StructureBlockView(BaseModel):
+    type: str
+    block_no: int | None
+    locator: str
+    preview: str
+    level: int | None
+    bbox: tuple[float, float, float, float] | None
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+
+class BusinessStructureView(BaseModel):
+    document_id: str
+    revision_id: str
+    page_no: int
+    blocks: list[StructureBlockView]
+
+    @classmethod
+    def from_page(cls, page: BusinessStructurePage) -> BusinessStructureView:
+        return cls(
+            document_id=page.document_id, revision_id=page.revision_id, page_no=page.page_no,
+            blocks=[StructureBlockView(**vars(block)) for block in page.blocks],
+        )
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -559,6 +584,22 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return RevisionOutlineView.from_page(discovery.outline(revision_id, start_page=start_page))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/structure", response_model=BusinessStructureView)
+    def get_revision_structure(
+        revision_id: str, page_no: Annotated[int, Query(ge=1)],
+    ) -> BusinessStructureView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return BusinessStructureView.from_page(discovery.structure(revision_id, page_no))
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else
@@ -848,6 +889,8 @@ __all__ = [
     "RevisionSearchView",
     "RevisionHeadingView",
     "RevisionOutlineView",
+    "BusinessStructureView",
+    "StructureBlockView",
     "SubmissionView",
     "TaskView",
     "TemplateCreateRequest",

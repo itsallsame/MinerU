@@ -136,6 +136,8 @@ from .types import (
     ParseInfo,
     ParseRequest,
     ParseResponse,
+    ParseBlockSummary,
+    ParseStructureResponse,
     ParseServerStatus,
     ParseStatus,
     ParsingRuleInfo,
@@ -673,6 +675,56 @@ class DoclibServer(AsyncDoclibInterface):
             no_marker=False,
         )
         return await self._execute_read_plan(plan, parse_id=parse_id)
+
+    @route("GET", "/parses/{parse_id}/structure", tags=("parse",))
+    async def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
+        """Return typed top-level blocks from exactly one retained historical batch."""
+        if page_no < 1:
+            raise InvalidRequestError("invalid_request", "page_no must be positive.", "page_no")
+        row = await self.state.db.fetchone(
+            "SELECT p.*, d.short_id AS short_id FROM parses p JOIN docs d ON d.sha256=p.sha256 WHERE p.id=?",
+            (parse_id,),
+        )
+        if row is None or row["status"] not in (PARSE_STATUS_DONE, PARSE_STATUS_SUPERSEDED) or row["done_at"] is None:
+            raise NotFoundError("not_cached", f"Completed parse {parse_id} is not cached.", "parse_id")
+        if page_no not in parse_page_range_set(row["page_range"]):
+            raise InvalidRequestError("invalid_request", "Page does not belong to this parse batch.", "page_no")
+        loaded = load_pages_from_done_batches(
+            _effective_data_dir(self.state), row["sha256"], row["tier"], cast(list[ParseBatchRow], [row]),
+            requested_page_numbers={page_no},
+        )
+        page = next((item for item in loaded if item.page_idx + 1 == page_no), None)
+        if page is None:
+            raise NotFoundError("not_cached", "Requested historical page is not cached.", "page_no")
+        if len(page.blocks) > 500:
+            raise InvalidRequestError("invalid_structure", "Page has too many top-level blocks.", "page_no")
+        blocks: list[ParseBlockSummary] = []
+        seen_indices: set[int] = set()
+        for block in page.blocks:
+            block_no = block.index + 1 if block.index is not None else None
+            if block_no is not None:
+                if block_no in seen_indices:
+                    raise InvalidRequestError("invalid_structure", "Duplicate top-level block index.", "page_no")
+                seen_indices.add(block_no)
+            locator = (
+                block_ref(row["short_id"], row["tier"], page_no, block_no)
+                if block_no is not None else page_ref(row["short_id"], row["tier"], page_no)
+            )
+            preview = ""
+            if block.type in {
+                BlockType.TEXT, BlockType.REF_TEXT, BlockType.DOC_TITLE, BlockType.PARAGRAPH_TITLE,
+                BlockType.HEADER, BlockType.FOOTER, BlockType.PAGE_NUMBER, BlockType.ASIDE_TEXT,
+                BlockType.PAGE_FOOTNOTE,
+            }:
+                preview = _structure_text_preview(getattr(block, "content", []))
+            blocks.append(ParseBlockSummary(
+                type=block.type.value, block_no=block_no, locator=locator,
+                preview=preview, level=getattr(block, "level", None), bbox=block.bbox,
+            ))
+        return ParseStructureResponse(
+            sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"],
+            page_no=page_no, blocks=blocks,
+        )
 
     async def _build_read_plan_from_parse(
         self,
@@ -2007,6 +2059,20 @@ def _page_marker(page_no: int, page_count: int | None) -> str:
     if page_count is None:
         return f"<!-- page {page_no} -->"
     return f"<!-- page {page_no} of {page_count} -->"
+
+
+def _structure_text_preview(spans: Any) -> str:
+    """Flatten only inline text content; never serialize image payloads or URLs."""
+    parts: list[str] = []
+    for span in spans:
+        if getattr(span, "type", None) not in ("text", "equation_inline", "code_inline", "hyperlink"):
+            continue
+        content = getattr(span, "content", None)
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            parts.append(_structure_text_preview(content))
+    return re.sub(r"\s+", " ", "".join(parts)).strip()[:200]
 
 
 def _page_markdown_blocks(

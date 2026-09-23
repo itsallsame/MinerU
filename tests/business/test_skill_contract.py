@@ -19,7 +19,9 @@ from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.business.services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse, SearchResponse
-from mineru.doclib.types import ContentRequestScope, DocContentResponse, SearchResult
+from mineru.doclib.types import (
+    ContentRequestScope, DocContentResponse, ParseBlockSummary, ParseStructureResponse, SearchResult,
+)
 
 
 def _script() -> ModuleType:
@@ -295,6 +297,15 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     outline_result = script.run(outline_args, client)
     assert outline_result["items"][0]["title"] == "Notice historical text"
     assert outline_result["items"][0]["state"] == "historical_parse_unconfirmed"
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=digest, short_id=digest[:12], tier="flash", page_no=1,
+        blocks=[ParseBlockSummary(type="doc_title", block_no=1, locator=f"{locator}/block:1",
+                                  preview="Notice historical text", level=1)],
+    )
+    structure_args = script.parser().parse_args(["structure", overview["revision"]["id"], "1"])
+    structure_result = script.run(structure_args, client)
+    assert structure_result["blocks"][0]["type"] == "doc_title"
+    assert structure_result["blocks"][0]["state"] == "historical_parse_unconfirmed"
     with pytest.raises(script.BusinessAPIError) as missing:
         client.overview("missing")
     assert missing.value.status == 404

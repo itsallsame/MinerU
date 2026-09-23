@@ -162,6 +162,9 @@ def parser() -> argparse.ArgumentParser:
     outline = commands.add_parser("outline")
     outline.add_argument("revision_id")
     outline.add_argument("--start-page", type=int)
+    structure = commands.add_parser("structure")
+    structure.add_argument("revision_id")
+    structure.add_argument("page_no", type=int)
     read = commands.add_parser("read")
     read.add_argument("revision_id")
     read.add_argument("locator")
@@ -194,6 +197,9 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "outline":
         suffix = f"?{urlencode({'start_page': args.start_page})}" if args.start_page is not None else ""
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/outline{suffix}")
+    if command == "structure":
+        query = urlencode({"page_no": args.page_no})
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/structure?{query}")
     if command == "read":
         query = urlencode({"locator": args.locator, "limit": args.limit})
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/content?{query}")

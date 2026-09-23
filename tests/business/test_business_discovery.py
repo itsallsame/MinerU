@@ -14,7 +14,9 @@ from mineru.business.documents import ImmutableUploadStore
 from mineru.business.services import BusinessDiscovery, DiscoveryError, EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, SearchResponse
-from mineru.doclib.types import ContentNextRequest, ContentRequestScope, DocContentResponse, SearchResult
+from mineru.doclib.types import (
+    ContentNextRequest, ContentRequestScope, DocContentResponse, ParseBlockSummary, ParseStructureResponse, SearchResult,
+)
 from mineru.errors import ServerNotRunningError
 
 
@@ -258,6 +260,45 @@ def test_outline_requires_continuation_and_rejects_truncated_pages(tmp_path: Pat
     last = discovery.outline(revision.id, start_page=26)
     assert [(item.title, item.page_no) for item in last.items] == [("Later heading", 26)]
     assert last.scanned_pages == 2 and last.next_page is None
+
+
+def test_native_structure_is_routed_to_the_historical_page_batch_and_sanitized(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=sha, short_id=short_id, tier="flash", page_range=str(page_no),
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((8, 1), (9, 2)))
+    revision = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.6")
+    block_locator = f"doc:{short_id}/tier:flash/page:2/block:3"
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=sha, short_id=short_id, tier="flash", page_no=2,
+        blocks=[ParseBlockSummary(type="paragraph_title", block_no=3, locator=block_locator,
+                                  preview="Historical section", level=2, bbox=(1, 2, 3, 4))],
+    )
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    page = discovery.structure(revision.id, 2)
+    assert page.document_id == document_id and page.blocks[0].level == 2
+    doclib.read_parse_structure.assert_called_once_with(9, 2)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{revision.id}/structure", params={"page_no": 2})
+    assert response.status_code == 200 and response.json()["blocks"][0]["locator"] == block_locator
+    assert response.json()["blocks"][0]["state"] == "historical_parse_unconfirmed"
+    assert "parse_id" not in response.text and "/private/" not in response.text
+    assert api.get(f"/api/business/revisions/{revision.id}/structure", params={"page_no": 3}).status_code == 422
+
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256="0" * 64, short_id=short_id, tier="flash", page_no=2,
+        blocks=[ParseBlockSummary(type="text", block_no=3, locator=block_locator)],
+    )
+    with pytest.raises(DiscoveryError, match="historical_structure_mismatch"):
+        discovery.structure(revision.id, 2)
 
 
 def test_revision_read_rejects_identity_drift_and_worker_outage(tmp_path: Path) -> None:

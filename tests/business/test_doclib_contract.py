@@ -170,6 +170,12 @@ def test_business_discovery_uses_real_local_doclib_without_exposing_paths(
     assert outline.scanned_pages == 1 and outline.next_page is None
     assert any(item.title == "DistinctiveLanternProject" and item.level == 1 for item in outline.items)
     assert all(item.locator.startswith(f"doc:{revision.short_id}/tier:flash/page:") for item in outline.items)
+    native_blocks = client.read_parse_structure(submitted.parse_ids[0], 1)
+    assert native_blocks.sha256 == submitted.sha256 and native_blocks.blocks
+    assert any(block.preview == "DistinctiveLanternProject" for block in native_blocks.blocks)
+    structure = discovery.structure(revision.id, 1)
+    assert structure.document_id == document.id
+    assert any(block.locator.startswith(f"doc:{revision.short_id}/tier:flash/page:1") for block in structure.blocks)
 
 
 def test_business_field_candidate_uses_historical_doclib_page(
@@ -251,6 +257,8 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
     assert "Historical Lantern" in client.read_parse_content(first_id, locator).content
     assert "Current Lantern" in client.read_parse_content(second_id, locator).content
     assert "Current Lantern" in client.read_content(locator).content
+    assert any(block.preview == "Historical Lantern" for block in client.read_parse_structure(first_id, 1).blocks)
+    assert any(block.preview == "Current Lantern" for block in client.read_parse_structure(second_id, 1).blocks)
 
     business_dir = root / "business-revisions"
     business_dir.mkdir()
@@ -425,6 +433,14 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
     assert outline.json()["scanned_pages"] == 13 and outline.json()["next_page"] is None
     assert all(item["locator"].startswith(f"doc:{revisions[0]['short_id']}/tier:flash/page:")
                for item in outline.json()["items"])
+    last_structure = client.get(
+        f"/api/business/revisions/{revisions[0]['id']}/structure", params={"page_no": 13},
+    )
+    assert last_structure.status_code == 200, last_structure.text
+    assert last_structure.json()["page_no"] == 13
+    assert all(item["locator"].startswith(f"doc:{revisions[0]['short_id']}/tier:flash/page:13")
+               for item in last_structure.json()["blocks"])
+    assert "parse_id" not in last_structure.text
 
     captured = client.post(f"/api/business/revisions/{revisions[0]['id']}/evidence", json={"locator": locator})
     assert captured.status_code == 201, captured.text

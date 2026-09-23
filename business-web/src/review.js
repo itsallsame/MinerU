@@ -48,7 +48,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   const state = {
     document: null, revisions: [], revisionId: null, runs: [], runId: null,
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
-    inspection: null, reading: null, outline: null, error: "", busy: false, generation: 0,
+    inspection: null, reading: null, outline: null, structure: null, error: "", busy: false, generation: 0,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -62,6 +62,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.inspection = null;
     state.reading = null;
     state.outline = null;
+    state.structure = null;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -117,6 +118,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.inspection = null;
     state.reading = null;
     state.outline = null;
+    state.structure = null;
     state.runs = [];
     state.template = null;
     state.decisions = [];
@@ -160,6 +162,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.inspection = null;
     state.reading = null;
     state.outline = null;
+    state.structure = null;
     state.error = "";
     root.hidden = false;
     render();
@@ -234,6 +237,14 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     });
   }
 
+  async function loadStructure(pageNo) {
+    await perform(async () => {
+      const revisionId = state.revisionId;
+      const page = await businessApi.structure(revisionId, pageNo);
+      if (revisionId === state.revisionId) state.structure = page;
+    });
+  }
+
   function renderOutline() {
     const box = section("解析标题目录");
     box.append(element("p", "review-hint", "根据历史解析 Markdown 标题生成，机器结果未人工确认；仅支持页级定位，每次最多扫描 25 页。"));
@@ -247,11 +258,49 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       row.style.marginLeft = `${Math.min(heading.level - 1, 5) * 18}px`;
       row.append(element("span", "", `${heading.title} · 第 ${heading.page_no} 页`));
       row.append(button("读取所在页", () => readHistorical(heading.locator), state.busy));
+      row.append(button("查看本页块", () => loadStructure(heading.page_no), state.busy));
       box.append(row);
     }
     box.append(element("p", "review-hint", `已扫描 ${state.outline.scannedPages} 页${state.outline.nextPage === null ? " · 已到末页" : " · 后续仍有页面"}。`));
     if (state.outline.nextPage !== null) {
       box.append(button("继续扫描目录", () => loadOutline(state.outline.nextPage), state.busy));
+    }
+    return box;
+  }
+
+  function renderStructure() {
+    const box = section("原生解析块结构");
+    box.append(element("p", "review-hint", "按历史解析批次读取真实顶层块类型与可用坐标；机器结果未人工确认，块与原文的对应仍需复核。"));
+    const form = element("form", "read-form");
+    const label = element("label", "", "结构页码");
+    const input = element("input");
+    input.type = "number";
+    input.min = "1";
+    input.value = String(state.structure?.page_no || Number.parseInt(currentRevision()?.page_range || "1", 10) || 1);
+    input.required = true;
+    input.setAttribute("aria-label", "原生结构页码");
+    label.append(input);
+    const submit = element("button", "secondary-button", "查看本页块");
+    submit.type = "submit";
+    submit.disabled = state.busy;
+    form.append(label, submit);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const pageNo = Number(input.value);
+      if (Number.isInteger(pageNo) && pageNo > 0) loadStructure(pageNo);
+    });
+    box.append(form);
+    if (!state.structure) return box;
+    box.append(element("p", "review-hint", `第 ${state.structure.page_no} 页 · ${state.structure.blocks.length} 个顶层块`));
+    if (!state.structure.blocks.length) box.append(element("p", "review-hint", "此页没有可列出的顶层块。"));
+    for (const block of state.structure.blocks) {
+      const row = element("div", "structure-block");
+      const labelText = `${block.type}${block.level ? ` · 标题级别 ${block.level}` : ""}${block.block_no ? ` · 块 ${block.block_no}` : " · 页级定位"}`;
+      row.append(element("strong", "", labelText));
+      if (block.preview) row.append(element("span", "", block.preview));
+      if (block.bbox) row.append(element("small", "", `坐标：${block.bbox.join(", ")}`));
+      row.append(button("读取此块", () => readHistorical(block.locator), state.busy));
+      box.append(row);
     }
     return box;
   }
@@ -555,7 +604,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
-    root.append(renderOutline(), renderReading(), renderEvidence());
+    root.append(renderOutline(), renderStructure(), renderReading(), renderEvidence());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;

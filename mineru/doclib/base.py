@@ -39,6 +39,7 @@ from .types import (
     ParseInfo,
     ParseRequest,
     ParseResponse,
+    ParseStructureResponse,
     ParseStatus,
     ParsingRuleInfo,
     ParsingRuleListResponse,
@@ -308,6 +309,10 @@ class DoclibInterface(ABC):
         Unlike ``read_content``, this never substitutes newer batches for the
         requested parse ID. Missing or unreadable historical artifacts fail.
         """
+        raise NotImplementedError()
+
+    def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
+        """Read native top-level block summaries from one retained parse batch and page."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -697,6 +702,10 @@ class AsyncDoclibInterface(ABC):
     @abstractmethod
     async def read_parse_content(self, parse_id: int, locator: str, *, limit: int = 30000) -> DocContentResponse:
         """Async version of ``DoclibInterface.read_parse_content``."""
+        raise NotImplementedError()
+
+    async def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
+        """Async version of ``DoclibInterface.read_parse_structure``."""
         raise NotImplementedError()
 
     @abstractmethod

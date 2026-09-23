@@ -314,3 +314,13 @@ Changes:
 Verification: 110 business tests passed/2 dependency warnings, including live HTML heading and 13-page PDF outline API; Web 9 tests/8 offline assets; Playwright review and discovery flows; Skill quick validation, Ruff and diff checks passed.
 Evidence: dev-docs/evidence/2026-09-23-historical-heading-outline.md
 Next: Implement historical native block structure/locator mapping, block-level evidence search, four-class annotated samples and isolated Kylin/NVIDIA acceptance. Goal remains active.
+
+=== 2026-09-23 Session 29 (Native historical top-level block summaries) ===
+Status: In progress; FE-023 nested tree/FE-018 block evidence and P1/P6 target gates remain open
+Changes:
+- Extended the Doclib public interface with parse-ID-pinned native top-level block summaries for one page, bounded preview and optional bbox/heading level.
+- Business API verifies revision-to-batch provenance, exposes no parse IDs/paths, and serves the same structure to Web review and own Skill.
+- Left FE-023 false: top-level blocks are not a complete nested model structure tree or reviewed evidence.
+Verification: 111 business tests/2 dependency warnings, 41 related Doclib upstream tests, Web 9 tests/8 assets, Playwright review flow, Skill validation, Ruff/diff checks passed. Real HTML old/new batch and 13-page PDF last-page cases passed.
+Evidence: dev-docs/evidence/2026-09-23-native-historical-blocks.md
+Next: Add nested block hierarchy and block-level search/evidence workflow, four-class annotated business acceptance, then isolated Kylin/NVIDIA target validation. Keep goal active.

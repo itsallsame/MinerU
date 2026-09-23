@@ -54,6 +54,9 @@ export const businessApi = {
   outline: (id, startPage = null) => request(
     `/revisions/${encodeURIComponent(id)}/outline${startPage === null ? "" : `?${new URLSearchParams({ start_page: String(startPage) })}`}`,
   ),
+  structure: (id, pageNo) => request(
+    `/revisions/${encodeURIComponent(id)}/structure?${new URLSearchParams({ page_no: String(pageNo) })}`,
+  ),
   documents: ({ limit = 20, offset = 0, status = "", templateCode = "" } = {}) => {
     const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status) query.set("status", status);

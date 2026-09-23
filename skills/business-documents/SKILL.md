@@ -24,6 +24,7 @@ python3 skills/business-documents/scripts/business_documents.py extraction RUN_I
 python3 skills/business-documents/scripts/business_documents.py search "年度通知" --limit 20
 python3 skills/business-documents/scripts/business_documents.py search-pages REVISION_ID "年度通知"
 python3 skills/business-documents/scripts/business_documents.py outline REVISION_ID
+python3 skills/business-documents/scripts/business_documents.py structure REVISION_ID 1
 python3 skills/business-documents/scripts/business_documents.py read REVISION_ID 'doc:SHORT_ID/tier:flash/page:1'
 python3 skills/business-documents/scripts/business_documents.py evidence EVIDENCE_ID
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
@@ -39,6 +40,8 @@ Upload requires an explicit local file and uses the business service's advertise
 
 `outline` derives a heading outline from the specified historical revision's parsed Markdown, scanning at most 25 pages per call. Use `--start-page` with `next_page` until the needed range is covered. Heading level and page locator are machine-derived, unconfirmed, and only page-precise; absence of headings does not mean the source has no semantic structure. Do not cite outline labels as frozen evidence.
 
-Current boundary: the unified business API has no authoritative model-block structure tree or block-level search evidence list yet. Do not silently fall back to Doclib/official Skill; tell the user these operations are pending.
+`structure` reads actual top-level block types, optional heading level, short text preview and available bbox from one page of the specified historical parse revision. A block locator is returned only when the persisted block has an index; otherwise the locator is page-level. This is machine-parsed structure, not reviewed evidence. Inspect a returned block with `read` and use frozen evidence for final citations.
+
+Current boundary: only top-level blocks are exposed, not the complete nested table/list/image tree or block-level search evidence list. Do not silently fall back to Doclib/official Skill; tell the user these operations are pending.
 
 HTTP errors print their actual status and business-service detail. On 404, recheck the business ID; on 409, report the conflict or stale source; on 503, report the unavailable business/Doclib worker. Do not hide errors or infer a successful parse/result from a successful upload.

@@ -74,6 +74,8 @@ P2 发现 `ensure_parse` 接收的是 **worker 可访问的本地绝对路径**�
 
 历史标题目录新增 `GET /api/business/revisions/{id}/outline`：按业务修订的历史 parse 批次读取 Markdown，识别 ATX 标题级别并排除代码围栏，每次最多 25 页、以 `next_page` 续扫；任一页截断或身份不符即报错，不输出不完整的“完整目录”。Web 目录项可读到所在页，自有 Skill `outline` 走同一业务 API。此目录是**Markdown 标题的派生视图**，不是 Doclib 原生模型块树；只有页级定位，不保证标题完整或块级证据。因此 FE-023 解析结构树仍不标完成，后续须实现并验证原生块结构与历史批次绑定。
 
+原生块摘要现从 Doclib 公共接口 `read_parse_structure(parse_id,page_no)` 读取持久化 Middle JSON 的指定历史批次与页，不让业务服务直接打开 Doclib 私有文件。返回顶层块类型、持久块索引、可用标题级别/bbox、仅限文本类块的 200 字符预览及定位器；没有索引的块只给页级定位。业务 API `/api/business/revisions/{id}/structure?page_no=...` 按修订页映射挑选批次并核对 SHA-256、short ID、tier、页码和定位器，不外露 parse ID/宿主路径。Web 与自有 Skill 都通过该业务 API 查看/读取原生块。它仍不是完整嵌套的表格/列表/图像结构树，且机器结果未人工确认；FE-023 继续开放。
+
 ## 核心流程
 
 1. 上传原文，做格式/大小/安全校验与哈希计算，建立业务文档身份并交给 Doclib 入库。

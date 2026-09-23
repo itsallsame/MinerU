@@ -78,6 +78,24 @@ class RevisionOutlinePage:
     scanned_pages: int
 
 
+@dataclass(frozen=True)
+class StructureBlock:
+    type: str
+    block_no: int | None
+    locator: str
+    preview: str
+    level: int | None
+    bbox: tuple[float, float, float, float] | None
+
+
+@dataclass(frozen=True)
+class BusinessStructurePage:
+    document_id: str
+    revision_id: str
+    page_no: int
+    blocks: tuple[StructureBlock, ...]
+
+
 class BusinessDiscovery:
     """Never expose Doclib-only documents, paths, parse IDs, or mutable hits as reviewed evidence."""
 
@@ -247,9 +265,48 @@ class BusinessDiscovery:
             scanned_pages=len(window),
         )
 
+    def structure(self, revision_id: str, page_no: int) -> BusinessStructurePage:
+        revision = self._store.get_revision(revision_id)
+        if revision is None:
+            raise DiscoveryError("revision_not_found")
+        parse_id = revision.parse_id_for_page(page_no)
+        if parse_id is None:
+            raise DiscoveryError("invalid_structure_page")
+        try:
+            response = self._doclib.read_parse_structure(parse_id, page_no)
+        except ServerNotRunningError as exc:
+            raise DiscoveryError("doclib_unavailable") from exc
+        except MineruError as exc:
+            raise DiscoveryError("historical_structure_unavailable") from exc
+        if (
+            response.sha256 != revision.sha256 or response.short_id.lower() != revision.short_id.lower()
+            or response.tier != revision.tier or response.page_no != page_no or len(response.blocks) > 500
+        ):
+            raise DiscoveryError("historical_structure_mismatch")
+        seen: set[int] = set()
+        blocks: list[StructureBlock] = []
+        for block in response.blocks:
+            try:
+                cursor = parse_content_cursor(block.locator)
+            except ValueError as exc:
+                raise DiscoveryError("historical_structure_mismatch") from exc
+            if (
+                cursor.short_id.lower() != revision.short_id.lower() or cursor.tier != revision.tier
+                or cursor.page_no != page_no or cursor.char_offset is not None
+                or cursor.block_no != block.block_no or len(block.preview) > 200
+            ):
+                raise DiscoveryError("historical_structure_mismatch")
+            if block.block_no is not None:
+                if block.block_no in seen:
+                    raise DiscoveryError("historical_structure_mismatch")
+                seen.add(block.block_no)
+            blocks.append(StructureBlock(**block.model_dump()))
+        return BusinessStructurePage(revision.document_id, revision_id, page_no, tuple(blocks))
+
 
 __all__ = [
     "BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead",
     "RevisionSearchHit", "RevisionSearchPage",
     "RevisionHeading", "RevisionOutlinePage",
+    "BusinessStructurePage", "StructureBlock",
 ]

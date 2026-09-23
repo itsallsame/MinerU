@@ -276,6 +276,23 @@ class DocContentResponse(DoclibModel):
     asset: "ContentAsset | None" = None
 
 
+class ParseBlockSummary(DoclibModel):
+    type: str
+    block_no: int | None = None
+    locator: str
+    preview: str = ""
+    level: int | None = None
+    bbox: tuple[float, float, float, float] | None = None
+
+
+class ParseStructureResponse(DoclibModel):
+    sha256: str
+    short_id: str
+    tier: Tier
+    page_no: int
+    blocks: list[ParseBlockSummary] = Field(default_factory=list)
+
+
 class ContentRequestScope(DoclibModel):
     page_range: str | None = Field(default=None, description=PAGE_RANGE_DESCRIPTION)
     after: str | None = None

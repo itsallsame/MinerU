@@ -55,6 +55,7 @@ from .types import (
     ParseInfo,
     ParseRequest,
     ParseResponse,
+    ParseStructureResponse,
     ParseStatus,
     ParsingRuleInfo,
     ParsingRuleListResponse,
@@ -283,6 +284,12 @@ class DoclibClient(DoclibInterface):
             DocContentResponse,
             path_params={"parse_id": parse_id},
             params={"locator": locator, "limit": limit},
+        )
+
+    @route("GET", "/parses/{parse_id}/structure", tags=("parse",))
+    def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
+        return self._request_model(
+            ParseStructureResponse, path_params={"parse_id": parse_id}, params={"page_no": page_no},
         )
 
     @route("POST", "/docs/{doc_ref}/exports", tags=("docs",))
