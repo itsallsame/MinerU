@@ -69,6 +69,16 @@ Limits: No cross-container access-control proof, online backup guarantee, busine
 Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
 Next: Business identity/evidence persistence and shared upload atomicity; keep target deployment gates open.
 
+=== 2026-09-23 Session 6 (P2 shared upload boundary) ===
+Status: In progress; P2 Mac prototype, not production acceptance
+Changes:
+- Added ImmutableUploadStore for bounded streaming, SHA-256, opaque names and atomic publication to a shared Doclib-visible directory.
+- Tested duplicate content, path-like client names, over-limit/empty/failed streams, symlink root, generated-name collision and a live Doclib parse of a published upload.
+- Documented that read-only file permissions are advisory; worker read-only mount, API-only write access, business transaction and orphan cleanup are still needed.
+Verification: 5 upload tests and all 31 business tests pass after collision regression; ruff check and format check pass.
+Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
+Next: Implement P3 business identity/evidence persistence without claiming P2 target completion.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

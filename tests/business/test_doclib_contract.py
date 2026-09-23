@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import io
 import shutil
 import subprocess
 import sys
@@ -18,7 +19,7 @@ from PIL import Image
 from pptx import Presentation
 from reportlab.pdfgen import canvas
 
-from mineru.business.documents import DoclibGateway
+from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
 from mineru.doclib.types import ForgetPathRequest
@@ -130,6 +131,17 @@ def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Pa
 
     search = client.search("Lantern", tier="flash")
     assert any(result.sha256 == doc.sha256 for result in search.results)
+
+
+def test_published_upload_can_be_submitted_to_doclib(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, _home = live_doclib
+    stored = ImmutableUploadStore(root, max_bytes=1024).store(
+        io.BytesIO(b"<h1>Project Lantern published source</h1>"), filename="report.html"
+    )
+    submitted = DoclibGateway(client, shared_root=root).submit(stored.path)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    assert submitted.sha256 == stored.sha256
+    assert "Project Lantern published" in client.get_doc_content(submitted.sha256, tier="flash").content
 
 
 def test_doclib_content_identity_is_hash_based(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
