@@ -62,6 +62,7 @@ Next: Define business identity/evidence persistence and continue P2 lifecycle/tr
 Status: In progress; Mac-only checks, not target-hardware acceptance
 Changes:
 - Added live explicit TCP Doclib client test, same-home second-process rejection test, and stopped-home copy/restore test.
+- Refined P3 identity/revision/evidence snapshot contract in the architecture baseline based on the observed Doclib locator semantics.
 Verification: 12 Doclib contract tests and all 25 business tests pass with local socket permissions; ruff check/format check pass.
 Findings: loopback TCP contract works across Mac processes; single-home ownership lock rejects second process; simple HTML content and locator survive stopped-home restore to a new path.
 Limits: No cross-container access-control proof, online backup guarantee, business DB consistency test, Kylin/NVIDIA result or model-backed parse.
