@@ -1,4 +1,28 @@
 services:
+  business-api:
+    image: "${MINERU_BUSINESS_IMAGE:?Set a locally imported business API image tag}"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g
+    environment:
+      MINERU_BUSINESS_DB_PATH: /var/lib/mineru-business/business.sqlite3
+      MINERU_BUSINESS_UPLOAD_ROOT: /srv/mineru-inbox
+      MINERU_BUSINESS_DOCLIB_URL: http://doclib-worker:15980
+      MINERU_BUSINESS_MAX_UPLOAD_BYTES: "${MINERU_BUSINESS_MAX_UPLOAD_BYTES:-104857600}"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    volumes:
+      - "${MINERU_BUSINESS_HOST_DIR:?Set the persistent business data directory}:/var/lib/mineru-business:rw"
+      - "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}:/srv/mineru-inbox:rw"
+    ports:
+      - "${MINERU_BUSINESS_BIND_ADDRESS:-127.0.0.1}:${MINERU_BUSINESS_PORT:-8088}:8080"
+    depends_on:
+      - doclib-worker
+    networks:
+      - business-internal
+
   doclib-worker:
     image: "${MINERU_WORKER_IMAGE:?Set a locally imported worker image tag}"
     restart: unless-stopped

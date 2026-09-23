@@ -102,6 +102,17 @@ Evidence: dev-docs/evidence/2026-09-23-p3-open-api.md
 Limits: No production API image/startup, network placement proof, full business workflow, frontend/Skill, target GPU or real-sample acceptance.
 Next: Add production-oriented API process/Compose boundary and evidence-service contract; keep full goal active.
 
+=== 2026-09-23 Session 9 (API process and split code-image skeleton) ===
+Status: In progress; P1/P2 target gates and P3 product functionality remain open
+Changes:
+- Added strict environment-based business API process bootstrap and offline business API Dockerfile.
+- Added business-api Compose service; API writes its own DB and shared upload directory, while Doclib worker retains read-only source/model mounts and is not host-published.
+- Reordered both Dockerfiles so the locked dependency layer precedes changing fork source.
+Verification: 52 business tests pass with local socket permission; ruff check/format pass; Compose config syntax passes with placeholder paths.
+Evidence: dev-docs/evidence/2026-09-23-p1-progress.md and dev-docs/evidence/2026-09-23-p3-open-api.md
+Limits: no real Linux amd64 image build, incremental transfer measurement, Compose runtime isolation test, Kylin GPU/model check, reverse-proxy upload limit, or complete product workflow. Release manifest does not yet record business API image.
+Next: close release-manifest API image gap and verify network/runtime boundary when target artifacts are available; continue evidence-service business contract on Mac.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
@@ -112,6 +123,6 @@ Next: Add production-oriented API process/Compose boundary and evidence-service 
 === Next session instructions ===
 
 1. Read AGENTS.md, this file, feature-list.json, architecture and plan; check git status/log.
-2. Complete P1 as a whole: source-based offline build, external model mount, no-network guards, release manifest, relevant tests.
+2. Complete remaining P1 gates: source-based Linux amd64 offline builds, external model mount, no-network runtime checks, dual-image release manifest and relevant tests.
 3. Run project-appropriate tests, document actual results and limitations; review changes and report phase completion.
 4. Stop at phase boundary for user confirmation. Never mark target hardware acceptance passed from Mac tests.

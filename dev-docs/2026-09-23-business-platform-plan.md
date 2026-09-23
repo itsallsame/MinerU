@@ -29,7 +29,7 @@ P1～P5 是开发阶段，不把一次能运行的演示冒充生产完成；P6 
 
 ## P1：离线交付底座
 
-拟新增 `docker/business/Dockerfile`、`docker/worker/Dockerfile`、`docker/compose.business.yaml`、`config/business.example.yaml`、`scripts/verify-offline-package.py`、`tests/business/test_offline_configuration.py`。也允许原型表明一个共享代码镜像更合理，但模型目录外置、断网可启动是不可变验收条件。
+已开始采用 `docker/business-api/Dockerfile`、`docker/worker/Dockerfile`、`docker/compose.business.yaml`、`scripts/offline_package.py` 与 `tests/business/test_offline_configuration.py`。API 与 worker 是两个代码镜像，共用外部模型目录由 worker 只读加载；两个镜像的启动/网络/离线性仍待目标机器验证。
 
 - 从精确源码提交安装本地 fork，不从包索引安装浮动 `mineru>=4,<5`。
 - 依赖基础层与业务代码层分离；构建上下文排除模型、文档库和用户文件。

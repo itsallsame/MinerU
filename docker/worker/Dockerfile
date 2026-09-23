@@ -12,17 +12,16 @@ LABEL org.opencontainers.image.base.id="${BASE_IMAGE_ID}"
 WORKDIR /opt/mineru
 COPY wheelhouse/ /opt/wheelhouse/
 COPY pyproject.toml README.md LICENSE.md /opt/mineru/
+
+# Keep the large dependency layer stable when only fork source changes.
+RUN python3 -m pip install --break-system-packages --no-index --find-links=/opt/wheelhouse \
+        --require-hashes -r /opt/wheelhouse/requirements.lock \
+    && rm -rf /opt/wheelhouse
 COPY mineru/ /opt/mineru/mineru/
 COPY scripts/offline_package.py /opt/mineru/scripts/offline_package.py
 COPY docker/worker/entrypoint.sh /opt/mineru/entrypoint.sh
-RUN chmod 0755 /opt/mineru/entrypoint.sh
-
-# Install the exact offline dependency closure before the fork source package.
-# The wheelhouse and lock are produced together on a matching Linux amd64 Python.
-RUN python3 -m pip install --break-system-packages --no-index --find-links=/opt/wheelhouse \
-        --require-hashes -r /opt/wheelhouse/requirements.lock \
-    && python3 -m pip install --break-system-packages --no-index --no-deps --no-build-isolation /opt/mineru \
-    && rm -rf /opt/wheelhouse
+RUN python3 -m pip install --break-system-packages --no-index --no-deps --no-build-isolation /opt/mineru \
+    && chmod 0755 /opt/mineru/entrypoint.sh
 
 ENV MINERU_HOME=/var/lib/mineru \
     MINERU_MODEL_BASE_DIR=/opt/mineru-models \
