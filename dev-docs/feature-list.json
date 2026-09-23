@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 65,
+  "completed_features": 66,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5083,9 +5083,9 @@
         "实现：业务单元测试覆盖率记录",
         "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "基于完整 tests/business 在 Mac 测得 mineru.business 综合覆盖率 90.63%（语句 93.03%、分支 80.08%；171 通过/1 个 opt-in 浏览器测试跳过），原始业务及上游单测命令均通过。仅为覆盖基线，不证明真实样本质量或麒麟/GPU；证据：dev-docs/evidence/2026-09-24-business-coverage.md"
     },
     {
       "id": "QA-003",

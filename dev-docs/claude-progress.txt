@@ -667,3 +667,10 @@ Changes: Recorded the full fork upstream-unit and business-test Mac baseline at 
 Verification: Exact feature commands passed: business 171 passed/1 skipped; upstream unittest 2798 passed/4 skipped. Both had 2 dependency deprecation warnings. No target-machine claim.
 Evidence: dev-docs/evidence/2026-09-24-test-baselines.md
 Next: Commit QA-001 separately, then record measured business module coverage for QA-002. Keep goal active.
+
+=== 2026-09-24 Session 63b (QA-002 business coverage) ===
+Status: In progress; QA-002 verified complete (66/241 passed); P6 remains incomplete
+Changes: Recorded reproducible business module statement/branch coverage and prioritized uncovered worker/extraction/template paths; no production behavior changed.
+Verification: Full business suite with branch coverage 171 passed/1 opt-in skipped; 2297 statements/522 branches, 93.03% statement, 80.08% branch, 90.63% combined. Exact business and upstream feature commands also passed. Mac baseline only.
+Evidence: dev-docs/evidence/2026-09-24-business-coverage.md
+Next: Add risk-focused tests for uncovered failure/restart paths, then continue four-class and target-machine gates. Keep goal active.
