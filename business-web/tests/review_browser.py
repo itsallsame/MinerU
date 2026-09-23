@@ -5,6 +5,7 @@ Run with a live local business Web/API: python review_browser.py http://127.0.0.
 
 from __future__ import annotations
 
+import base64
 import json
 import sys
 import time
@@ -67,8 +68,13 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 "items": [{"document": document, "task": task}], "total": 1, "limit": 20, "offset": 0,
             }))
             page.route("**/api/business/documents/*/revisions", lambda route: fulfill(route, [revision, older_revision]))
+            image_bytes = base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII="
+            )
             page.route("**/api/business/documents/*/source", lambda route: route.fulfill(
-                status=200, content_type="application/pdf", body=b"%PDF-1.4\n",
+                status=200,
+                content_type="image/png" if document["original_name"] == "scan.png" else "application/pdf",
+                body=image_bytes if document["original_name"] == "scan.png" else b"%PDF-1.4\n",
             ))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, [run]))
             page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, [evidence]))

@@ -439,3 +439,13 @@ Changes:
 Verification: Web 10 tests/8-asset build; Playwright search/audit failure scenarios and existing discovery/audit/outage regressions passed.
 Evidence: dev-docs/evidence/2026-09-23-web-service-recovery.md
 Next: Finish remaining FE-047 races, FE-048 missing-resource feedback, then four-class annotated samples and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 42 (Original availability feedback) ===
+Status: In progress; FE-048 completed (54/241), wider P4/P6 gates remain open
+Changes:
+- Added HEAD source availability using the GET route's existing file size and SHA-256 validation without sending body.
+- Gated Web original link/PDF/image preview on verified availability; distinguished 404/409/service failure and added retry. Image load/decode errors withdraw the preview.
+- Preserved the open-system contract with no user, role or permission layer; documented PDF viewer late-failure limitation.
+Verification: business suite 122 passed, Ruff check passed, Web 10 tests/8-asset build; Playwright source failure/recovery and review/evidence/outage regressions passed. Whole-file Ruff format check reflects pre-existing style drift, not a new formatting pass.
+Evidence: dev-docs/evidence/2026-09-23-original-availability.md
+Next: Finish FE-047 remaining races and FE-046 accessibility; then four-class annotated sample and isolated Kylin/NVIDIA gates. Keep goal active.

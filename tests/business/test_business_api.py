@@ -226,11 +226,17 @@ def test_open_document_library_capabilities_and_source(tmp_path: Path) -> None:
     assert html_source.content == b"<script>alert(1)</script>"
     assert html_source.headers["content-disposition"].startswith("attachment;")
     assert html_source.headers["x-content-type-options"] == "nosniff"
+    html_head = client.head(f"/api/business/documents/{first.id}/source")
+    assert html_head.status_code == 200
+    assert html_head.content == b""
+    assert html_head.headers["content-length"] == str(first.size)
     pdf_source = client.get(f"/api/business/documents/{second.id}/source")
     assert pdf_source.status_code == 200
     assert pdf_source.headers["content-disposition"].startswith("inline;")
     assert client.get("/api/business/documents/unknown/source").status_code == 404
+    assert client.head("/api/business/documents/unknown/source").status_code == 404
     assert first_task.document_id == first.id
     html.path.chmod(0o644)
     html.path.write_bytes(b"changed")
     assert client.get(f"/api/business/documents/{first.id}/source").status_code == 409
+    assert client.head(f"/api/business/documents/{first.id}/source").status_code == 409

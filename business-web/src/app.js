@@ -26,6 +26,9 @@ const state = {
   auditBefore: null,
   auditItems: [],
   sourcePageNo: 1,
+  sourceStatus: "idle",
+  sourceError: "",
+  sourceRequest: 0,
 };
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
@@ -316,6 +319,8 @@ async function refreshDocuments() {
     if (state.selectedId && !state.selectedSearchDocument && !state.items.some((item) => item.document.id === state.selectedId)) {
       state.selectedId = null;
       state.selectionRequest += 1;
+      state.sourceRequest += 1;
+      state.sourceStatus = "idle";
       state.revisions = [];
       state.revisionsError = "";
       review.clear();
@@ -341,6 +346,8 @@ async function refreshDocuments() {
     state.selectedId = null;
     state.selectedSearchDocument = null;
     state.selectionRequest += 1;
+    state.sourceRequest += 1;
+    state.sourceStatus = "idle";
     state.revisionsError = "";
     state.revisions = [];
     review.clear();
@@ -366,6 +373,27 @@ function detailRow(label, value) {
   const row = element("div");
   row.append(element("span", "", label), element("strong", "", value));
   return row;
+}
+
+async function checkSource(id) {
+  const requestNumber = ++state.sourceRequest;
+  state.sourceStatus = "checking";
+  state.sourceError = "";
+  renderDetail();
+  try {
+    await businessApi.sourceAvailable(id);
+    if (requestNumber !== state.sourceRequest || id !== state.selectedId) return;
+    state.sourceStatus = "available";
+  } catch (error) {
+    if (requestNumber !== state.sourceRequest || id !== state.selectedId) return;
+    state.sourceStatus = "unavailable";
+    state.sourceError = error.status === 409
+      ? "原件缺失或内容与上传记录不一致，不能预览或下载。"
+      : error.status === 404
+        ? "业务文档已不存在，原件无法读取。"
+        : `原件暂不可用（${error.status || "连接失败"}），请检查业务服务后重试。`;
+  }
+  renderDetail();
 }
 
 function renderDetail() {
@@ -416,56 +444,73 @@ function renderDetail() {
   source.append(element("h3", "", "原文"));
   const sourceUrl = businessApi.sourceUrl(record.id);
   const kind = sourcePreviewKind(record.original_name);
-  const download = element("a", "", kind === "download" ? "下载原文件 ↗" : "在新窗口打开原文 ↗");
-  download.href = sourceUrl;
-  download.target = "_blank";
-  download.rel = "noopener noreferrer";
-  const sourceActions = element("div", "detail-actions");
-  sourceActions.append(download);
-  source.append(sourceActions);
-  if (kind === "pdf") {
-    const pageForm = element("form", "source-page-form");
-    const pageLabel = element("label", "", "按原文页码查字段");
-    const pageInput = element("input");
-    pageInput.type = "number";
-    pageInput.min = "1";
-    pageInput.max = "100000";
-    pageInput.required = true;
-    pageInput.value = String(state.sourcePageNo);
-    pageInput.setAttribute("aria-label", "查看 PDF 原文页码");
-    const pageButton = element("button", "secondary-button", "打开页并查关联字段");
-    pageButton.type = "submit";
-    pageLabel.append(pageInput);
-    pageForm.append(pageLabel, pageButton);
-    pageForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const pageNo = Number(pageInput.value);
-      if (!Number.isInteger(pageNo) || pageNo < 1) return;
-      state.sourcePageNo = pageNo;
-      preview.src = `${sourceUrl}#page=${pageNo}`;
-      if (!review.showSourcePage(pageNo, { scroll: true })) {
-        showError("请等待业务文档修订加载后再查关联字段。");
-      }
-    });
-    source.append(pageForm);
-    const preview = element("iframe", "source-preview");
-    preview.src = `${sourceUrl}#page=${state.sourcePageNo}`;
-    preview.title = `${record.original_name} PDF 原文预览`;
-    source.append(preview);
-  } else if (kind === "image") {
-    const preview = element("img", "source-preview image");
-    preview.src = sourceUrl;
-    preview.alt = `${record.original_name} 原图`;
-    source.append(preview);
-    const findFields = element("button", "secondary-button", "查找此图的关联字段");
-    findFields.type = "button";
-    findFields.addEventListener("click", () => {
-      state.sourcePageNo = 1;
-      if (!review.showSourcePage(1, { scroll: true })) showError("请等待业务文档修订加载后再查关联字段。");
-    });
-    source.append(findFields);
+  if (state.sourceStatus !== "available") {
+    source.append(element("p", state.sourceStatus === "unavailable" ? "error-banner" : "review-hint",
+      state.sourceStatus === "unavailable" ? state.sourceError : "正在核验原件完整性…"));
+    if (state.sourceStatus === "unavailable") {
+      const retrySource = element("button", "secondary-button", "重试核验原件");
+      retrySource.type = "button";
+      retrySource.addEventListener("click", () => checkSource(record.id));
+      source.append(retrySource);
+    }
   } else {
-    source.append(element("p", "preview-note", "该格式暂不支持浏览器原文预览。可下载原文件；不会伪造 PDF 页码或坐标。"));
+    const download = element("a", "", kind === "download" ? "下载原文件 ↗" : "在新窗口打开原文 ↗");
+    download.href = sourceUrl;
+    download.target = "_blank";
+    download.rel = "noopener noreferrer";
+    const sourceActions = element("div", "detail-actions");
+    sourceActions.append(download);
+    source.append(sourceActions);
+    if (kind === "pdf") {
+      const pageForm = element("form", "source-page-form");
+      const pageLabel = element("label", "", "按原文页码查字段");
+      const pageInput = element("input");
+      pageInput.type = "number";
+      pageInput.min = "1";
+      pageInput.max = "100000";
+      pageInput.required = true;
+      pageInput.value = String(state.sourcePageNo);
+      pageInput.setAttribute("aria-label", "查看 PDF 原文页码");
+      const pageButton = element("button", "secondary-button", "打开页并查关联字段");
+      pageButton.type = "submit";
+      pageLabel.append(pageInput);
+      pageForm.append(pageLabel, pageButton);
+      pageForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const pageNo = Number(pageInput.value);
+        if (!Number.isInteger(pageNo) || pageNo < 1) return;
+        state.sourcePageNo = pageNo;
+        preview.src = `${sourceUrl}#page=${pageNo}`;
+        if (!review.showSourcePage(pageNo, { scroll: true })) {
+          showError("请等待业务文档修订加载后再查关联字段。");
+        }
+      });
+      source.append(pageForm);
+      const preview = element("iframe", "source-preview");
+      preview.src = `${sourceUrl}#page=${state.sourcePageNo}`;
+      preview.title = `${record.original_name} PDF 原文预览`;
+      source.append(preview);
+    } else if (kind === "image") {
+      const preview = element("img", "source-preview image");
+      preview.src = sourceUrl;
+      preview.alt = `${record.original_name} 原图`;
+      preview.addEventListener("error", () => {
+        if (state.selectedId !== record.id || state.sourceStatus !== "available") return;
+        state.sourceStatus = "unavailable";
+        state.sourceError = "浏览器无法加载原图；原件可能已变化或图片格式无法解码。请重试核验。";
+        renderDetail();
+      });
+      source.append(preview);
+      const findFields = element("button", "secondary-button", "查找此图的关联字段");
+      findFields.type = "button";
+      findFields.addEventListener("click", () => {
+        state.sourcePageNo = 1;
+        if (!review.showSourcePage(1, { scroll: true })) showError("请等待业务文档修订加载后再查关联字段。");
+      });
+      source.append(findFields);
+    } else {
+      source.append(element("p", "preview-note", "该格式暂不支持浏览器原文预览。可下载原文件；不会伪造 PDF 页码或坐标。"));
+    }
   }
   root.append(source);
 
@@ -497,9 +542,12 @@ async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
   state.selectedReviewTarget = reviewTarget;
   state.revisions = [];
   state.revisionsError = "";
+  state.sourceStatus = "checking";
+  state.sourceError = "";
   review.clear();
   renderDocuments();
   renderDetail();
+  void checkSource(id);
   let revisions;
   try {
     revisions = await businessApi.revisions(id);

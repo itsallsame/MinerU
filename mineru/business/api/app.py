@@ -924,6 +924,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="Document not found")
         return DocumentView.from_record(document)
 
+    @app.head("/api/business/documents/{document_id}/source", response_class=FileResponse)
     @app.get("/api/business/documents/{document_id}/source", response_class=FileResponse)
     def get_document_source(document_id: str) -> FileResponse:
         document = store.get_document(document_id)

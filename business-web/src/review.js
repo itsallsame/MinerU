@@ -652,7 +652,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (canNavigateEvidence(info)) {
         const jump = button("尝试跳转当前原文页 ↗", () => {
           if (!onEvidenceNavigate(info)) {
-            state.error = "该原文格式不支持可靠的浏览器页码跳转。";
+            state.error = "原文当前不可预览，或该格式不支持可靠的浏览器页码跳转。";
             render();
           }
         });

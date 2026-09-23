@@ -36,7 +36,7 @@ def main(base_url: str) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
 
     def guard_writes(route: object) -> None:
-        if route.request.method != "GET":
+        if route.request.method not in ("GET", "HEAD"):
             writes.append(route.request.url)
             route.abort()
         else:

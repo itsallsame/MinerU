@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {}, expectJson = true) {
   let response;
   try {
     response = await fetch(`${base}${path}`, { cache: "no-store", ...options });
@@ -25,7 +25,7 @@ async function request(path, options = {}) {
     }
     throw new ApiError(detail, response.status);
   }
-  return response.json();
+  return expectJson ? response.json() : null;
 }
 
 const postJson = (path, body) => request(path, {
@@ -107,4 +107,5 @@ export const businessApi = {
     return request("/documents", { method: "POST", body });
   },
   sourceUrl: (id) => `${base}/documents/${encodeURIComponent(id)}/source`,
+  sourceAvailable: (id) => request(`/documents/${encodeURIComponent(id)}/source`, { method: "HEAD" }, false),
 };
