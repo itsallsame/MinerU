@@ -543,3 +543,12 @@ Changes:
 Verification: Web 10 unit tests/8-asset offline build; Playwright selected completion, stale selection, filter-change error, upload/retry and outage recovery scenarios passed with simulated API. No real samples or target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-task-polling-context.md
 Next: Continue P4 failure/retry/cancel and review-edit gaps, then four-class samples and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 53a (Task failure guidance) ===
+Status: In progress; FE-014 verified complete (56/241 passed)
+Changes:
+- Mapped stable backend task error codes to actionable Chinese guidance; source-integrity failures no longer offer an ineffective retry.
+- Preserved raw error codes for offline diagnostics and kept the open business API without identity/permission checks.
+Verification: Web 11 unit tests/8-asset offline build; Playwright failure guidance and retry variants passed; backend document workflow 10 tests passed. Simulated browser API and Mac backend only.
+Evidence: dev-docs/evidence/2026-09-23-task-failure-guidance.md
+Next: Verify FE-015 retry acceptance separately, then continue cancellation and review-edit gaps. Keep goal active.

@@ -50,3 +50,32 @@ export function taskLabel(status) {
     failed: "失败",
   }[status] || "未知状态";
 }
+
+export function taskFailure(errorCode) {
+  const known = {
+    source_integrity_failed: {
+      message: "原文件与入库时记录不一致，不能安全重试；请重新上传原件并核查存储。",
+      retryable: false,
+    },
+    doclib_submission_failed: {
+      message: "文档处理服务未能受理任务；服务恢复后可重新提交。",
+      retryable: true,
+    },
+    doclib_parse_failed: {
+      message: "底层解析失败；可以重新提交，若持续失败请检查文档与模型运行日志。",
+      retryable: true,
+    },
+    parse_coverage_incomplete: {
+      message: "解析结果未覆盖原文全部页面；可以重新提交。",
+      retryable: true,
+    },
+    parse_batch_invalid: {
+      message: "解析批次记录不一致；可以重试，若重复出现需检查文档库状态。",
+      retryable: true,
+    },
+  };
+  return known[errorCode] || {
+    message: "任务失败；可重试。若再次失败，请记录下面的代码并检查服务日志。",
+    retryable: true,
+  };
+}

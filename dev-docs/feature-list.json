@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 55,
+  "completed_features": 56,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3761,9 +3761,9 @@
         "实现：失败原因展示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "已知任务错误码显示中文原因与保留代码，完整性失败引导重新上传且不显示无效重试；未知代码安全兜底。前端单测、浏览器与后端工作流测试通过。证据：dev-docs/evidence/2026-09-23-task-failure-guidance.md"
     },
     {
       "id": "FE-015",

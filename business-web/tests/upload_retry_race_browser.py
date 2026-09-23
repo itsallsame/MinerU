@@ -14,13 +14,17 @@ def main(base_url: str) -> None:
     documents = [
         {"id": char * 32, "original_name": name, "sha256": char * 64, "size": 16,
          "created_at_ms": now, "template_code": None, "template_version": None}
-        for char, name in (("a", "failed.pdf"), ("b", "current.pdf"))
+        for char, name in (("a", "failed.pdf"), ("b", "current.pdf"), ("e", "damaged.pdf"))
     ]
     tasks = [
         {"id": char * 32, "document_id": doc["id"], "requested_tier": "flash", "actual_tier": "flash",
-         "status": status, "error_code": "parse_failed" if status == "failed" else None,
+         "status": status, "error_code": (
+             "source_integrity_failed" if doc["id"] == documents[2]["id"]
+             else "doclib_submission_failed" if status == "failed" else None
+         ),
          "created_at_ms": now, "updated_at_ms": now}
-        for char, doc, status in (("c", documents[0], "failed"), ("d", documents[1], "done"))
+        for char, doc, status in (("c", documents[0], "failed"), ("d", documents[1], "done"),
+                                  ("f", documents[2], "failed"))
     ]
     uploaded: list[bytes] = []
     retry_calls = 0
@@ -38,7 +42,7 @@ def main(base_url: str) -> None:
                         "built_in": False, "fields": [], "created_at_ms": now}]
         elif path == "/documents" and request.method == "GET":
             payload = {"items": [{"document": doc, "task": task} for doc, task in zip(documents, tasks)],
-                       "total": 2, "limit": 20, "offset": 0}
+                       "total": 3, "limit": 20, "offset": 0}
         elif path == "/documents" and request.method == "POST":
             uploaded.append(request.post_data_buffer)
             payload = {"document": documents[0], "task": {**tasks[0], "status": "submitted"}}
@@ -110,7 +114,11 @@ def main(base_url: str) -> None:
             assert page.locator("#detail-content h2").inner_text() == "current.pdf"
             assert page.locator("#files").is_enabled()
 
+            page.get_by_role("button", name="查看 damaged.pdf，失败").click()
+            page.get_by_text("原文件与入库时记录不一致", exact=False).wait_for()
+            assert page.get_by_role("button", name="重新提交任务").count() == 0
             page.get_by_role("button", name="查看 failed.pdf，失败").click()
+            page.get_by_text("文档处理服务未能受理任务", exact=False).wait_for()
             page.get_by_role("button", name="重新提交任务").wait_for()
             page.evaluate(f"window.__delayNext('/tasks/{tasks[0]['id']}/retry')")
             page.get_by_role("button", name="重新提交任务").click()
@@ -126,8 +134,14 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="重新提交任务").click()
             page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
             assert retry_calls == 2
+            tasks[0] = {**tasks[0], "status": "uploaded"}
+            page.get_by_role("button", name="刷新列表").click()
+            page.get_by_role("button", name="查看 failed.pdf，待提交").click()
+            page.get_by_role("button", name="提交待处理任务").click()
+            page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
+            assert retry_calls == 3
             assert not errors, errors
-            print("Playwright upload/retry races passed: batch settings frozen; stale retry error hidden")
+            print("Playwright upload/retry passed: stable batch, failure guidance, uploaded recovery and stale-error guard")
         finally:
             browser.close()
 

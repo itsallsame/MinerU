@@ -1,5 +1,5 @@
 import { businessApi } from "./api.js";
-import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskLabel, tierForFile } from "./domain.js";
+import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskFailure, taskLabel, tierForFile } from "./domain.js";
 import { createReviewWorkbench } from "./review.js";
 import { createTemplateManager } from "./templates.js";
 
@@ -453,10 +453,15 @@ function renderDetail() {
     detailRow("实际档位", task?.actual_tier || state.revisions[0]?.tier || "尚未完成"),
   );
   summary.append(grid);
-  if (task?.error_code) summary.append(element("p", "error-banner", `失败代码：${task.error_code}`));
-  const actions = element("div", "detail-actions");
   if (task?.status === "failed") {
-    const retry = element("button", "", "重新提交任务");
+    const failure = taskFailure(task.error_code);
+    const explanation = element("p", "error-banner", `${failure.message} 失败代码：${task.error_code || "未提供"}`);
+    explanation.setAttribute("role", "alert");
+    summary.append(explanation);
+  }
+  const actions = element("div", "detail-actions");
+  if (task && (task.status === "uploaded" || (task.status === "failed" && taskFailure(task.error_code).retryable))) {
+    const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
     retry.type = "button";
     retry.addEventListener("click", async () => {
       retry.disabled = true;

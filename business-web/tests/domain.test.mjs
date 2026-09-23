@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyFile, extensionOf, sourcePreviewKind, tierForFile } from "../src/domain.js";
+import { classifyFile, extensionOf, sourcePreviewKind, taskFailure, tierForFile } from "../src/domain.js";
 
 const capabilities = {
   max_upload_bytes: 100,
@@ -32,4 +32,14 @@ test("only supported browser media may preview inline", () => {
   assert.equal(sourcePreviewKind("x.html"), "download");
   assert.equal(sourcePreviewKind("x.docx"), "download");
   assert.equal(sourcePreviewKind("x.tiff"), "download");
+});
+
+test("task failures distinguish recoverable parsing from source integrity loss", () => {
+  assert.equal(taskFailure("source_integrity_failed").retryable, false);
+  assert.match(taskFailure("source_integrity_failed").message, /重新上传原件/);
+  for (const code of ["doclib_submission_failed", "doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"]) {
+    assert.equal(taskFailure(code).retryable, true);
+    assert.ok(taskFailure(code).message.length > 10);
+  }
+  assert.equal(taskFailure("other_failure").retryable, true);
 });
