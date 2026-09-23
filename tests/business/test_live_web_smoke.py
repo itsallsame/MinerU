@@ -14,6 +14,9 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 import pytest
+from docx import Document
+from openpyxl import Workbook
+from pptx import Presentation
 
 from mineru.doclib import DoclibClient
 from mineru.doclib.endpoint import read_endpoint_file
@@ -69,7 +72,7 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
 
 
 @pytest.mark.skipif(os.getenv("MINERU_RUN_LIVE_BROWSER") != "1", reason="Opt in to local Chromium and socket integration")
-def test_live_web_pdf_through_business_api_and_doclib() -> None:
+def test_live_web_native_formats_through_business_api_and_doclib() -> None:
     assert SAMPLE.is_file()
     assert hashlib.sha256(SAMPLE.read_bytes()).hexdigest() == "f3b3be345bf2df8979f2491ca9466e078e4fd1d6a216611faa8566e4c44d474b"
     assert (WEB_ROOT / "asset-manifest.json").is_file(), "Run cd business-web && pnpm build first"
@@ -78,6 +81,17 @@ def test_live_web_pdf_through_business_api_and_doclib() -> None:
         home = Path(temporary)
         uploads = home / "uploads"
         uploads.mkdir()
+        office_files = [home / f"smoke.{extension}" for extension in ("docx", "pptx", "xlsx")]
+        document = Document()
+        document.add_paragraph("MinerUOfficeDocxMarker")
+        document.save(office_files[0])
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        slide.shapes.add_textbox(0, 0, 3_000_000, 500_000).text = "MinerUOfficePptxMarker"
+        presentation.save(office_files[1])
+        workbook = Workbook()
+        workbook.active["A1"] = "MinerUOfficeXlsxMarker"
+        workbook.save(office_files[2])
         doclib_log = home / "doclib.log"
         api_log = home / "business-api.log"
         doclib_env = os.environ.copy()
@@ -140,7 +154,13 @@ def test_live_web_pdf_through_business_api_and_doclib() -> None:
             try:
                 _wait_for_api(api, origin, api_log)
                 subprocess.run(
-                    ["python3", str(ROOT / "business-web" / "tests" / "live_business_smoke.py"), origin, str(SAMPLE)],
+                    [
+                        "python3",
+                        str(ROOT / "business-web" / "tests" / "live_business_smoke.py"),
+                        origin,
+                        str(SAMPLE),
+                        *(str(path) for path in office_files),
+                    ],
                     check=True,
                     timeout=150,
                 )

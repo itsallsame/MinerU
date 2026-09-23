@@ -653,3 +653,10 @@ Changes: Added an opt-in Chromium test using real same-origin Web, business API 
 Verification: Public sample SHA-256 pinned; Flash upload, completed revision and historical first-page read passed on Mac. No model/GPU/four-class quality claim. First test-selector ambiguity was corrected and rerun.
 Evidence: dev-docs/evidence/2026-09-24-live-web-pdf-smoke.md
 Next: Obtain controlled four-class annotated business samples; run their read-only evaluator and target Kylin/NVIDIA acceptance separately. Keep goal active.
+
+=== 2026-09-24 Session 62 (Live local Office format integration) ===
+Status: In progress; 64/241 passed; P6 real samples and target-machine gates remain incomplete
+Changes: Extended the opt-in real Web/API/Doclib Chromium test with temporary DOCX, PPTX and XLSX documents, each carrying a distinct text marker; verified bulk upload, Flash revision, historical content and download-only source guidance.
+Verification: The four-format live integration test passed on Mac with real API/Doclib and no route mocks; Ruff/format and diff checks passed. Office fixtures are synthetic and do not establish real-sample quality.
+Evidence: dev-docs/evidence/2026-09-24-live-web-office-smoke.md
+Next: Controlled four-class annotated sources, model-backed image/advanced parsing and Kylin/NVIDIA validation remain necessary. Keep goal active.

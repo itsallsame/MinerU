@@ -2,7 +2,7 @@
 
 状态：评估工具与合成契约测试已就绪；**尚无四类脱敏原文和人工标注，准确率与生产验收未执行**。这份说明不是对模型质量的预测。
 
-仓库公共 `demo/pdfs/demo1.pdf` 已用于 Mac 的真实 Web→业务 API→Doclib Flash 解析/历史页读取冒烟（见 [联通证据](evidence/2026-09-24-live-web-pdf-smoke.md)）。它没有四类业务人工标注，也不使用 NVIDIA/VLM 模型；不能纳入下述四类准确率或生产验收分母。
+仓库公共 `demo/pdfs/demo1.pdf` 及临时生成的 DOCX/PPTX/XLSX 已用于 Mac 的真实 Web→业务 API→Doclib Flash 解析/历史页读取冒烟（见 [PDF 联通证据](evidence/2026-09-24-live-web-pdf-smoke.md)与 [Office 联通证据](evidence/2026-09-24-live-web-office-smoke.md)）。这些都没有四类业务人工标注，也不使用 NVIDIA/VLM 模型；不能纳入下述四类准确率或生产验收分母。
 
 ## 样本准备
 

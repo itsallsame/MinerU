@@ -31,7 +31,7 @@ Python 运行从本仓库根目录执行。基础单测：
 
 Web 关键流程的离线 Chromium 回归在构建后运行 `cd business-web && pnpm test:browser`。准备机须预装 Python Playwright 与 Chromium；脚本只在本机随机端口启动静态资源服务并模拟业务 API 响应，不连接模型，也不代替真实 API、真实样本或目标麒麟验收。另有 `tests/browser_smoke.py` 专用于已启动的真实业务 API，不属于离线套件。
 
-公共 PDF 的真实本机联通冒烟可在构建后运行 `MINERU_RUN_LIVE_BROWSER=1 .venv/bin/python -m pytest -q tests/business/test_live_web_smoke.py`。此测试临时启动绑定回环地址的 Doclib TCP 与业务 API，再由预装 Python Playwright/Chromium 的 `python3` 打开同源 Web；它不模拟 API 响应，结束时关闭两个临时进程。Mac 可用 Flash 文本解析，不需模型权重；它不测 GPU 档位、真实四类人工标注质量或麒麟部署。
+公共 PDF 加临时生成的 DOCX/PPTX/XLSX 的真实本机联通冒烟可在构建后运行 `MINERU_RUN_LIVE_BROWSER=1 .venv/bin/python -m pytest -q tests/business/test_live_web_smoke.py`。此测试临时启动绑定回环地址的 Doclib TCP 与业务 API，再由预装 Python Playwright/Chromium 的 `python3` 打开同源 Web；它不模拟 API 响应，结束时关闭两个临时进程。Mac 可用 Flash 原生解析，不需模型权重；它不测 GPU 档位、真实四类人工标注质量或麒麟部署。
 
 ## 会话启动协议
 
