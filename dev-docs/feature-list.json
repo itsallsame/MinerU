@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 60,
+  "completed_features": 61,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3937,9 +3937,9 @@
         "实现：Office预览不可用提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Playwright 验证 DOCX 明示浏览器不可预览、无 PDF/图片预览和页码、保留同页下载入口；后端 TestClient 验证 Office attachment/nosniff。模拟浏览器未声称实际下载文件已验收。证据：dev-docs/evidence/2026-09-23-source-formats-revisions.md"
     },
     {
       "id": "FE-023",
