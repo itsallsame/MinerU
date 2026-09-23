@@ -20,6 +20,7 @@ from pptx import Presentation
 from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
+from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
 from mineru.doclib.types import ForgetPathRequest
@@ -142,6 +143,30 @@ def test_published_upload_can_be_submitted_to_doclib(live_doclib: tuple[DoclibCl
     _wait_for_parse(client, list(submitted.parse_ids))
     assert submitted.sha256 == stored.sha256
     assert "Project Lantern published" in client.get_doc_content(submitted.sha256, tier="flash").content
+
+
+def test_business_evidence_references_real_doclib_parse(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, _home = live_doclib
+    stored = ImmutableUploadStore(root, max_bytes=1024).store(
+        io.BytesIO(b"<h1>Project Lantern real evidence</h1>"), filename="report.html"
+    )
+    database_dir = root / "business"
+    database_dir.mkdir()
+    business = BusinessStore(database_dir / "business.sqlite3")
+    business.initialize()
+    document = business.create_document(stored, original_name="report.html", owner_id="alice")
+    submitted = DoclibGateway(client, shared_root=root).submit(stored.path)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    parse = client.get_parse(submitted.parse_ids[0])
+    revision = business.add_completed_revision(document.id, owner_id="alice", parse=parse, producer_version="4.0.6")
+    content = client.get_doc_content(submitted.sha256, tier="flash")
+    locator = content.content_ranges[0].start
+    snippet = client.read_content(locator).content
+    evidence = business.capture_evidence(revision.id, owner_id="alice", locator=locator, snippet=snippet)
+
+    assert evidence.document_id == document.id
+    assert evidence.snippet == snippet
+    assert BusinessStore(database_dir / "business.sqlite3").get_evidence(evidence.id, owner_id="alice") == evidence
 
 
 def test_doclib_content_identity_is_hash_based(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

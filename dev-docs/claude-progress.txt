@@ -79,6 +79,18 @@ Verification: 5 upload tests and all 31 business tests pass after collision regr
 Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
 Next: Implement P3 business identity/evidence persistence without claiming P2 target completion.
 
+=== 2026-09-23 Session 7 (P3 business identity persistence prototype) ===
+Status: In progress; P1/P2 target gates and P3 API/domain gates remain open
+Changes:
+- Explicitly documented Mac P3 parallel scope and provisional single-node SQLite decision.
+- Added business document, completed parse revision and frozen evidence records in a separate versioned SQLite business store.
+- Added owner filtering, provenance conflict detection, retry-safe parse revision insertion and private explicit database creation.
+- Linked real Doclib HTML parse/locator to persisted business evidence in a live contract test.
+Verification: 6 focused store tests, 1 live integration test and 38 total business tests pass; ruff checks pass.
+Evidence: dev-docs/evidence/2026-09-23-p3-business-store.md
+Limits: No service/API auth, cross-resource transaction, user-scale concurrency, model-backed parse or Kylin validation.
+Next: Business service/API boundary, orphan cleanup and evidence provenance serialization; do not claim P3 complete.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
