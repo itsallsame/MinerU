@@ -674,3 +674,10 @@ Changes: Recorded reproducible business module statement/branch coverage and pri
 Verification: Full business suite with branch coverage 171 passed/1 opt-in skipped; 2297 statements/522 branches, 93.03% statement, 80.08% branch, 90.63% combined. Exact business and upstream feature commands also passed. Mac baseline only.
 Evidence: dev-docs/evidence/2026-09-24-business-coverage.md
 Next: Add risk-focused tests for uncovered failure/restart paths, then continue four-class and target-machine gates. Keep goal active.
+
+=== 2026-09-24 Session 64 (Extraction worker lifecycle regression) ===
+Status: In progress; 66/241 passed; P6 remains incomplete
+Changes: Added deterministic worker lifecycle/error tests for invalid polling, restart, exception continuation and timed-out shutdown without a duplicate worker. No production queue behavior changed; open system remains without accounts or permissions.
+Verification: New 4 tests and Ruff passed; full Mac business suite 175 passed/1 opt-in skipped. Initial restricted run failed only because local socket binding was denied; authorized local-socket rerun passed. No Kylin/GPU or annotated-sample claim.
+Evidence: dev-docs/evidence/2026-09-24-extraction-worker-lifecycle.md
+Next: Strengthen Doclib and API contract regression, then run real four-class samples and target Kylin/NVIDIA acceptance when available. Keep goal active.
