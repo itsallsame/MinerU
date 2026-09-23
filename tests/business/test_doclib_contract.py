@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
+from mineru.doclib.endpoint import read_endpoint_file
 from mineru.doclib.types import ForgetPathRequest
 from mineru.errors import MineruError, ServerNotRunningError
 
@@ -286,3 +288,148 @@ def test_doclib_restart_preserves_content_and_locator(live_doclib: tuple[DoclibC
             except subprocess.TimeoutExpired:
                 restarted.kill()
                 restarted.wait(timeout=10)
+
+
+def test_explicit_tcp_client_reaches_isolated_doclib(tmp_path: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="mu-doclib-tcp-", dir="/private/tmp") as short_home:
+        home = Path(short_home)
+        env = os.environ.copy()
+        env.update(
+            {
+                "MINERU_HOME": str(home),
+                "MINERU_MODEL_SOURCE": "local",
+                "MINERU_MODEL_BASE_DIR": str(tmp_path / "models"),
+                "MINERU_DOCLIB_UDS_ENABLED": "false",
+                "MINERU_DOCLIB_TCP_ENABLED": "true",
+                "MINERU_DOCLIB_TCP_HOST": "127.0.0.1",
+                "MINERU_DOCLIB_TCP_PORT": "0",
+                "HF_HUB_OFFLINE": "1",
+                "TRANSFORMERS_OFFLINE": "1",
+            }
+        )
+        log_path = tmp_path / "doclib-tcp.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                [sys.executable, "-m", "mineru.doclib.app"], env=env, stdout=log, stderr=subprocess.STDOUT
+            )
+            client: DoclibClient | None = None
+            try:
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise AssertionError(f"TCP Doclib exited: {log_path.read_text()}")
+                    endpoint = read_endpoint_file(home / "doclib.endpoint.json")
+                    urls = (
+                        [transport.base_url for transport in endpoint.transports if transport.type == "tcp"] if endpoint else []
+                    )
+                    if urls and urls[0]:
+                        client = DoclibClient(base_url=urls[0], timeout=10)
+                        try:
+                            client.get_server_status()
+                            break
+                        except (ServerNotRunningError, MineruError):
+                            client.close()
+                            client = None
+                    time.sleep(0.1)
+                else:
+                    raise AssertionError(f"TCP Doclib did not start: {log_path.read_text()}")
+
+                source = tmp_path / "tcp-report.html"
+                source.write_text("<h1>Project Lantern TCP evidence</h1>")
+                submitted = DoclibGateway(client, shared_root=tmp_path).submit(source)
+                _wait_for_parse(client, list(submitted.parse_ids))
+                assert "Project Lantern TCP" in client.get_doc_content(submitted.sha256, tier="flash").content
+            finally:
+                if client is not None:
+                    client.close()
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=10)
+
+
+def test_second_doclib_cannot_own_same_home(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, home = live_doclib
+    env = os.environ.copy()
+    env.update(
+        {
+            "MINERU_HOME": str(home),
+            "MINERU_MODEL_SOURCE": "local",
+            "MINERU_MODEL_BASE_DIR": str(root / "models"),
+            "MINERU_DOCLIB_UDS_ENABLED": "true",
+            "MINERU_DOCLIB_TCP_ENABLED": "false",
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+        }
+    )
+    competing = subprocess.run(
+        [sys.executable, "-m", "mineru.doclib.app"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert competing.returncode != 0
+    assert "currently owned by another doclib server process" in competing.stdout + competing.stderr
+    assert client.get_server_status() is not None
+
+
+def test_offline_backup_restores_parsed_content(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    client, root, home = live_doclib
+    source = root / "backup-report.html"
+    source.write_text("<h1>Project Lantern backup evidence</h1>")
+    submitted = DoclibGateway(client, shared_root=root).submit(source)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    locator = client.get_doc_content(submitted.sha256, tier="flash").content_ranges[0].start
+    assert client.shutdown_server().accepted
+    deadline = time.monotonic() + 10
+    while (home / "doclib.sock").exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert not (home / "doclib.sock").exists()
+
+    with tempfile.TemporaryDirectory(prefix="mu-doclib-restore-", dir="/private/tmp") as restore_root:
+        restored_home = Path(restore_root) / "home"
+        shutil.copytree(home, restored_home)
+        env = os.environ.copy()
+        env.update(
+            {
+                "MINERU_HOME": str(restored_home),
+                "MINERU_MODEL_SOURCE": "local",
+                "MINERU_MODEL_BASE_DIR": str(root / "models"),
+                "MINERU_DOCLIB_UDS_ENABLED": "true",
+                "MINERU_DOCLIB_TCP_ENABLED": "false",
+                "HF_HUB_OFFLINE": "1",
+                "TRANSFORMERS_OFFLINE": "1",
+            }
+        )
+        log_path = root / "restore.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            restored = subprocess.Popen(
+                [sys.executable, "-m", "mineru.doclib.app"], env=env, stdout=log, stderr=subprocess.STDOUT
+            )
+            restored_client = DoclibClient(socket_path=restored_home / "doclib.sock", timeout=10)
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if restored.poll() is not None:
+                        raise AssertionError(f"Restored Doclib exited: {log_path.read_text()}")
+                    try:
+                        restored_client.get_server_status()
+                        break
+                    except (ServerNotRunningError, MineruError):
+                        time.sleep(0.1)
+                else:
+                    raise AssertionError(f"Restored Doclib did not start: {log_path.read_text()}")
+                assert restored_client.get_doc(submitted.sha256).sha256 == submitted.sha256
+                assert "Project Lantern backup" in restored_client.read_content(locator).content
+            finally:
+                restored_client.close()
+                restored.terminate()
+                try:
+                    restored.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    restored.kill()
+                    restored.wait(timeout=10)

@@ -58,6 +58,16 @@ Findings: locator lacks parse_id; forget_path is re-ingestable while source rema
 Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
 Next: Define business identity/evidence persistence and continue P2 lifecycle/transport checks without claiming target deployment success.
 
+=== 2026-09-23 Session 5 (P2 transport and lifecycle checks) ===
+Status: In progress; Mac-only checks, not target-hardware acceptance
+Changes:
+- Added live explicit TCP Doclib client test, same-home second-process rejection test, and stopped-home copy/restore test.
+Verification: 12 Doclib contract tests and all 25 business tests pass with local socket permissions; ruff check/format check pass.
+Findings: loopback TCP contract works across Mac processes; single-home ownership lock rejects second process; simple HTML content and locator survive stopped-home restore to a new path.
+Limits: No cross-container access-control proof, online backup guarantee, business DB consistency test, Kylin/NVIDIA result or model-backed parse.
+Evidence: dev-docs/evidence/2026-09-23-p2-doclib-prototype.md
+Next: Business identity/evidence persistence and shared upload atomicity; keep target deployment gates open.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
