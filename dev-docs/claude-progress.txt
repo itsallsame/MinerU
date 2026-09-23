@@ -246,3 +246,13 @@ Changes:
 Verification: Skill quick_validate and Ruff passed; P5 contract tests 5 passed using actual FastAPI with a Doclib test double; full business suite 93 passed/2 dependency warnings on Mac.
 Evidence: dev-docs/evidence/2026-09-23-p5-business-skill-first-slice.md
 Next: Add business-scoped search/locator/structure APIs and corresponding Web/Skill flows, then real-document and offline target evidence. Do not claim P5 or production complete.
+
+=== 2026-09-23 Session 22 (Business-scoped discovery and historical reading) ===
+Status: In progress; P4/P5 structure/evidence search and P1/P6 target gates remain open
+Changes:
+- Added /api/business/search with Doclib hit-to-business-revision mapping, path-free current-index previews, bounded scanning and explicit incomplete-scan status.
+- Added revision-bound historical locator read with parse-ID pinning, identity checks and safe next-locator continuation; both Web and own Skill use the same business API and label text unconfirmed.
+- Added Web search + progressive-reading panels and Skill search/read commands without user/permission management or official Skill fallback.
+Verification: business suite 98 passed/2 dependency warnings; targeted live local Doclib HTML search/read test passed; Web tests 7/build 7 assets; Playwright discovery and existing upload/review flows passed on Mac.
+Evidence: dev-docs/evidence/2026-09-23-business-discovery-and-reading.md
+Next: Add page/block search evidence and structure tree, template/quality UI, real marked business samples, then offline Kylin/NVIDIA and failure/recovery acceptance. Do not claim phase or production complete.

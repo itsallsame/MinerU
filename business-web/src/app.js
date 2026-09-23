@@ -11,14 +11,17 @@ const state = {
   total: 0,
   items: [],
   selectedId: null,
+  selectedSearchDocument: null,
   revisions: [],
   listRequest: 0,
+  searchRequest: 0,
   polling: false,
   uploading: false,
 };
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
-    const item = state.items.find((entry) => entry.document.id === state.selectedId);
+    const item = state.items.find((entry) => entry.document.id === state.selectedId)
+      || (state.selectedSearchDocument ? { document: state.selectedSearchDocument } : null);
     if (!item || sourcePreviewKind(item.document.original_name) !== "pdf") return false;
     const frame = byId("detail-content").querySelector("iframe.source-preview");
     if (!frame) return false;
@@ -145,7 +148,7 @@ async function refreshDocuments() {
     state.total = page.total;
     setConnection(true, "业务服务已连接");
     clearError();
-    if (state.selectedId && !state.items.some((item) => item.document.id === state.selectedId)) {
+    if (state.selectedId && !state.selectedSearchDocument && !state.items.some((item) => item.document.id === state.selectedId)) {
       state.selectedId = null;
       state.revisions = [];
       review.clear();
@@ -173,7 +176,8 @@ function detailRow(label, value) {
 }
 
 function renderDetail() {
-  const item = state.items.find((entry) => entry.document.id === state.selectedId);
+  const item = state.items.find((entry) => entry.document.id === state.selectedId)
+    || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
   if (!item) return;
   const { document: record, task } = item;
   const root = byId("detail-content");
@@ -189,9 +193,9 @@ function renderDetail() {
   const template = state.templates.find((entry) => entry.code === record.template_code);
   grid.append(
     detailRow("业务类型", template?.name || "未分类"),
-    detailRow("解析状态", task ? taskLabel(task.status) : "无任务"),
+    detailRow("解析状态", task ? taskLabel(task.status) : state.selectedSearchDocument ? "检索未返回任务状态" : "无任务"),
     detailRow("请求档位", task?.requested_tier || "Flash（原生格式）"),
-    detailRow("实际档位", task?.actual_tier || "尚未完成"),
+    detailRow("实际档位", task?.actual_tier || state.revisions[0]?.tier || "尚未完成"),
   );
   summary.append(grid);
   if (task?.error_code) summary.append(element("p", "error-banner", `失败代码：${task.error_code}`));
@@ -255,8 +259,9 @@ function renderDetail() {
   root.append(revisions);
 }
 
-async function selectDocument(id) {
+async function selectDocument(id, searchDocument = null) {
   state.selectedId = id;
+  state.selectedSearchDocument = searchDocument;
   state.revisions = [];
   review.clear();
   renderDocuments();
@@ -266,10 +271,40 @@ async function selectDocument(id) {
     if (state.selectedId !== id) return;
     state.revisions = revisions;
     renderDetail();
-    const item = state.items.find((entry) => entry.document.id === id);
+    const item = state.items.find((entry) => entry.document.id === id)
+      || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
     if (item) await review.setDocument(item.document, revisions);
   } catch (error) {
     if (state.selectedId === id) showError(`修订记录不可用：${error.message}`);
+  }
+}
+
+async function searchDocuments(event) {
+  event.preventDefault();
+  const query = byId("search-query").value.trim();
+  const root = byId("search-results");
+  if (!query) return;
+  const requestNumber = ++state.searchRequest;
+  root.replaceChildren(element("p", "review-hint", "正在检索业务文档…"));
+  try {
+    const page = await businessApi.search(query);
+    if (requestNumber !== state.searchRequest) return;
+    root.replaceChildren();
+    if (!page.items.length) root.append(element("p", "review-hint", "未找到已完成解析且匹配关键词的业务文档。"));
+    for (const hit of page.items) {
+      const row = element("div", "search-hit");
+      row.append(element("strong", "", hit.document.original_name));
+      row.append(element("p", "", `${hit.tier.toUpperCase()} · 当前索引预览，未人工确认：${hit.snippet}`));
+      const open = element("button", "secondary-button", "打开业务文档");
+      open.type = "button";
+      open.addEventListener("click", () => selectDocument(hit.document.id, hit.document));
+      row.append(open);
+      root.append(row);
+    }
+    if (!page.scan_complete) root.append(element("p", "review-hint", "检索达到返回或扫描上限，后续匹配结果可能尚未列出。"));
+  } catch (error) {
+    if (requestNumber !== state.searchRequest) return;
+    root.replaceChildren(element("p", "error-banner", `检索失败：${error.message}`));
   }
 }
 
@@ -334,6 +369,7 @@ async function pollTasks() {
 
 byId("files").addEventListener("change", updateFileSelection);
 byId("upload-form").addEventListener("submit", submitFiles);
+byId("search-form").addEventListener("submit", searchDocuments);
 byId("refresh").addEventListener("click", refreshDocuments);
 for (const id of ["status-filter", "template-filter"]) {
   byId(id).addEventListener("change", () => { state.page = 0; refreshDocuments(); });

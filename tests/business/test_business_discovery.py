@@ -1,0 +1,146 @@
+"""Business search filters Doclib hits and historical reads stay bound to parse revisions."""
+
+from __future__ import annotations
+
+import io
+from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
+from fastapi.testclient import TestClient
+
+from mineru.business.api import create_app
+from mineru.business.documents import ImmutableUploadStore
+from mineru.business.services import BusinessDiscovery, DiscoveryError, EvidenceReader, EvidenceWriter
+from mineru.business.store import BusinessStore
+from mineru.doclib import DoclibInterface, ParseInfo, SearchResponse
+from mineru.doclib.types import ContentNextRequest, ContentRequestScope, DocContentResponse, SearchResult
+from mineru.errors import ServerNotRunningError
+
+
+def _fixture(tmp_path: Path) -> tuple[BusinessStore, Mock, str, str, str, str]:
+    root = tmp_path / "uploads"
+    root.mkdir()
+    store = BusinessStore(tmp_path / "business.sqlite3")
+    store.initialize()
+    uploads = ImmutableUploadStore(root, max_bytes=1024)
+    first = uploads.store(io.BytesIO(b"<h1>Project Lantern</h1>"), filename="report.html")
+    second = uploads.store(io.BytesIO(b"<h1>Project Lantern</h1>"), filename="copy.html")
+    document_a = store.create_document(first, original_name="report.html")
+    document_b = store.create_document(second, original_name="copy.html")
+    parse = ParseInfo(
+        id=7, sha256=first.sha256, short_id=first.sha256[:12], tier="flash", page_range="1",
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    )
+    revision_a = store.add_completed_revision(document_a.id, parse=parse, producer_version="4.0.6")
+    revision_b = store.add_completed_revision(document_b.id, parse=parse, producer_version="4.0.6")
+    doclib = Mock(spec=DoclibInterface)
+    return store, doclib, document_a.id, document_b.id, revision_a.id, revision_b.id
+
+
+def test_search_only_maps_business_revisions_and_does_not_leak_doclib_paths(tmp_path: Path) -> None:
+    store, doclib, document_a, document_b, revision_a, revision_b = _fixture(tmp_path)
+    sha = store.get_document(document_a).sha256
+    doclib.search.return_value = SearchResponse(
+        query="Lantern", total=2, results=[
+            SearchResult(
+                sha256="f" * 64, short_id="f" * 12, tier="flash", snippet="Outside platform",
+                files=[{"path": "/private/unmanaged.pdf", "filename": "unmanaged.pdf", "ext": "pdf", "status": "active"}],
+            ),
+            SearchResult(
+                sha256=sha, short_id=sha[:12], tier="flash", snippet="Current index preview",
+                files=[{"path": "/private/managed.html", "filename": "report.html", "ext": "html", "status": "active"}],
+            ),
+        ],
+    )
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    page = discovery.search(" Lantern ")
+    assert {hit.document.id for hit in page.items} == {document_a, document_b}
+    assert {hit.revision_id for hit in page.items} == {revision_a, revision_b}
+    assert all(hit.snippet == "Current index preview" for hit in page.items)
+    assert page.scan_complete
+    doclib.search.assert_called_once_with("Lantern", limit=100, offset=0)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get("/api/business/search", params={"query": "Lantern"})
+    assert response.status_code == 200
+    assert {item["document"]["id"] for item in response.json()["items"]} == {document_a, document_b}
+    assert all(item["state"] == "current_index_unconfirmed" for item in response.json()["items"])
+    assert "/private/" not in response.text
+    assert "doclib_parse_id" not in response.text
+    assert api.get("/api/business/search", params={"query": "  "}).status_code == 422
+
+
+def test_revision_read_uses_historical_parse_id_and_returns_safe_continuation(tmp_path: Path) -> None:
+    store, doclib, document_a, _document_b, revision_a, _revision_b = _fixture(tmp_path)
+    sha = store.get_document(document_a).sha256
+    locator = f"doc:{sha[:12]}/tier:flash/page:1/block:1"
+    next_locator = f"doc:{sha[:12]}/tier:flash/page:1/block:2"
+    doclib.read_parse_content.return_value = DocContentResponse(
+        sha256=sha, short_id=sha[:12], tier="flash", content="Project Lantern",
+        request_scope=ContentRequestScope(locator=locator),
+        next_request=ContentNextRequest(locator=next_locator), truncated=True,
+        asset={"path": "/private/doclib/internal.png", "mime_type": "image/png"},
+    )
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    read = discovery.read(revision_a, locator, limit=12000)
+    assert read.document_id == document_a
+    assert read.next_locator == next_locator and read.truncated
+    doclib.read_parse_content.assert_called_once_with(7, locator, limit=12000)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{revision_a}/content", params={"locator": locator})
+    assert response.status_code == 200
+    assert response.json()["state"] == "historical_parse_unconfirmed"
+    assert response.json()["next_locator"] == next_locator
+    assert "/private/" not in response.text and "doclib_parse_id" not in response.text
+    assert api.get("/api/business/revisions/missing/content", params={"locator": locator}).status_code == 404
+    assert api.get(f"/api/business/revisions/{revision_a}/content", params={"locator": "bad"}).status_code == 422
+    too_large = api.get(f"/api/business/revisions/{revision_a}/content", params={"locator": locator, "limit": 30001})
+    assert too_large.status_code == 422
+
+
+def test_revision_read_rejects_identity_drift_and_worker_outage(tmp_path: Path) -> None:
+    store, doclib, document_a, _document_b, revision_a, _revision_b = _fixture(tmp_path)
+    sha = store.get_document(document_a).sha256
+    locator = f"doc:{sha[:12]}/tier:flash/page:1"
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    with pytest.raises(DiscoveryError, match="invalid_content_locator"):
+        discovery.read(revision_a, f"doc:{sha[:12]}/tier:basic/page:1")
+    doclib.read_parse_content.return_value = DocContentResponse(
+        sha256="0" * 64, short_id=sha[:12], tier="flash", content="Other document",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    with pytest.raises(DiscoveryError, match="historical_content_mismatch"):
+        discovery.read(revision_a, locator)
+    doclib.read_parse_content.side_effect = ServerNotRunningError()
+    with pytest.raises(DiscoveryError, match="doclib_unavailable"):
+        discovery.read(revision_a, locator)
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    unavailable = api.get(f"/api/business/revisions/{revision_a}/content", params={"locator": locator})
+    assert unavailable.status_code == 503
+
+
+def test_search_reports_incomplete_scan_when_result_limit_is_reached(tmp_path: Path) -> None:
+    store, doclib, document_a, _document_b, _revision_a, _revision_b = _fixture(tmp_path)
+    sha = store.get_document(document_a).sha256
+    doclib.search.return_value = SearchResponse(
+        query="Lantern", total=100, results=[SearchResult(
+            sha256=sha, short_id=sha[:12], tier="flash", snippet="Preview",
+        )],
+    )
+    result = BusinessDiscovery(store=store, doclib=doclib).search("Lantern", limit=1)
+    assert len(result.items) == 1
+    assert not result.scan_complete

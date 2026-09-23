@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 40,
+  "completed_features": 43,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3827,9 +3827,9 @@
         "实现：文档库搜索入口",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "业务 API、Web/Skill 接入和测试已通过；Mac 真实 Doclib HTML 样本与 Playwright 验证，麒麟未验收。"
     },
     {
       "id": "FE-018",
@@ -4751,9 +4751,9 @@
         "实现：Skill文档搜索命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "业务 API、Web/Skill 接入和测试已通过；Mac 真实 Doclib HTML 样本与 Playwright 验证，麒麟未验收。"
     },
     {
       "id": "SKL-010",
@@ -4773,9 +4773,9 @@
         "实现：Skill定位器原文读取命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "业务 API、Web/Skill 接入和测试已通过；Mac 真实 Doclib HTML 样本与 Playwright 验证，麒麟未验收。"
     },
     {
       "id": "SKL-011",

@@ -16,9 +16,10 @@ from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import DocumentWorkflow, EvidenceReader, EvidenceWriter
+from mineru.business.services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
-from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse
+from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse, SearchResponse
+from mineru.doclib.types import ContentRequestScope, DocContentResponse, SearchResult
 
 
 def _script() -> ModuleType:
@@ -225,6 +226,7 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
         workflow=workflow, store=store, uploads=uploads,
         evidence_reader=EvidenceReader(store=store, doclib=doclib),
         evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+        discovery=BusinessDiscovery(store=store, doclib=doclib),
     )
     client = script.BusinessClient("http://127.0.0.1:8080")
     client._connect = lambda: _ASGIConnection(TestClient(app))
@@ -244,6 +246,25 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     assert overview["revision"]["tier"] == "flash"
     assert overview["draft"] is None
     assert overview["confirmed_for_latest_run"] is None
+    doclib.search.return_value = SearchResponse(
+        query="Notice", total=1, results=[SearchResult(
+            sha256=digest, short_id=digest[:12], tier="flash", snippet="Notice index preview",
+        )],
+    )
+    search_args = script.parser().parse_args(["search", "Notice"])
+    search_result = script.run(search_args, client)
+    assert search_result["items"][0]["document"]["id"] == submitted["document"]["id"]
+    assert search_result["items"][0]["state"] == "current_index_unconfirmed"
+    locator = f"doc:{digest[:12]}/tier:flash/page:1"
+    doclib.read_parse_content.return_value = DocContentResponse(
+        sha256=digest, short_id=digest[:12], tier="flash", content="Notice historical text",
+        request_scope=ContentRequestScope(locator=locator),
+    )
+    read_args = script.parser().parse_args(["read", overview["revision"]["id"], locator])
+    read_result = script.run(read_args, client)
+    assert read_result["content"] == "Notice historical text"
+    assert read_result["state"] == "historical_parse_unconfirmed"
+    doclib.read_parse_content.assert_called_once_with(7, locator, limit=12000)
     with pytest.raises(script.BusinessAPIError) as missing:
         client.overview("missing")
     assert missing.value.status == 404

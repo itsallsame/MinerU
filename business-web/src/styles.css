@@ -59,6 +59,14 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .secondary-button { background: #fff; color: #2d644c; border: 1px solid #d6e2da; border-radius: 8px; padding: 9px 12px; font-size: 12px; white-space: nowrap; }
 .secondary-button:hover { border-color: #7ba98a; background: #f8fbf9; }
 .error-banner { margin-top: 20px; border: 1px solid #f1c6bb; background: #fff4f0; color: #a14435; padding: 12px 14px; border-radius: 9px; font-size: 12px; }
+.search-panel { margin-top: 24px; border: 1px solid #dce8de; border-radius: 12px; background: #fff; padding: 15px; }
+.search-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.search-form label { color: #486854; font-size: 12px; font-weight: 700; flex: 1 1 100%; }
+.search-form input { min-width: 0; flex: 1 1 170px; border: 1px solid #d8e4da; border-radius: 8px; padding: 9px 11px; font-size: 12px; }
+.search-results { display: grid; gap: 8px; }
+.search-hit { border-top: 1px solid #e7eee8; padding: 10px 0; }
+.search-hit strong { font-size: 12px; }.search-hit p { margin: 6px 0; color: #657a6b; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.search-hit button { padding: 6px 9px; }
 .filterbar { display: flex; align-items: flex-end; gap: 12px; margin: 33px 0 19px; }
 .filterbar label { width: 145px; color: #6e8174; font-size: 11px; }.filterbar select { display: block; margin-top: 6px; }
 .result-count { margin-left: auto; color: #86958b; font-size: 11px; padding-bottom: 12px; white-space: nowrap; }
@@ -100,6 +108,7 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .field-edit-form textarea, .field-edit-form input, .capture-form input, .issue-form input { border: 1px solid #d9e3da; border-radius: 7px; background: #fff; color: #264537; padding: 9px; font-size: 11px; min-width: 0; }
 .field-edit-form select { min-width: 0; }.capture-form { display: flex; gap: 9px; align-items: end; flex-wrap: wrap; }.capture-form label { color: #657969; font-size: 11px; }.capture-form input { display: block; margin-top: 5px; width: 85px; }.capture-form button { padding: 9px; }
 .evidence-inspection { border: 1px solid #d8e5d8; background: #f8fbf8; border-radius: 8px; padding: 10px; margin-top: 10px; }.evidence-snippet { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; max-height: 220px; overflow: auto; }
+.read-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }.read-form label { color: #657969; font-size: 11px; }.read-form input { display: block; width: 90px; margin-top: 5px; padding: 9px; border: 1px solid #d9e3da; border-radius: 7px; }.historical-content { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; background: #f8fbf8; padding: 12px; font-size: 11px; line-height: 1.6; }
 .issue-card { border: 1px solid #efdbbf; background: #fffbf5; border-radius: 9px; padding: 12px; margin-top: 9px; }.issue-card.closed { background: #f6f9f6; border-color: #dce9dc; }.issue-card strong { font-size: 11px; }.issue-state { display: inline-block; margin-left: 8px; color: #9c6a31; font-size: 10px; }.issue-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }.issue-form input { flex: 1 1 150px; }.issue-form button { padding: 8px; font-size: 10px; }
 .blockers { color: #a35739; background: #fff4ee; padding: 12px 12px 12px 30px; border-radius: 8px; font-size: 11px; line-height: 1.7; }
 .result-card { border-top: 1px solid #e8eee8; padding: 13px 0; }.result-card strong { color: #286548; font-size: 12px; }.result-card small { margin-left: 9px; color: #87978a; font-size: 10px; }.result-card p { font-size: 11px; margin: 8px 0; overflow-wrap: anywhere; }.result-actions { display: flex; gap: 8px; }.audit-details { color: #6e8174; font-size: 11px; padding: 11px; }.audit-details summary { cursor: pointer; }.audit-details p { margin: 8px 0; }

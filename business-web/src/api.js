@@ -37,6 +37,10 @@ const postJson = (path, body) => request(path, {
 export const businessApi = {
   capabilities: () => request("/capabilities"),
   templates: () => request("/templates"),
+  search: (query, limit = 20) => request(`/search?${new URLSearchParams({ query, limit: String(limit) })}`),
+  readRevision: (id, locator, limit = 12000) => request(
+    `/revisions/${encodeURIComponent(id)}/content?${new URLSearchParams({ locator, limit: String(limit) })}`,
+  ),
   documents: ({ limit = 20, offset = 0, status = "", templateCode = "" } = {}) => {
     const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status) query.set("status", status);

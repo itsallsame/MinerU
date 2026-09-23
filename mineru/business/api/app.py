@@ -42,6 +42,9 @@ from ..domain import (
     TaskStatus,
 )
 from ..services import (
+    BusinessDiscovery,
+    BusinessSearchPage,
+    DiscoveryError,
     DocumentWorkflow,
     DocumentWorkflowError,
     EvidenceCaptureError,
@@ -50,6 +53,7 @@ from ..services import (
     EvidenceWriter,
     ExtractionWorker,
     FieldExtraction,
+    HistoricalRead,
     NavigationStatus,
 )
 from ..store import BusinessStore, BusinessStoreError
@@ -345,6 +349,45 @@ class RevisionView(BaseModel):
         )
 
 
+class BusinessSearchHitView(BaseModel):
+    document: DocumentView
+    revision_id: str
+    tier: Tier
+    snippet: str
+    state: Literal["current_index_unconfirmed"] = "current_index_unconfirmed"
+
+
+class BusinessSearchView(BaseModel):
+    items: list[BusinessSearchHitView]
+    scan_complete: bool
+    scanned_doclib_hits: int
+
+    @classmethod
+    def from_page(cls, page: BusinessSearchPage) -> BusinessSearchView:
+        return cls(
+            items=[BusinessSearchHitView(
+                document=DocumentView.from_record(hit.document), revision_id=hit.revision_id,
+                tier=hit.tier, snippet=hit.snippet,
+            ) for hit in page.items],
+            scan_complete=page.scan_complete, scanned_doclib_hits=page.scanned_doclib_hits,
+        )
+
+
+class HistoricalReadView(BaseModel):
+    document_id: str
+    revision_id: str
+    locator: str
+    tier: Tier
+    content: str
+    truncated: bool
+    next_locator: str | None
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+    @classmethod
+    def from_read(cls, read: HistoricalRead) -> HistoricalReadView:
+        return cls(**vars(read))
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -379,7 +422,7 @@ class EvidenceCaptureRequest(BaseModel):
 def create_app(
     *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader,
     evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
-    extraction_worker: ExtractionWorker | None = None,
+    extraction_worker: ExtractionWorker | None = None, discovery: BusinessDiscovery | None = None,
     uploads: ImmutableUploadStore | None = None,
     web_root: Path | None = None,
 ) -> FastAPI:
@@ -407,6 +450,37 @@ def create_app(
             parseable_extensions=tuple(sorted(PARSEABLE_EXTENSIONS)),
             tiers=("flash", "basic", "standard", "advanced"),
         )
+
+    @app.get("/api/business/search", response_model=BusinessSearchView)
+    def search_business_documents(
+        query: Annotated[str, Query(min_length=1, max_length=200)],
+        limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    ) -> BusinessSearchView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return BusinessSearchView.from_page(discovery.search(query, limit=limit))
+        except DiscoveryError as exc:
+            status_code = 422 if exc.code == "invalid_search_request" else 503
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/content", response_model=HistoricalReadView)
+    def read_revision_content(
+        revision_id: str,
+        locator: str,
+        limit: Annotated[int, Query(ge=1, le=30000)] = 12000,
+    ) -> HistoricalReadView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return HistoricalReadView.from_read(discovery.read(revision_id, locator, limit=limit))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
 
     @app.post(
         "/api/business/extractions/{run_id}/fields/{field_code}/decisions",
@@ -663,6 +737,8 @@ def create_app(
 
 __all__ = [
     "AuditEventView",
+    "BusinessSearchHitView",
+    "BusinessSearchView",
     "ConfirmationRequest",
     "ConfirmedFieldView",
     "ConfirmedResultView",
@@ -678,6 +754,7 @@ __all__ = [
     "FieldCandidateView",
     "FieldDecisionRequest",
     "FieldDecisionView",
+    "HistoricalReadView",
     "IssueResolutionRequest",
     "IssueResolutionView",
     "QualityIssueView",

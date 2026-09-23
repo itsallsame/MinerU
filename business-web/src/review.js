@@ -48,7 +48,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   const state = {
     document: null, revisions: [], revisionId: null, runs: [], runId: null,
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
-    inspection: null, error: "", busy: false, generation: 0,
+    inspection: null, reading: null, error: "", busy: false, generation: 0,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -60,6 +60,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runId = null;
     state.extraction = null;
     state.inspection = null;
+    state.reading = null;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -113,6 +114,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runId = null;
     state.extraction = null;
     state.inspection = null;
+    state.reading = null;
     state.runs = [];
     state.template = null;
     state.decisions = [];
@@ -154,6 +156,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.results = [];
     state.audit = [];
     state.inspection = null;
+    state.reading = null;
     state.error = "";
     root.hidden = false;
     render();
@@ -193,6 +196,51 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     await perform(async () => {
       state.inspection = await businessApi.inspectEvidence(evidenceId);
     });
+  }
+
+  async function readHistorical(locator) {
+    await perform(async () => {
+      const revisionId = state.revisionId;
+      const reading = await businessApi.readRevision(revisionId, locator);
+      if (revisionId === state.revisionId) state.reading = reading;
+    });
+  }
+
+  function renderReading() {
+    const box = section("历史解析渐进读取");
+    const revision = currentRevision();
+    const form = element("form", "read-form");
+    const label = element("label", "", "解析页码");
+    const page = element("input");
+    page.type = "number";
+    page.min = "1";
+    page.max = "100000";
+    page.value = "1";
+    page.required = true;
+    page.setAttribute("aria-label", "历史解析页码");
+    const start = element("button", "secondary-button", "读取这一页");
+    start.type = "submit";
+    start.disabled = state.busy || !revision;
+    label.append(page);
+    form.append(label, start);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const pageNo = Number(page.value);
+      if (!revision || !Number.isInteger(pageNo) || pageNo < 1) return;
+      readHistorical(`doc:${state.document.sha256.slice(0, 12)}/tier:${revision.tier}/page:${pageNo}`);
+    });
+    box.append(form);
+    box.append(element("p", "review-hint", "读取指定解析修订的历史内容；这是机器解析文本，未人工确认，也不是冻结证据。"));
+    if (state.reading) {
+      box.append(element("p", "review-hint", `当前定位器：${state.reading.locator}`));
+      box.append(element("pre", "historical-content", state.reading.content || "该位置没有可读取的文本。"));
+      if (state.reading.next_locator) {
+        box.append(button("继续读取下一段", () => readHistorical(state.reading.next_locator), state.busy));
+      } else if (state.reading.truncated) {
+        box.append(element("p", "review-hint", "内容已截断，但服务未提供可续读定位器；请缩小读取范围。"));
+      }
+    }
+    return box;
   }
 
   function renderEvidence() {
@@ -452,6 +500,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
+    root.append(renderReading());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;

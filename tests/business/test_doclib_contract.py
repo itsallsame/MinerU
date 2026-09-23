@@ -20,7 +20,7 @@ from pptx import Presentation
 from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import EvidenceReader, EvidenceWriter, FieldExtraction
+from mineru.business.services import BusinessDiscovery, EvidenceReader, EvidenceWriter, FieldExtraction
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
@@ -134,6 +134,36 @@ def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Pa
 
     search = client.search("Lantern", tier="flash")
     assert any(result.sha256 == doc.sha256 for result in search.results)
+
+
+def test_business_discovery_uses_real_local_doclib_without_exposing_paths(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    client, root, _home = live_doclib
+    source = root / "business-lantern.html"
+    source.write_text("<html><body><p>DistinctiveLanternProject</p></body></html>", encoding="utf-8")
+    submitted = DoclibGateway(client, shared_root=root).submit(source)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    business_dir = root / "business-discovery"
+    business_dir.mkdir()
+    store = BusinessStore(business_dir / "business.sqlite3")
+    store.initialize()
+    upload = ImmutableUploadStore(root, max_bytes=1024).store(
+        io.BytesIO(source.read_bytes()), filename="business-lantern.html"
+    )
+    document = store.create_document(upload, original_name="business-lantern.html")
+    revision = store.add_completed_revision(
+        document.id, parse=client.get_parse(submitted.parse_ids[0]), producer_version="4.0.6"
+    )
+    discovery = BusinessDiscovery(store=store, doclib=client)
+    matches = discovery.search("DistinctiveLanternProject")
+    assert any(hit.document.id == document.id and hit.revision_id == revision.id for hit in matches.items)
+    assert all("/private/" not in hit.snippet for hit in matches.items)
+    content = client.get_doc_content(submitted.sha256, tier="flash")
+    locator = content.content_ranges[0].start
+    historical = discovery.read(revision.id, locator)
+    assert historical.document_id == document.id
+    assert "DistinctiveLanternProject" in historical.content
 
 
 def test_business_field_candidate_uses_historical_doclib_page(

@@ -887,6 +887,31 @@ class BusinessStore:
             row = database.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
         return BusinessDocument(**dict(row)) if row is not None else None
 
+    def find_documents_with_revision(self, sha256: str, *, tier: Tier) -> tuple[tuple[BusinessDocument, str], ...]:
+        """Map a Doclib index hit only to business documents with a completed matching-tier revision."""
+        if not _SHA256_RE.fullmatch(sha256):
+            return ()
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT d.*, r.id AS revision_id FROM documents d "
+                "JOIN revisions r ON r.document_id=d.id "
+                "WHERE d.sha256=? AND r.sha256=? AND r.tier=? "
+                "ORDER BY d.created_at_ms DESC, d.rowid DESC, r.created_at_ms DESC, r.rowid DESC",
+                (sha256, sha256, tier),
+            ).fetchall()
+        found: list[tuple[BusinessDocument, str]] = []
+        seen: set[str] = set()
+        for row in rows:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            found.append((BusinessDocument(
+                id=row["id"], original_name=row["original_name"], storage_key=row["storage_key"],
+                sha256=row["sha256"], size=row["size"], created_at_ms=row["created_at_ms"],
+                template_code=row["template_code"], template_version=row["template_version"],
+            ), row["revision_id"]))
+        return tuple(found)
+
     def list_documents(
         self, *, limit: int = 20, offset: int = 0, template_code: str | None = None,
         status: TaskStatus | None = None,

@@ -67,6 +67,15 @@
           <button id="refresh" class="secondary-button" type="button">刷新列表 <span aria-hidden="true">↻</span></button>
         </div>
         <div id="global-error" class="error-banner" role="alert" hidden></div>
+        <section class="search-panel" aria-label="业务文档检索">
+          <form id="search-form" class="search-form">
+            <label for="search-query">检索已解析的业务文档</label>
+            <input id="search-query" name="query" type="search" maxlength="200" placeholder="输入关键词" required />
+            <button class="secondary-button" type="submit">检索</button>
+          </form>
+          <p class="review-hint">结果是当前索引预览，未人工确认；不能直接作为冻结证据引用。</p>
+          <div id="search-results" class="search-results" aria-live="polite"></div>
+        </section>
         <section class="filterbar" aria-label="筛选文档">
           <label for="status-filter">任务状态
             <select id="status-filter">

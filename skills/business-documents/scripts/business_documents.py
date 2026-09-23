@@ -12,7 +12,7 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 
 
 class BusinessAPIError(Exception):
@@ -148,6 +148,13 @@ def parser() -> argparse.ArgumentParser:
     upload.add_argument("file", type=Path)
     upload.add_argument("--tier", choices=("flash", "basic", "standard", "advanced"))
     upload.add_argument("--template")
+    search = commands.add_parser("search")
+    search.add_argument("query")
+    search.add_argument("--limit", type=int, default=20)
+    read = commands.add_parser("read")
+    read.add_argument("revision_id")
+    read.add_argument("locator")
+    read.add_argument("--limit", type=int, default=12000)
     for command, argument in (
         ("task", "task_id"), ("revisions", "document_id"), ("overview", "document_id"),
         ("extract", "revision_id"), ("extraction", "run_id"), ("evidence", "evidence_id"),
@@ -165,6 +172,12 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
         return client.upload(args.file, tier=args.tier, template=args.template)
     if command == "overview":
         return client.overview(args.document_id)
+    if command == "search":
+        query = urlencode({"query": args.query, "limit": args.limit})
+        return client.request("GET", f"/search?{query}")
+    if command == "read":
+        query = urlencode({"locator": args.locator, "limit": args.limit})
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/content?{query}")
     if command == "task":
         return client.request("GET", f"/tasks/{quote(args.task_id, safe='')}")
     if command == "revisions":

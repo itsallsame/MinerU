@@ -1,6 +1,6 @@
 ---
 name: business-documents
-description: "Work with this deployment's open MinerU business document platform through its business API: submit documents, follow parsing and extraction, inspect frozen evidence, and distinguish machine drafts from confirmed results. Use for this project's business workflows, not for the upstream MinerU CLI or official Skill."
+description: "Use this deployment's open MinerU business document platform to submit and search documents, read a historical revision by locator, inspect frozen evidence, and distinguish machine drafts from confirmed results. Use for this project's business workflow, not the upstream MinerU CLI or official Skill."
 ---
 
 # Business Documents
@@ -21,6 +21,8 @@ python3 skills/business-documents/scripts/business_documents.py task TASK_ID
 python3 skills/business-documents/scripts/business_documents.py overview DOCUMENT_ID
 python3 skills/business-documents/scripts/business_documents.py extract REVISION_ID
 python3 skills/business-documents/scripts/business_documents.py extraction RUN_ID
+python3 skills/business-documents/scripts/business_documents.py search "年度通知" --limit 20
+python3 skills/business-documents/scripts/business_documents.py read REVISION_ID 'doc:SHORT_ID/tier:flash/page:1'
 python3 skills/business-documents/scripts/business_documents.py evidence EVIDENCE_ID
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
 ```
@@ -31,6 +33,8 @@ Upload requires an explicit local file and uses the business service's advertise
 
 `evidence` returns the frozen original snippet and `navigation_status`. Cite the evidence ID and locator. `current_match` means current content matches the frozen snippet; it does **not** prove the same historical parse batch. With `changed` or `unavailable`, present the frozen snippet but do not claim a live jump to its historical location. A raw source download is not a substitute for a reviewed result.
 
-Current boundary: the unified business API has no business-scoped full-text search, arbitrary locator read, or parsed structure tree endpoint yet. Do not silently fall back to Doclib/official Skill; tell the user this operation is pending. These commands will be added here when the same business API also serves the Web.
+`search` is business-scoped discovery: returned snippets are **current index previews, unconfirmed**, not frozen evidence or citation-ready text. Only hits mapped to a business document with a completed matching-tier revision are returned; `scan_complete` concerns the Doclib-reported result window, not guaranteed full-corpus recall. `read` takes a **business revision ID and its matching locator**; it reads that historical parse batch, returns `next_locator` for bounded continuation, and labels the text `historical_parse_unconfirmed`. It is not an immutable evidence snapshot or human-confirmed field. For a final citation, use a frozen evidence ID or confirmed field evidence, not a search preview.
+
+Current boundary: the unified business API has no parsed structure tree or search-result page/block evidence list yet. Do not silently fall back to Doclib/official Skill; tell the user these operations are pending.
 
 HTTP errors print their actual status and business-service detail. On 404, recheck the business ID; on 409, report the conflict or stale source; on 503, report the unavailable business/Doclib worker. Do not hide errors or infer a successful parse/result from a successful upload.
