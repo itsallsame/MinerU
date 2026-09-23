@@ -227,3 +227,12 @@ Changes:
 Verification: pnpm test 3 passed, pnpm build 5 assets; full business suite 88 passed/2 dependency warnings with local sockets, Ruff and Compose config passed; Playwright Chromium real-page/mocked-upload smoke and desktop/mobile visual checks passed on Mac.
 Evidence: dev-docs/evidence/2026-09-23-p4-business-web-first-slice.md
 Next: Finish P4 review/evidence/results/template flows and deeper browser coverage; continue own Skill, offline/real-sample/target gates. Do not claim P4 or production complete.
+
+=== 2026-09-23 Session 20 (Business Web review workbench) ===
+Status: In progress; P4 search/structure/template/quality UX and P1/P6 target gates remain open
+Changes:
+- Added same-origin review workbench for parse revision/extraction selection, frozen evidence inspection, candidate decisions, issue handling, immutable result confirmation/version history, JSON/Markdown export and source-only audit display.
+- Explicitly kept machine candidates unconfirmed and restricted PDF page jump to current_match evidence; open system has no user/role/permission UI or backend model.
+Verification: pnpm test 7 passed, pnpm build 7 offline assets, Ruff/diff check passed; business suite 88 passed/2 dependency warnings; Playwright synthetic-record review and original upload/library smoke passed, including narrow-screen width.
+Evidence: dev-docs/evidence/2026-09-23-p4-review-workbench.md
+Next: Finish P4 search/structure/template/quality UX and real document browser flow; continue offline/Kylin source-build/model and Skill/target gates. Do not mark P4 or production complete from Mac mocks.

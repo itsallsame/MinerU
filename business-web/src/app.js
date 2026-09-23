@@ -1,5 +1,6 @@
 import { businessApi } from "./api.js";
 import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskLabel, tierForFile } from "./domain.js";
+import { createReviewWorkbench } from "./review.js";
 
 const byId = (id) => document.getElementById(id);
 const state = {
@@ -15,6 +16,17 @@ const state = {
   polling: false,
   uploading: false,
 };
+const review = createReviewWorkbench(byId("workbench"), {
+  onEvidenceNavigate: (evidence) => {
+    const item = state.items.find((entry) => entry.document.id === state.selectedId);
+    if (!item || sourcePreviewKind(item.document.original_name) !== "pdf") return false;
+    const frame = byId("detail-content").querySelector("iframe.source-preview");
+    if (!frame) return false;
+    frame.src = `${businessApi.sourceUrl(item.document.id)}#page=${evidence.page_no}`;
+    frame.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  },
+});
 
 function element(tag, className = "", content = "") {
   const node = document.createElement(tag);
@@ -136,6 +148,7 @@ async function refreshDocuments() {
     if (state.selectedId && !state.items.some((item) => item.document.id === state.selectedId)) {
       state.selectedId = null;
       state.revisions = [];
+      review.clear();
       const detail = byId("detail-content");
       detail.className = "detail-empty";
       detail.replaceChildren(
@@ -245,6 +258,7 @@ function renderDetail() {
 async function selectDocument(id) {
   state.selectedId = id;
   state.revisions = [];
+  review.clear();
   renderDocuments();
   renderDetail();
   try {
@@ -252,6 +266,8 @@ async function selectDocument(id) {
     if (state.selectedId !== id) return;
     state.revisions = revisions;
     renderDetail();
+    const item = state.items.find((entry) => entry.document.id === id);
+    if (item) await review.setDocument(item.document, revisions);
   } catch (error) {
     if (state.selectedId === id) showError(`修订记录不可用：${error.message}`);
   }
@@ -327,4 +343,5 @@ byId("next-page").addEventListener("click", () => {
   if ((state.page + 1) * state.limit < state.total) { state.page += 1; refreshDocuments(); }
 });
 setInterval(pollTasks, 4000);
+setInterval(() => review.refreshActive(), 4000);
 bootstrap();

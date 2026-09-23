@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 0,
+  "completed_features": 25,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3871,9 +3871,9 @@
         "实现：定位器跳转原文",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-020",
@@ -4047,9 +4047,9 @@
         "实现：字段候选表单",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-028",
@@ -4091,9 +4091,9 @@
         "实现：问题队列",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-030",
@@ -4113,9 +4113,9 @@
         "实现：问题严重度标识",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-031",
@@ -4201,9 +4201,9 @@
         "实现：复核决定操作",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-035",
@@ -4223,9 +4223,9 @@
         "实现：确认前必核问题提示",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-036",
@@ -4245,9 +4245,9 @@
         "实现：已确认成果页",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-037",
@@ -4267,9 +4267,9 @@
         "实现：草稿结果水印或状态标识",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-038",
@@ -4289,9 +4289,9 @@
         "实现：成果版本历史",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-039",
@@ -4311,9 +4311,9 @@
         "实现：JSON成果下载",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-040",
@@ -4333,9 +4333,9 @@
         "实现：Markdown成果下载",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-041",
@@ -4443,9 +4443,9 @@
         "实现：窄屏复核布局",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
     },
     {
       "id": "FE-046",

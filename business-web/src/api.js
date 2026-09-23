@@ -28,6 +28,12 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+const postJson = (path, body) => request(path, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
 export const businessApi = {
   capabilities: () => request("/capabilities"),
   templates: () => request("/templates"),
@@ -39,6 +45,24 @@ export const businessApi = {
   },
   document: (id) => request(`/documents/${encodeURIComponent(id)}`),
   revisions: (id) => request(`/documents/${encodeURIComponent(id)}/revisions`),
+  revisionEvidence: (id) => request(`/revisions/${encodeURIComponent(id)}/evidence`),
+  captureEvidence: (id, locator) => postJson(`/revisions/${encodeURIComponent(id)}/evidence`, { locator }),
+  inspectEvidence: (id) => request(`/evidence/${encodeURIComponent(id)}`),
+  extractions: (id) => request(`/revisions/${encodeURIComponent(id)}/extractions`),
+  enqueueExtraction: (id) => request(`/revisions/${encodeURIComponent(id)}/extractions`, { method: "POST" }),
+  extraction: (id) => request(`/extractions/${encodeURIComponent(id)}`),
+  templateVersion: (code, version) => request(`/templates/${encodeURIComponent(code)}?version=${encodeURIComponent(version)}`),
+  decisions: (id) => request(`/extractions/${encodeURIComponent(id)}/decisions`),
+  decideField: (runId, fieldCode, value, evidenceId, reason = null) => postJson(
+    `/extractions/${encodeURIComponent(runId)}/fields/${encodeURIComponent(fieldCode)}/decisions`,
+    { value, evidence_id: evidenceId, source: "web", reason },
+  ),
+  resolveIssue: (issueId, status, reason) => postJson(
+    `/issues/${encodeURIComponent(issueId)}/resolutions`, { status, source: "web", reason },
+  ),
+  results: (id) => request(`/extractions/${encodeURIComponent(id)}/results`),
+  confirm: (id) => postJson(`/extractions/${encodeURIComponent(id)}/confirm`, { source: "web" }),
+  audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),
   task: (id) => request(`/tasks/${encodeURIComponent(id)}`),
   retry: (id) => request(`/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" }),
   upload: (file, { tier, templateCode } = {}) => {
