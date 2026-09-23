@@ -4467,7 +4467,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "文档列表键盘选中后焦点保持与焦点轮廓已用 Playwright 验证；复核工作台完整键盘遍历和屏幕阅读器检查仍待完成。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md"
+      "notes": "文档列表键盘选中后焦点保持与焦点轮廓已用 Playwright 验证；复核的候选接受、问题解决和成果确认已用 Enter 键验证重绘后焦点回到相应卡片。完整键盘遍历和屏幕阅读器检查仍待完成。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md"
     },
     {
       "id": "FE-047",
@@ -4489,7 +4489,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页及质量统计并发已验证；任务重试、上传等其他异步反馈仍待检查。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-search-action-context.md、dev-docs/evidence/2026-09-23-review-template-write-races.md"
+      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；其他异步反馈和完整错误恢复仍待检查。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-search-action-context.md、dev-docs/evidence/2026-09-23-review-template-write-races.md、dev-docs/evidence/2026-09-23-upload-navigation-races.md"
     },
     {
       "id": "FE-048",

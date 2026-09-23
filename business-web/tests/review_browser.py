@@ -218,20 +218,32 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="看证据").first.click()
             page.get_by_text("当前定位内容已变化").wait_for()
             assert page.get_by_role("button", name="尝试跳转当前原文页").count() == 0
-            page.get_by_role("button", name="接受候选").first.click()
+            page.get_by_role("button", name="接受候选").first.focus()
+            page.keyboard.press("Enter")
             page.get_by_text("已复核：年度通知").wait_for()
+            assert page.locator(".field-review").evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            ), "keyboard decision lost the field context"
             page.get_by_role("button", name="查看已复核字段的证据").click()
             assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
             assert page.get_by_role("button", name="标题 · 已复核决定", exact=True).count() == 1
             assert confirm_button.is_disabled(), "An open issue must still block confirmation"
             page.get_by_label("多个候选值冲突处理原因").fill("与原文一致")
-            page.get_by_role("button", name="标记已解决").click()
+            page.get_by_role("button", name="标记已解决").focus()
+            page.keyboard.press("Enter")
             page.get_by_text("必核 · 已处理").wait_for()
+            assert page.locator(".issue-card").first.evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            ), "keyboard resolution lost the issue context"
             assert confirm_button.is_enabled()
             if screenshot:
                 page.screenshot(path=str(screenshot), full_page=True)
-            confirm_button.click()
+            confirm_button.focus()
+            page.keyboard.press("Enter")
             page.get_by_text("确认成果 v1").wait_for()
+            assert page.locator(".result-card").first.evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            ), "keyboard confirmation lost the result context"
             assert confirm_button.is_disabled(), "An unchanged result must not be reconfirmed"
             with page.expect_download() as download_info:
                 page.get_by_role("button", name="下载 JSON").click()

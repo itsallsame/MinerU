@@ -90,9 +90,26 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (state.busy) return;
     const contextVersion = state.contextVersion;
     const isCurrent = () => contextVersion === state.contextVersion;
+    const active = document.activeElement;
+    const focusedFieldCode = root.contains(active) ? active.closest(".field-review")?.dataset.fieldCode : null;
+    const focusedIssueId = root.contains(active) ? active.closest(".issue-card")?.dataset.issueId : null;
+    const focusedConfirmation = root.contains(active)
+      && active.textContent === "确认并生成不可变成果版本";
+    const restoreFocus = () => {
+      if (!isCurrent()) return;
+      const card = focusedFieldCode
+        ? [...root.querySelectorAll(".field-review")].find((node) => node.dataset.fieldCode === focusedFieldCode)
+        : focusedIssueId
+          ? [...root.querySelectorAll(".issue-card")].find((node) => node.dataset.issueId === focusedIssueId)
+          : focusedConfirmation
+            ? root.querySelector(".result-card") || root.querySelector(".review-section:last-of-type")
+            : null;
+      card?.focus({ preventScroll: true });
+    };
     state.busy = true;
     state.error = "";
     render();
+    restoreFocus();
     try {
       await action(isCurrent);
     } catch (error) {
@@ -101,6 +118,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (isCurrent()) {
         state.busy = false;
         render();
+        restoreFocus();
       }
     }
   }
@@ -743,6 +761,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     for (const issue of state.extraction.issues) {
       const field = state.template.fields.find((item) => item.code === issue.field_code);
       const card = element("div", `issue-card ${issue.status === "open" ? "open" : "closed"}`);
+      card.dataset.issueId = issue.id;
+      card.tabIndex = -1;
       const label = issueLabels[issue.code] || issue.code;
       card.append(element("strong", "", `${field?.label || "文档整体"} · ${label}`));
       card.append(element("span", "issue-state", `${issue.severity === "blocking" ? "必核" : "提示"} · ${issue.status === "open" ? "未处理" : "已处理"}`));
@@ -789,6 +809,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   function renderResults() {
     const box = section("确认成果与版本");
+    box.tabIndex = -1;
     const blockers = confirmationBlockers(state.extraction, state.template, state.decisions, state.results);
     if (blockers.length) {
       const list = element("ul", "blockers");
@@ -803,6 +824,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {
       const card = element("div", "result-card");
+      card.tabIndex = -1;
       card.append(element("strong", "", `确认成果 v${result.version}`));
       card.append(element("small", "", new Date(result.created_at_ms).toLocaleString("zh-CN")));
       for (const field of result.fields) {
