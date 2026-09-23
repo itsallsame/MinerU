@@ -164,6 +164,7 @@ async function loadAudit(reset = false) {
   const more = byId("audit-more");
   more.disabled = true;
   if (reset) byId("audit-content").replaceChildren(element("p", "review-hint", "正在读取审计记录…"));
+  else renderAudit();
   try {
     const page = await businessApi.auditPage(before);
     if (requestNumber !== state.auditRequest || !byId("audit-panel").open) return;
@@ -171,10 +172,19 @@ async function loadAudit(reset = false) {
     state.auditBefore = page.next_before;
     renderAudit();
   } catch (error) {
-    if (requestNumber !== state.auditRequest) return;
+    if (requestNumber !== state.auditRequest || !byId("audit-panel").open) return;
     const root = byId("audit-content");
-    if (reset) root.replaceChildren();
-    root.append(element("p", "error-banner", `审计记录不可用：${error.message}`));
+    if (reset) {
+      state.auditItems = [];
+      state.auditBefore = null;
+      root.replaceChildren();
+      more.hidden = true;
+    }
+    root.append(element("p", "error-banner", `审计记录不可用：${error.message}${reset ? "" : "；已加载记录保留，后续页尚未读取。"}`));
+    const retry = element("button", "secondary-button", reset ? "重试读取审计记录" : "重试加载这一页");
+    retry.type = "button";
+    retry.addEventListener("click", () => loadAudit(reset));
+    root.append(retry);
   } finally {
     if (requestNumber === state.auditRequest) more.disabled = false;
   }
@@ -512,9 +522,9 @@ async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
   }
 }
 
-async function searchDocuments(event) {
-  event.preventDefault();
-  const query = byId("search-query").value.trim();
+async function searchDocuments(event, retryQuery = null) {
+  event?.preventDefault();
+  const query = retryQuery ?? byId("search-query").value.trim();
   const root = byId("search-results");
   if (!query) return;
   const requestNumber = ++state.searchRequest;
@@ -537,11 +547,12 @@ async function searchDocuments(event) {
       const matches = element("div", "page-matches");
       async function scan(startPage = null) {
         findPages.disabled = true;
-        matches.append(element("p", "review-hint", "正在扫描历史解析块（每次最多 25 页）…"));
+        const loading = element("p", "review-hint", "正在扫描历史解析块（每次最多 25 页）…");
+        matches.append(loading);
         try {
           const found = await businessApi.searchBlocks(hit.revision_id, query, startPage);
           if (requestNumber !== state.searchRequest) return;
-          matches.lastElementChild.remove();
+          loading.remove();
           for (const match of found.items) {
             const result = element("div", "page-match");
             result.append(element("p", "", `第 ${match.page_no} 页 · 块 ${match.block_no} · 机器解析候选，未人工确认：${match.snippet}`));
@@ -577,12 +588,24 @@ async function searchDocuments(event) {
             matches.append(more);
           }
         } catch (error) {
+          if (requestNumber !== state.searchRequest) return;
+          loading.remove();
           const limitError = ["historical_search_limit_exceeded", "historical_search_too_many_matches"]
             .includes(error.message);
           const detail = limitError
             ? "块搜索达到安全上限，结果未完整返回；可换更具体的关键词，或逐页读取原文。"
             : `历史块检索失败：${error.message}`;
-          matches.replaceChildren(element("p", "error-banner", detail));
+          matches.append(element("p", "error-banner", detail));
+          if (!limitError) {
+            const retry = element("button", "secondary-button", "重试扫描这一段");
+            retry.type = "button";
+            retry.addEventListener("click", () => {
+              retry.previousElementSibling?.remove();
+              retry.remove();
+              scan(startPage);
+            });
+            matches.append(retry);
+          }
         } finally {
           findPages.disabled = false;
         }
@@ -594,7 +617,10 @@ async function searchDocuments(event) {
     if (!page.scan_complete) root.append(element("p", "review-hint", "检索达到返回或扫描上限，后续匹配结果可能尚未列出。"));
   } catch (error) {
     if (requestNumber !== state.searchRequest) return;
-    root.replaceChildren(element("p", "error-banner", `检索失败：${error.message}`));
+    const retry = element("button", "secondary-button", "重试本次检索");
+    retry.type = "button";
+    retry.addEventListener("click", () => searchDocuments(null, query));
+    root.replaceChildren(element("p", "error-banner", `检索失败：${error.message}`), retry);
   }
 }
 
