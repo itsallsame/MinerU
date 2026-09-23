@@ -137,7 +137,16 @@ def test_runtime_preflight_accepts_isolated_local_deployment(tmp_path: Path) -> 
             lambda x: x["worker"]["Mounts"][1].update(Source=str(x["model_dir"] / "doclib")),
             "directories overlap",
         ),
-        (lambda x: x["business"]["Mounts"].append({"Destination": "/opt/mineru-models"}), "mounts model"),
+        (lambda x: x["business"]["Mounts"].append({"Destination": "/opt/mineru-models"}), "unexpected mount"),
+        (
+            lambda x: x["business"]["Mounts"].append(
+                {"Type": "bind", "Source": str(x["model_dir"]), "Destination": "/different-name", "RW": True}
+            ),
+            "unexpected mount",
+        ),
+        (lambda x: x["worker"]["Mounts"].append({"Destination": "/extra"}), "unexpected mount"),
+        (lambda x: x["business"].pop("Mounts"), "mount inventory is unavailable"),
+        (lambda x: x["business"]["Mounts"].pop(), "missing a required mount"),
         (lambda x: x["network"].update(Internal=False), "internal network"),
         (lambda x: x["worker"]["NetworkSettings"]["Ports"].update({"15980/tcp": [{}]}), "published host port"),
         (lambda x: x["business"]["NetworkSettings"]["Ports"]["8080/tcp"][0].update(HostIp="0.0.0.0"), "published port"),

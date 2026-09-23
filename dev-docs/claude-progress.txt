@@ -639,3 +639,10 @@ Changes: Added pre-start host layout validation and runtime recheck to prevent w
 Verification: Targeted host-layout/runtime tests and full 166-test business suite passed on Mac; full suite required local socket permission after sandbox-only bind errors. Ruff and diff check passed. No Kylin/NVIDIA/air-gap claim.
 Evidence: dev-docs/evidence/2026-09-24-host-mount-separation.md
 Next: Verify the host-layout CLI and Compose binding on target Kylin; continue Linux amd64 wheelhouse/image, real model and sample gates. Keep goal active.
+
+=== 2026-09-24 Session 60 (Runtime mount allowlist) ===
+Status: In progress; 64/241 passed; P1 target-machine gates remain incomplete
+Changes: Tightened runtime preflight to reject any extra, missing or duplicate container bind/volume mount; closes alternate-destination access to host model files. Documented the expected two business and four worker mounts.
+Verification: Targeted 39 tests and full 171-test business suite passed on Mac; Ruff check/format and diff check passed. Tests use simulated Docker inspect, not a Kylin/NVIDIA container.
+Evidence: dev-docs/evidence/2026-09-24-runtime-mount-allowlist.md
+Next: Target-machine Compose inspect and release verification; continue Linux amd64 wheelhouse/image, real model and sample gates. Keep goal active.

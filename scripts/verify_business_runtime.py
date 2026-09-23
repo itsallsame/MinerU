@@ -54,6 +54,15 @@ def _mount(container: dict[str, Any], destination: str, *, writable: bool) -> st
     return source
 
 
+def _mount_layout(container: dict[str, Any], expected: set[str]) -> None:
+    mounts = container.get("Mounts")
+    if not isinstance(mounts, list) or any(not isinstance(item, dict) for item in mounts):
+        raise ValueError("Container mount inventory is unavailable")
+    destinations = [item.get("Destination") for item in mounts]
+    if len(destinations) != len(expected) or set(destinations) != expected:
+        raise ValueError("Container has an unexpected mount or is missing a required mount")
+
+
 def _environment(container: dict[str, Any]) -> dict[str, str]:
     values = container.get("Config", {}).get("Env", [])
     if not isinstance(values, list):
@@ -91,6 +100,8 @@ def check_runtime(
             raise ValueError(f"{label} container is not running")
         if container.get("HostConfig", {}).get("ReadonlyRootfs") is not True:
             raise ValueError(f"{label} root filesystem is not read-only")
+    _mount_layout(business, {"/srv/mineru-inbox", "/var/lib/mineru-business"})
+    _mount_layout(worker, {"/srv/mineru-inbox", "/var/lib/mineru", "/opt/mineru-models", "/etc/mineru/model-manifest.json"})
     business_shared = _mount(business, "/srv/mineru-inbox", writable=True)
     worker_shared = _mount(worker, "/srv/mineru-inbox", writable=False)
     if Path(business_shared).resolve() != Path(worker_shared).resolve():
@@ -108,11 +119,6 @@ def check_runtime(
         shared_documents_dir=Path(business_shared),
         business_dir=Path(business_data),
     )
-    if any(
-        item.get("Destination") in ("/opt/mineru-models", "/etc/mineru/model-manifest.json")
-        for item in business.get("Mounts", [])
-    ):
-        raise ValueError("Business API unexpectedly mounts model artifacts")
     business_networks = business.get("NetworkSettings", {}).get("Networks", {})
     worker_networks = worker.get("NetworkSettings", {}).get("Networks", {})
     if (
