@@ -580,3 +580,10 @@ Changes:
 Verification: Web 11 tests/8-asset offline build; Playwright source formats and review workflow passed; backend source and historical-read tests passed. Browser API simulated; no target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-source-formats-revisions.md
 Next: Verify image, Office fallback, historical Markdown and revision switching separately, then other P4 gaps. Keep goal active.
+
+=== 2026-09-23 Session 55b (Image source preview) ===
+Status: In progress; FE-021 verified complete (60/241 passed)
+Changes: Confirmed image preview is decoded in Chromium, has alt text and a one-page field-link action; source failure still withdraws the preview.
+Verification: Playwright source-formats and source-availability regressions; backend inline image source contract. Simulated browser API only.
+Evidence: dev-docs/evidence/2026-09-23-source-formats-revisions.md
+Next: Verify Office fallback and revision reading. Keep goal active.

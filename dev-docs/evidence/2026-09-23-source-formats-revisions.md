@@ -7,6 +7,6 @@
 - Office：DOCX 不显示 PDF/图片预览或 PDF 页码，明确提示浏览器不支持原文预览；显示带文件名的同页下载链接。后端 TestClient 验证 DOCX 响应为 `attachment`、PDF/PNG 为 `inline`，并保留 `nosniff`。Playwright 模拟 API 的下载导航不被其请求拦截可靠覆盖，因此没有声称浏览器端实际下载文件已验收。
 - 历史解析：在复核工作台切到旧修订，读取旧版页 Markdown；切回新修订后旧文本清空，再读取新版页 Markdown。文本显示为机器解析原文，未人工确认，也不是冻结证据。后端历史读取按修订绑定的测试通过。
 
-验证：`cd business-web && pnpm test && pnpm build` 为 11 个单测通过、8 个离线资源；Playwright `source_formats_browser.py` 与 `review_browser.py` 通过；`.venv/bin/python -m pytest tests/business/test_business_api.py::test_open_document_library_capabilities_and_source -q` 为 1 passed，`tests/business/test_business_discovery.py -q` 为 12 passed（后端测试各有 2 个已有依赖弃用警告）。
+验证：`cd business-web && pnpm test && pnpm build` 为 11 个单测通过、8 个离线资源；Playwright `source_formats_browser.py`、`source_availability_browser.py` 与 `review_browser.py` 通过；`.venv/bin/python -m pytest tests/business/test_business_api.py::test_open_document_library_capabilities_and_source -q` 为 1 passed，`tests/business/test_business_discovery.py -q` 为 12 passed（后端测试各有 2 个已有依赖弃用警告）。
 
 边界：浏览器使用模拟业务 API；没有证明真实 Office 文件能在浏览器内预览、PDF 文字选择/bbox 像素精度或四类真实业务样本质量。麒麟 x86_64/NVIDIA 完全离线目标机验收仍待完成。系统不增加用户或权限层。
