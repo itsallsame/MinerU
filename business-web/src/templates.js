@@ -86,27 +86,42 @@ export function createTemplateManager(root, { onChanged }) {
     const list = element("div", "template-list");
     for (const template of templates) {
       const choose = button(`${template.name} · v${template.version}${template.enabled ? "" : " · 已停用"}${template.built_in ? " · 内置" : ""}`, () => {
+        const keepFocus = document.activeElement === choose;
         viewVersion += 1;
         selectedCode = template.code;
         creating = false;
         error = "";
         message = "";
         render();
+        if (keepFocus) {
+          [...root.querySelectorAll(".template-list button")].find((node) => node.dataset.templateCode === template.code)?.focus({ preventScroll: true });
+        }
       });
+      choose.dataset.templateCode = template.code;
       choose.classList.toggle("selected", selectedCode === template.code && !creating);
       list.append(choose);
     }
     list.append(button("新增自定义模板", () => {
+      const keepFocus = root.contains(document.activeElement);
       viewVersion += 1;
       selectedCode = null;
       creating = true;
       error = "";
       message = "";
       render();
+      if (keepFocus) root.querySelector('[name="template-code"]')?.focus({ preventScroll: true });
     }));
     root.append(intro, list);
-    if (error) root.append(element("p", "error-banner", error));
-    if (message) root.append(element("p", "template-success", message));
+    if (error) {
+      const warning = element("p", "error-banner", error);
+      warning.setAttribute("role", "alert");
+      root.append(warning);
+    }
+    if (message) {
+      const success = element("p", "template-success", message);
+      success.setAttribute("role", "status");
+      root.append(success);
+    }
     const selected = templates.find((item) => item.code === selectedCode);
     if (!selected && !creating) return;
     if (selected && (selected.built_in || !selected.enabled)) {

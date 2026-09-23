@@ -63,12 +63,20 @@ def main(base_url: str) -> None:
             page.route("**/api/business/**", api)
             page.goto(base_url, wait_until="networkidle")
             page.locator("#template-manager > summary").click()
-            page.get_by_role("button", name="公文 · v1 · 内置").click()
+            page.get_by_role("button", name="公文 · v1 · 内置").focus()
+            page.keyboard.press("Enter")
             page.get_by_text("内置模板只读；需要不同字段时").wait_for()
+            assert page.get_by_role("button", name="公文 · v1 · 内置").evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            )
             assert page.locator(".template-editor").count() == 0
 
-            page.get_by_role("button", name="新增自定义模板").click()
+            page.get_by_role("button", name="新增自定义模板").focus()
+            page.keyboard.press("Enter")
             editor = page.locator(".template-editor")
+            assert editor.locator('[name="template-code"]').evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            )
             editor.locator('[name="template-code"]').fill("my_report")
             editor.locator('[name="template-name"]').fill("我的报告")
             editor.locator('[name="field-code"]').fill("title")
@@ -82,6 +90,7 @@ def main(base_url: str) -> None:
             second.get_by_role("button", name="上移").click()
             editor.get_by_role("button", name="创建模板").click()
             page.get_by_text("我的报告 第 1 版已保存。").wait_for()
+            assert page.get_by_role("status").get_by_text("我的报告 第 1 版已保存。").count() == 1
             assert [field["code"] for field in writes[0][1]["fields"]] == ["written_date", "title"]
             assert writes[0][1]["fields"][1]["required"] is True
             assert page.locator("#upload-template option[value='my_report']").count() == 1

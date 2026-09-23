@@ -524,3 +524,12 @@ Changes:
 Verification: Web 10 unit tests/8-asset offline build; Playwright Enter-key decision, issue-resolution and confirmation with focus assertions passed; document-card focus and delayed review-write races passed. Simulated API only, no target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-review-keyboard-focus.md
 Next: Complete FE-046 whole-workbench keyboard/screen-reader audit and FE-047 recovery coverage, then real samples and Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 51 (Template keyboard focus and status semantics) ===
+Status: In progress; FE-046 advanced but remains incomplete (54/241 passed)
+Changes:
+- Preserved focus after Enter-key template selection and moved focus to the code field when creating a template.
+- Added alert/status semantics for template errors and successful saves; no identity or permission model introduced.
+Verification: Web 10 unit tests/8-asset offline build; Playwright template keyboard/CRUD and delayed-write race scenarios passed with simulated API. No screen-reader or target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-template-keyboard-status.md
+Next: Continue full FE-046 traversal and screen-reader checks, FE-047 recovery, then real samples and Kylin/NVIDIA gates. Keep goal active.

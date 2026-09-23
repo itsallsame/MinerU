@@ -4467,7 +4467,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "文档列表键盘选中后焦点保持与焦点轮廓已用 Playwright 验证；复核的候选接受、问题解决和成果确认已用 Enter 键验证重绘后焦点回到相应卡片。完整键盘遍历和屏幕阅读器检查仍待完成。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md"
+      "notes": "文档列表键盘选中后焦点保持与焦点轮廓已用 Playwright 验证；复核的候选接受、问题解决和成果确认已用 Enter 键验证重绘后焦点回到相应卡片；模板选择和新建入口也已用 Enter 键验证焦点连续性，提示具备 alert/status 语义。完整键盘遍历和屏幕阅读器检查仍待完成。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md、dev-docs/evidence/2026-09-23-template-keyboard-status.md"
     },
     {
       "id": "FE-047",
