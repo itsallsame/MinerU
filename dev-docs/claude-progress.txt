@@ -552,3 +552,12 @@ Changes:
 Verification: Web 11 unit tests/8-asset offline build; Playwright failure guidance and retry variants passed; backend document workflow 10 tests passed. Simulated browser API and Mac backend only.
 Evidence: dev-docs/evidence/2026-09-23-task-failure-guidance.md
 Next: Verify FE-015 retry acceptance separately, then continue cancellation and review-edit gaps. Keep goal active.
+
+=== 2026-09-23 Session 53b (Task retry entry) ===
+Status: In progress; FE-015 verified complete (57/241 passed)
+Changes:
+- Confirmed the Web retry entry for recoverable failed tasks and uploaded-but-unsubmitted tasks; integrity failure remains intentionally non-retryable.
+- Guarded stale retry feedback when the user selects another document; backend retry preserves the retained source identity.
+Verification: Playwright failure/retry browser scenario covered failed 503 then successful retry, uploaded recovery and stale error; backend document workflow 10 tests passed; Web 11 tests/8-asset build passed. No target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-task-failure-guidance.md
+Next: Design/implement true task cancellation with explicit worker semantics, then remaining P4 review-edit gaps and real Kylin/NVIDIA gates. Keep goal active.

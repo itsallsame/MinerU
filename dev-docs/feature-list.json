@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 56,
+  "completed_features": 57,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3783,9 +3783,9 @@
         "实现：任务重试入口",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "失败任务可重新提交、上传后中断而停留在 uploaded 的任务可恢复提交；完整性失败不提供无效重试，旧请求错误不污染新文档。Playwright 与后端工作流测试通过。证据：dev-docs/evidence/2026-09-23-task-failure-guidance.md"
     },
     {
       "id": "FE-016",
