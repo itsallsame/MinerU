@@ -20,7 +20,7 @@ from pptx import Presentation
 from reportlab.pdfgen import canvas
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import EvidenceReader, EvidenceWriter
+from mineru.business.services import EvidenceReader, EvidenceWriter, FieldExtraction
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
@@ -134,6 +134,51 @@ def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Pa
 
     search = client.search("Lantern", tier="flash")
     assert any(result.sha256 == doc.sha256 for result in search.results)
+
+
+def test_business_field_candidate_uses_historical_doclib_page(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    client, root, home = live_doclib
+    source = root / "notice.html"
+    source.write_text(
+        "<html><body><p>标题：年度通知</p><p>发文单位：办公室</p></body></html>", encoding="utf-8"
+    )
+    submitted = DoclibGateway(client, shared_root=root).submit(source)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    business_dir = root / "business-field-test"
+    business_dir.mkdir()
+    business = BusinessStore(business_dir / "business.sqlite3")
+    business.initialize()
+    stored = ImmutableUploadStore(root, max_bytes=1024).store(
+        io.BytesIO(source.read_bytes()), filename="notice.html"
+    )
+    document = business.create_document(stored, original_name="notice.html", template_code="official_document")
+    parse = client.get_parse(submitted.parse_ids[0])
+    revision = business.add_completed_revision(document.id, parse=parse, producer_version="4.0.6")
+    time.sleep(0.02)
+    current = client.ensure_parse(ParseRequest(path=str(source), tier="flash", force=True, remote=False))
+    _wait_for_parse(client, current.created_parse_ids)
+    current_parse = client.get_parse(current.created_parse_ids[0])
+    current_json = Path(
+        parse_batch_json_path(
+            str(home / "doclib"), submitted.sha256, "flash", current_parse.page_range, current_parse.done_at
+        )
+    )
+    payload = current_json.read_text()
+    assert "年度通知" in payload
+    current_json.write_text(payload.replace("年度通知", "当前通知"))
+    writer = EvidenceWriter(store=business, doclib=client)
+    run = FieldExtraction(store=business, doclib=client, evidence_writer=writer).run(revision.id)
+    assert run.status == "done"
+    candidates = business.list_field_candidates(run.id)
+    assert {(item.field_code, item.value) for item in candidates} == {
+        ("title", "年度通知"), ("issuer", "办公室")
+    }
+    assert all(business.get_evidence(item.evidence_id).revision_id == revision.id for item in candidates)
+    locator = f"doc:{submitted.short_id}/tier:flash/page:1"
+    assert "当前通知" in client.read_content(locator).content
+    assert "年度通知" in client.read_parse_content(parse.id, locator).content
 
 
 def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

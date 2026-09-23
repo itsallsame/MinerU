@@ -21,15 +21,18 @@ from ..domain import (
     BUILTIN_TEMPLATES,
     BusinessDocument,
     EvidenceSnapshot,
+    ExtractionRun,
+    FieldCandidate,
     IngestTask,
     ParseRevision,
+    QualityIssue,
     TemplateField,
     TemplateVersion,
     validate_template,
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 class BusinessStoreError(ValueError):
@@ -77,7 +80,10 @@ class BusinessStore:
                         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                     )
                 }
-                if tables != {"documents", "tasks", "revisions", "evidence", "templates", "template_versions"}:
+                if tables != {
+                    "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
+                    "extraction_runs", "field_candidates", "quality_issues",
+                }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
             if version != 0:
@@ -159,11 +165,46 @@ class BusinessStore:
                         created_at_ms INTEGER NOT NULL,
                         PRIMARY KEY (code, version)
                     );
+                    CREATE TABLE extraction_runs (
+                        id TEXT PRIMARY KEY,
+                        revision_id TEXT NOT NULL REFERENCES revisions(id) ON DELETE RESTRICT,
+                        template_code TEXT NOT NULL,
+                        template_version INTEGER NOT NULL,
+                        status TEXT NOT NULL CHECK(status IN ('running', 'done', 'failed')),
+                        error_code TEXT,
+                        created_at_ms INTEGER NOT NULL,
+                        updated_at_ms INTEGER NOT NULL,
+                        FOREIGN KEY (template_code, template_version)
+                            REFERENCES template_versions(code, version) ON DELETE RESTRICT
+                    );
+                    CREATE INDEX extraction_runs_revision_created ON extraction_runs(revision_id, created_at_ms);
+                    CREATE TABLE field_candidates (
+                        id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        field_code TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
+                        method TEXT NOT NULL CHECK(method = 'label_rule'),
+                        created_at_ms INTEGER NOT NULL,
+                        UNIQUE(run_id, field_code, value, evidence_id)
+                    );
+                    CREATE INDEX field_candidates_run_created ON field_candidates(run_id, created_at_ms);
+                    CREATE TABLE quality_issues (
+                        id TEXT PRIMARY KEY,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        field_code TEXT,
+                        code TEXT NOT NULL CHECK(code IN ('required_missing', 'conflicting_candidates', 'coverage_incomplete')),
+                        severity TEXT NOT NULL CHECK(severity = 'blocking'),
+                        status TEXT NOT NULL CHECK(status = 'open'),
+                        created_at_ms INTEGER NOT NULL,
+                        UNIQUE(run_id, field_code, code)
+                    );
+                    CREATE INDEX quality_issues_run_created ON quality_issues(run_id, created_at_ms);
                     """
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 3")
+                database.execute("PRAGMA user_version = 4")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -255,6 +296,152 @@ class BusinessStore:
                 "ON v.code=t.code AND v.version=t.current_version ORDER BY t.code"
             ).fetchall()
         return tuple(self._template_from_row(row) for row in rows)
+
+    def create_extraction(self, revision_id: str) -> ExtractionRun:
+        """Freeze the document's chosen template version against one parse revision."""
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute(
+                "SELECT d.template_code, d.template_version FROM revisions r "
+                "JOIN documents d ON d.id=r.document_id WHERE r.id=?", (revision_id,)
+            ).fetchone()
+            if row is None:
+                raise BusinessStoreError("Parse revision not found")
+            if row["template_code"] is None or row["template_version"] is None:
+                raise BusinessStoreError("Document has no selected template")
+            now = _now_ms()
+            run = ExtractionRun(
+                id=uuid.uuid4().hex, revision_id=revision_id,
+                template_code=row["template_code"], template_version=row["template_version"],
+                status="running", error_code=None, created_at_ms=now, updated_at_ms=now,
+            )
+            database.execute(
+                "INSERT INTO extraction_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (run.id, run.revision_id, run.template_code, run.template_version,
+                 run.status, run.error_code, run.created_at_ms, run.updated_at_ms),
+            )
+        return run
+
+    def get_extraction(self, run_id: str) -> ExtractionRun | None:
+        with closing(self._connect()) as database:
+            row = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
+        return ExtractionRun(**dict(row)) if row is not None else None
+
+    def list_extractions(self, revision_id: str) -> tuple[ExtractionRun, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM extraction_runs WHERE revision_id=? ORDER BY created_at_ms DESC, id DESC",
+                (revision_id,),
+            ).fetchall()
+        return tuple(ExtractionRun(**dict(row)) for row in rows)
+
+    def add_field_candidate(
+        self, run_id: str, *, field_code: str, value: str, evidence_id: str
+    ) -> FieldCandidate:
+        """Only a frozen snippet from this run's revision can support a candidate."""
+        if not value.strip() or len(value) > 2000:
+            raise BusinessStoreError("Candidate value must be 1-2000 characters")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute(
+                "SELECT x.status, x.template_code, x.template_version, x.revision_id, e.snippet, e.revision_id AS "
+                "evidence_revision_id FROM extraction_runs x JOIN evidence e ON e.id=? WHERE x.id=?",
+                (evidence_id, run_id),
+            ).fetchone()
+            if row is None or row["status"] != "running" or row["evidence_revision_id"] != row["revision_id"]:
+                raise BusinessStoreError("Candidate requires running extraction and evidence from the same revision")
+            fields_row = database.execute(
+                "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
+                (row["template_code"], row["template_version"]),
+            ).fetchone()
+            if fields_row is None or field_code not in {
+                field["code"] for field in json.loads(fields_row["fields_json"])
+            }:
+                raise BusinessStoreError("Candidate field is not in the frozen template")
+            if value not in row["snippet"]:
+                raise BusinessStoreError("Candidate value is absent from frozen source evidence")
+            candidate = FieldCandidate(
+                id=uuid.uuid4().hex, run_id=run_id, field_code=field_code,
+                value=value, evidence_id=evidence_id, method="label_rule", created_at_ms=_now_ms(),
+            )
+            database.execute(
+                "INSERT INTO field_candidates VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (candidate.id, candidate.run_id, candidate.field_code, candidate.value,
+                 candidate.evidence_id, candidate.method, candidate.created_at_ms),
+            )
+        return candidate
+
+    def list_field_candidates(self, run_id: str) -> tuple[FieldCandidate, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM field_candidates WHERE run_id=? ORDER BY created_at_ms, id", (run_id,)
+            ).fetchall()
+        return tuple(FieldCandidate(**dict(row)) for row in rows)
+
+    def finish_extraction(self, run_id: str, *, complete_coverage: bool) -> ExtractionRun:
+        """Generate blocking quality issues only after every source page was scanned."""
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
+            if row is None or row["status"] != "running":
+                raise BusinessStoreError("Extraction is not running")
+            fields_row = database.execute(
+                "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
+                (row["template_code"], row["template_version"]),
+            ).fetchone()
+            if fields_row is None:
+                raise BusinessStoreError("Frozen template version is missing")
+            fields = json.loads(fields_row["fields_json"])
+            candidate_rows = database.execute(
+                "SELECT field_code, value FROM field_candidates WHERE run_id=?", (run_id,)
+            ).fetchall()
+            values_by_field: dict[str, set[str]] = {}
+            for candidate in candidate_rows:
+                values_by_field.setdefault(candidate["field_code"], set()).add(candidate["value"])
+            now = _now_ms()
+            if not complete_coverage:
+                database.execute(
+                    "INSERT INTO quality_issues VALUES (?, ?, NULL, 'coverage_incomplete', 'blocking', 'open', ?)",
+                    (uuid.uuid4().hex, run_id, now),
+                )
+            for field in fields:
+                values = values_by_field.get(field["code"], set())
+                issue_code = (
+                    "required_missing" if complete_coverage and field["required"] and not values
+                    else "conflicting_candidates" if len(values) > 1 else None
+                )
+                if issue_code is not None:
+                    database.execute(
+                        "INSERT INTO quality_issues VALUES (?, ?, ?, ?, 'blocking', 'open', ?)",
+                        (uuid.uuid4().hex, run_id, field["code"], issue_code, now),
+                    )
+            database.execute(
+                "UPDATE extraction_runs SET status='done', updated_at_ms=? WHERE id=?", (now, run_id)
+            )
+        result = self.get_extraction(run_id)
+        assert result is not None
+        return result
+
+    def fail_extraction(self, run_id: str, *, error_code: str) -> ExtractionRun:
+        if not error_code.strip():
+            raise BusinessStoreError("Extraction failure code is required")
+        with closing(self._connect()) as database, database:
+            cursor = database.execute(
+                "UPDATE extraction_runs SET status='failed', error_code=?, updated_at_ms=? "
+                "WHERE id=? AND status='running'", (error_code, _now_ms(), run_id),
+            )
+            if cursor.rowcount != 1:
+                raise BusinessStoreError("Extraction is not running")
+        result = self.get_extraction(run_id)
+        assert result is not None
+        return result
+
+    def list_quality_issues(self, run_id: str) -> tuple[QualityIssue, ...]:
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT * FROM quality_issues WHERE run_id=? ORDER BY created_at_ms, id", (run_id,)
+            ).fetchall()
+        return tuple(QualityIssue(**dict(row)) for row in rows)
 
     def create_document(
         self, upload: StoredUpload, *, original_name: str, template_code: str | None = None

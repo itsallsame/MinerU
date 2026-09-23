@@ -9,7 +9,18 @@ from pydantic import BaseModel, ConfigDict
 
 from ...types import Tier
 from ..documents import UploadError
-from ..domain import BusinessDocument, EvidenceSnapshot, FieldType, IngestTask, ParseRevision, TemplateField, TemplateVersion
+from ..domain import (
+    BusinessDocument,
+    EvidenceSnapshot,
+    ExtractionRun,
+    FieldCandidate,
+    FieldType,
+    IngestTask,
+    ParseRevision,
+    QualityIssue,
+    TemplateField,
+    TemplateVersion,
+)
 from ..services import (
     DocumentWorkflow,
     DocumentWorkflowError,
@@ -17,9 +28,59 @@ from ..services import (
     EvidenceInspection,
     EvidenceReader,
     EvidenceWriter,
+    FieldExtraction,
     NavigationStatus,
 )
 from ..store import BusinessStore, BusinessStoreError
+
+
+class ExtractionRunView(BaseModel):
+    id: str
+    revision_id: str
+    template_code: str
+    template_version: int
+    status: str
+    error_code: str | None
+    created_at_ms: int
+    updated_at_ms: int
+
+    @classmethod
+    def from_record(cls, run: ExtractionRun) -> ExtractionRunView:
+        return cls(**vars(run))
+
+
+class FieldCandidateView(BaseModel):
+    id: str
+    run_id: str
+    field_code: str
+    value: str
+    evidence_id: str
+    method: str
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, candidate: FieldCandidate) -> FieldCandidateView:
+        return cls(**vars(candidate))
+
+
+class QualityIssueView(BaseModel):
+    id: str
+    run_id: str
+    field_code: str | None
+    code: str
+    severity: str
+    status: str
+    created_at_ms: int
+
+    @classmethod
+    def from_record(cls, issue: QualityIssue) -> QualityIssueView:
+        return cls(**vars(issue))
+
+
+class ExtractionResultView(BaseModel):
+    run: ExtractionRunView
+    candidates: list[FieldCandidateView]
+    issues: list[QualityIssueView]
 
 
 class TemplateFieldView(BaseModel):
@@ -166,10 +227,41 @@ class EvidenceCaptureRequest(BaseModel):
 
 
 def create_app(
-    *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader, evidence_writer: EvidenceWriter
+    *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader,
+    evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
 ) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     app = FastAPI(title="MinerU Business Documents", version="0.1.0")
+
+    @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=201)
+    def extract_fields(revision_id: str) -> ExtractionRunView:
+        if field_extraction is None:
+            raise HTTPException(status_code=503, detail="Field extraction is not configured")
+        try:
+            run = field_extraction.run(revision_id)
+        except BusinessStoreError as exc:
+            status_code = 404 if str(exc) == "Parse revision not found" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        return ExtractionRunView.from_record(run)
+
+    @app.get("/api/business/revisions/{revision_id}/extractions", response_model=list[ExtractionRunView])
+    def list_extractions(revision_id: str) -> list[ExtractionRunView]:
+        if store.get_revision(revision_id) is None:
+            raise HTTPException(status_code=404, detail="Revision not found")
+        return [ExtractionRunView.from_record(run) for run in store.list_extractions(revision_id)]
+
+    @app.get("/api/business/extractions/{run_id}", response_model=ExtractionResultView)
+    def get_extraction(run_id: str) -> ExtractionResultView:
+        run = store.get_extraction(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Extraction not found")
+        return ExtractionResultView(
+            run=ExtractionRunView.from_record(run),
+            candidates=[FieldCandidateView.from_record(item) for item in store.list_field_candidates(run_id)]
+            if run.status == "done" else [],
+            issues=[QualityIssueView.from_record(item) for item in store.list_quality_issues(run_id)]
+            if run.status == "done" else [],
+        )
 
     @app.get("/api/business/templates", response_model=list[TemplateView])
     def list_templates() -> list[TemplateView]:
@@ -290,6 +382,10 @@ __all__ = [
     "EvidenceCaptureRequest",
     "EvidenceInspectionView",
     "EvidenceView",
+    "ExtractionResultView",
+    "ExtractionRunView",
+    "FieldCandidateView",
+    "QualityIssueView",
     "RevisionView",
     "SubmissionView",
     "TaskView",

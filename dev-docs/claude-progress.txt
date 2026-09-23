@@ -164,6 +164,16 @@ Verification: Full business suite 65 passed, 2 warnings (46.48 s) with local soc
 Evidence: dev-docs/evidence/2026-09-23-p3-template-binding.md
 Next: Extract evidence-backed field candidates from the selected historical parse and issue required-field quality problems; then implement review/confirmation.
 
+=== 2026-09-23 Session 15 (Evidence-backed field candidates) ===
+Status: In progress; P3 review/result, richer extraction, async execution and target deployment remain open
+Changes:
+- Added extraction runs bound to the frozen template and selected parse revision, with evidence-backed unconfirmed label-rule candidates and blocking quality issues.
+- Partial parse coverage does not create false required-field-missing issues; failed runs hide partial candidates through the open API.
+- Added live Doclib reparse test showing old extraction retains old source while current locator changes.
+Verification: 73 business tests passed/2 warnings on Mac with local sockets; Ruff passed.
+Evidence: dev-docs/evidence/2026-09-23-p3-evidence-backed-candidates.md
+Next: Implement persistent asynchronous extraction and review/confirmation state machine; expand field methods and real-sample accuracy checks.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.
