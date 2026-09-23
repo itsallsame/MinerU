@@ -113,6 +113,16 @@ Evidence: dev-docs/evidence/2026-09-23-p1-progress.md and dev-docs/evidence/2026
 Limits: no real Linux amd64 image build, incremental transfer measurement, Compose runtime isolation test, Kylin GPU/model check, reverse-proxy upload limit, or complete product workflow. Release manifest does not yet record business API image.
 Next: close release-manifest API image gap and verify network/runtime boundary when target artifacts are available; continue evidence-service business contract on Mac.
 
+=== 2026-09-23 Session 10 (Dual-image offline release record) ===
+Status: In progress; P1 target build/runtime and P3 product workflow remain open
+Changes:
+- Release record schema 2 now requires distinct worker and business API image IDs, checks both image architectures and revision/base labels, and records both with the model/wheelhouse identity.
+- Updated offline delivery commands and P1 evidence; target Linux/Kylin validation remains explicitly open.
+Verification: 4 release-manifest tests and all 53 business tests pass, including a simulated CLI invocation; ruff checks pass. No real amd64 image inspect was available.
+Evidence: dev-docs/evidence/2026-09-23-p1-progress.md
+Limits: no real offline image build or target GPU/model validation; frontend, Skill and product workflow remain incomplete.
+Next: Continue P3 evidence-service contract and API, then frontend/Skill; return to P1/P6 target checks when hardware artifacts exist.
+
 === Known constraints and unresolved inputs ===
 
 - Kylin version, GPU model/driver/VRAM and exact offline import policy are not yet provided; Mac development can proceed, production acceptance cannot be asserted.

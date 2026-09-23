@@ -37,10 +37,25 @@ def _image_info(reference: str) -> dict[str, Any]:
     return data
 
 
+def _validated_image_id(label: str, image: dict[str, Any], *, revision: str | None = None, base_id: str | None = None) -> str:
+    if image.get("Os") != "linux" or image.get("Architecture") != "amd64":
+        raise ValueError(f"{label} image is not linux/amd64")
+    image_id = image.get("Id")
+    if not isinstance(image_id, str) or not IMAGE_ID_RE.fullmatch(image_id):
+        raise ValueError(f"{label} image has no immutable SHA-256 ID")
+    labels = (image.get("Config") or {}).get("Labels") or {}
+    if revision is not None and labels.get("org.opencontainers.image.revision") != revision:
+        raise ValueError(f"{label} image revision label differs from the checked-out source")
+    if base_id is not None and labels.get("org.opencontainers.image.base.id") != base_id:
+        raise ValueError(f"{label} image base label differs from the inspected base image")
+    return image_id
+
+
 def build_release_record(
     *,
     revision: str,
     worker: dict[str, Any],
+    business: dict[str, Any],
     base: dict[str, Any],
     wheelhouse: Path,
     model_manifest: Path,
@@ -48,16 +63,11 @@ def build_release_record(
 ) -> dict[str, Any]:
     if not COMMIT_RE.fullmatch(revision):
         raise ValueError("Source revision must be a full lowercase Git commit SHA")
-    for label, image in (("worker", worker), ("base", base)):
-        if image.get("Os") != "linux" or image.get("Architecture") != "amd64":
-            raise ValueError(f"{label} image is not linux/amd64")
-        if not isinstance(image.get("Id"), str) or not IMAGE_ID_RE.fullmatch(image["Id"]):
-            raise ValueError(f"{label} image has no immutable SHA-256 ID")
-    labels = (worker.get("Config") or {}).get("Labels") or {}
-    if labels.get("org.opencontainers.image.revision") != revision:
-        raise ValueError("Worker image revision label differs from the checked-out source")
-    if labels.get("org.opencontainers.image.base.id") != base["Id"]:
-        raise ValueError("Worker image base label differs from the inspected base image")
+    base_id = _validated_image_id("base", base)
+    worker_id = _validated_image_id("worker", worker, revision=revision, base_id=base_id)
+    business_id = _validated_image_id("business", business, revision=revision, base_id=base_id)
+    if worker_id == business_id:
+        raise ValueError("Worker and business images must have distinct IDs")
     if not wheelhouse.is_dir() or wheelhouse.is_symlink():
         raise ValueError("Wheelhouse directory is missing or is a symlink")
     wheel_files = sorted(path for path in wheelhouse.rglob("*") if path.is_file())
@@ -80,11 +90,12 @@ def build_release_record(
     if previous_release is not None and (not previous_release.is_file() or previous_release.is_symlink()):
         raise ValueError("Previous release manifest is missing")
     return {
-        "schema": 1,
+        "schema": 2,
         "source_revision": revision,
         "platform": "linux/amd64",
-        "worker_image_id": worker["Id"],
-        "base_image_id": base["Id"],
+        "worker_image_id": worker_id,
+        "business_image_id": business_id,
+        "base_image_id": base_id,
         "model": {
             "source": "local",
             "small_backend": "torch",
@@ -102,6 +113,7 @@ def build_release_record(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--worker-image", required=True)
+    parser.add_argument("--business-image", required=True)
     parser.add_argument("--base-image", required=True)
     parser.add_argument("--wheelhouse", required=True, type=Path)
     parser.add_argument("--model-manifest", required=True, type=Path)
@@ -117,6 +129,7 @@ def main() -> int:
         record = build_release_record(
             revision=revision,
             worker=_image_info(args.worker_image),
+            business=_image_info(args.business_image),
             base=_image_info(args.base_image),
             wheelhouse=args.wheelhouse,
             model_manifest=args.model_manifest,

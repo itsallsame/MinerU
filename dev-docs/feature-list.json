@@ -308,7 +308,7 @@
       "description": "完成并验证：锁定源码提交写入构建标签",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -330,7 +330,7 @@
       "description": "完成并验证：本地源码安装取代包索引安装",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -352,7 +352,7 @@
       "description": "完成并验证：移除构建期模型下载",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -374,7 +374,7 @@
       "description": "完成并验证：构建上下文排除模型目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -396,7 +396,7 @@
       "description": "完成并验证：构建上下文排除用户文档目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -418,7 +418,7 @@
       "description": "完成并验证：构建上下文排除文档库数据目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -440,7 +440,7 @@
       "description": "完成并验证：构建上下文排除业务数据库文件",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -462,7 +462,7 @@
       "description": "完成并验证：配置只读模型挂载目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -484,7 +484,7 @@
       "description": "完成并验证：配置持久文档库目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -506,7 +506,7 @@
       "description": "完成并验证：配置持久业务数据目录",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -528,7 +528,7 @@
       "description": "完成并验证：启动时强制本地模型源",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -550,7 +550,7 @@
       "description": "完成并验证：禁用生产云端解析回退",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -572,7 +572,7 @@
       "description": "完成并验证：禁用生产远程VLM回退",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -594,7 +594,7 @@
       "description": "完成并验证：模型目录缺失时启动失败",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -616,7 +616,7 @@
       "description": "完成并验证：模型校验失败时启动失败",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -638,7 +638,7 @@
       "description": "完成并验证：记录实际MinerU源码版本",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -660,7 +660,7 @@
       "description": "完成并验证：记录模型目录和后端组合",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -682,7 +682,7 @@
       "description": "完成并验证：锁定Python依赖版本",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -704,7 +704,7 @@
       "description": "完成并验证：准备离线Python依赖仓库",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -726,7 +726,7 @@
       "description": "完成并验证：准备前端离线依赖策略",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -748,7 +748,7 @@
       "description": "完成并验证：准备离线系统依赖清单",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -770,7 +770,7 @@
       "description": "完成并验证：校验离线制品SHA256",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -792,7 +792,7 @@
       "description": "完成并验证：校验镜像架构为amd64",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -814,7 +814,7 @@
       "description": "完成并验证：限制MinerU内部接口网络暴露",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -836,7 +836,7 @@
       "description": "完成并验证：配置NVIDIA设备可见性",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -858,7 +858,7 @@
       "description": "完成并验证：验证仅业务代码变更不触碰模型",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -880,7 +880,7 @@
       "description": "完成并验证：验证仅模型变更不重建业务镜像",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -902,7 +902,7 @@
       "description": "完成并验证：生成可回滚的发布清单",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -924,7 +924,7 @@
       "description": "完成并验证：记录断网启动验收步骤",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
@@ -946,7 +946,7 @@
       "description": "完成并验证：保留旧镜像与模型版本用于回退",
       "dependencies": [],
       "files": [
-        "docker/business/Dockerfile",
+        "docker/business-api/Dockerfile",
         "docker/worker/Dockerfile",
         "docker/compose.business.yaml",
         "config/business.example.yaml"
