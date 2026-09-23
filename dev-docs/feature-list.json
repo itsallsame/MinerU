@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 57,
+  "completed_features": 58,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3807,7 +3807,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Doclib 当前无按批次取消公共契约，解析批次还可能跨业务文档复用；不能用前端隐藏或单改业务状态冒充停 GPU。目标语义和待实现测试见 dev-docs/2026-09-23-task-cancellation-design.md。保持未完成。"
     },
     {
       "id": "FE-017",
@@ -4157,9 +4157,9 @@
         "实现：人工字段修改表单",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Playwright 通过页面表单用 Enter 提交人工修订值、证据与原因，验证新的决定与再次确认入口；后端复核结果测试证明旧成果不可变。证据：dev-docs/evidence/2026-09-23-manual-field-edit.md"
     },
     {
       "id": "FE-033",

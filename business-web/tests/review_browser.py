@@ -131,14 +131,24 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             def decide(route: object) -> None:
                 payload = json.loads(route.request.post_data)
                 writes.append(("decision", payload))
-                assert payload == {
-                    "value": "年度通知", "evidence_id": "evidence-1", "source": "web", "reason": None,
-                }
-                decision = {
-                    "id": "decision-1", "run_id": run["id"], "field_code": "title", "previous_value": None,
-                    "value": "年度通知", "evidence_id": evidence["id"], "basis": "candidate_acceptance",
-                    "source": "web", "reason": None, "created_at_ms": now,
-                }
+                if not decisions:
+                    assert payload == {
+                        "value": "年度通知", "evidence_id": "evidence-1", "source": "web", "reason": None,
+                    }
+                    decision = {
+                        "id": "decision-1", "run_id": run["id"], "field_code": "title", "previous_value": None,
+                        "value": "年度通知", "evidence_id": evidence["id"], "basis": "candidate_acceptance",
+                        "source": "web", "reason": None, "created_at_ms": now,
+                    }
+                else:
+                    assert payload == {
+                        "value": "规范化标题", "evidence_id": "evidence-1", "source": "web", "reason": "按业务规则规范化",
+                    }
+                    decision = {
+                        "id": "decision-2", "run_id": run["id"], "field_code": "title", "previous_value": "年度通知",
+                        "value": "规范化标题", "evidence_id": evidence["id"], "basis": "manual_correction",
+                        "source": "web", "reason": "按业务规则规范化", "created_at_ms": now + 1,
+                    }
                 decisions.append(decision)
                 fulfill(route, decision, 201)
 
@@ -256,14 +266,15 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             assert "标题：年度通知" in markdown and "evidence-1" in markdown
             assert "candidate-1" not in markdown
             assert [name for name, _payload in writes] == ["decision", "resolution", "confirmation"]
-            decisions.append({
-                "id": "decision-2", "run_id": run["id"], "field_code": "title",
-                "previous_value": "年度通知", "value": "规范化标题", "evidence_id": evidence["id"],
-                "basis": "manual_correction", "source": "api", "reason": "按业务规则规范化",
-                "created_at_ms": now + 1,
-            })
-            page.locator('select[aria-label="选择解析修订"]').select_option("rev-1")
+            page.get_by_label("标题的复核值").fill("规范化标题")
+            page.get_by_label("标题的证据").select_option("evidence-1")
+            page.get_by_label("标题的修订原因").fill("按业务规则规范化")
+            page.get_by_role("button", name="保存复核决定").focus()
+            page.keyboard.press("Enter")
             page.get_by_text("已复核：规范化标题").wait_for()
+            assert page.locator(".field-review").evaluate("node => document.activeElement === node")
+            assert [name for name, _payload in writes] == ["decision", "resolution", "confirmation", "decision"]
+            assert confirm_button.is_enabled(), "new manual decision must allow a new result version"
             page.get_by_role("button", name="查看已复核字段的证据").click()
             page.get_by_text("该复核值不在冻结片段中逐字出现").wait_for()
             assert page.locator(".evidence-snippet mark").count() == 0

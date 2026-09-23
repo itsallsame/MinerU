@@ -561,3 +561,13 @@ Changes:
 Verification: Playwright failure/retry browser scenario covered failed 503 then successful retry, uploaded recovery and stale error; backend document workflow 10 tests passed; Web 11 tests/8-asset build passed. No target-machine run.
 Evidence: dev-docs/evidence/2026-09-23-task-failure-guidance.md
 Next: Design/implement true task cancellation with explicit worker semantics, then remaining P4 review-edit gaps and real Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 54 (Manual field edit and cancellation boundary) ===
+Status: In progress; FE-032 verified complete (58/241 passed); FE-016 remains incomplete
+Changes:
+- Replaced a simulated external field decision in the browser review test with actual Web form input, evidence selection, reason and Enter-key submission.
+- Documented why current Doclib batch reuse and missing cancel API make a simple cancel button misleading; specified the queue/shared/running/completion-race semantics required before FE-016 can pass.
+- Kept the open system without user or permission model and made no old-data compatibility promise.
+Verification: Web 11 unit tests/8-asset offline build; Playwright full review workflow with manual correction passed; backend review results 9 passed/2 existing dependency warnings. No real samples or target-machine run.
+Evidence: dev-docs/evidence/2026-09-23-manual-field-edit.md; dev-docs/2026-09-23-task-cancellation-design.md
+Next: Implement Doclib-aware cancellation or continue other P4 gaps while preserving truthful FE-016 status; obtain real samples and isolated Kylin/NVIDIA artifacts for P1/P6. Keep goal active.
