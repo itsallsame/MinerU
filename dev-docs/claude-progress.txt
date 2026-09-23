@@ -236,3 +236,13 @@ Changes:
 Verification: pnpm test 7 passed, pnpm build 7 offline assets, Ruff/diff check passed; business suite 88 passed/2 dependency warnings; Playwright synthetic-record review and original upload/library smoke passed, including narrow-screen width.
 Evidence: dev-docs/evidence/2026-09-23-p4-review-workbench.md
 Next: Finish P4 search/structure/template/quality UX and real document browser flow; continue offline/Kylin source-build/model and Skill/target gates. Do not mark P4 or production complete from Mac mocks.
+
+=== 2026-09-23 Session 21 (Own business Skill first slice) ===
+Status: In progress; P5 search/locator/structure and P1/P4/P6 gates remain open
+Changes:
+- Added fork-owned `business-documents` Agent Skill and standard-library business API client. It uses only /api/business, supports capability-checked streaming uploads, task/extraction status, evidence, machine draft and confirmed-result reads.
+- Kept the Skill open-system and offline-oriented: no identity/auth model, no auto-confirm command, public IP literals/non-internal hostnames rejected, no official Skill/Doclib/model service fallback.
+- Corrected stale P5 feature SKL-014 from an authorization concept to nonexistent-document/service-unavailable errors, consistent with the user's open-system requirement.
+Verification: Skill quick_validate and Ruff passed; P5 contract tests 5 passed using actual FastAPI with a Doclib test double; full business suite 93 passed/2 dependency warnings on Mac.
+Evidence: dev-docs/evidence/2026-09-23-p5-business-skill-first-slice.md
+Next: Add business-scoped search/locator/structure APIs and corresponding Web/Skill flows, then real-document and offline target evidence. Do not claim P5 or production complete.

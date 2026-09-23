@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 25,
+  "completed_features": 40,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4575,9 +4575,9 @@
         "实现：自有Skill元信息",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-002",
@@ -4597,9 +4597,9 @@
         "实现：Skill安装说明",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-003",
@@ -4619,9 +4619,9 @@
         "实现：Skill业务API连接配置",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-004",
@@ -4641,9 +4641,9 @@
         "实现：Skill开放API地址与隔离边界说明",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-005",
@@ -4663,9 +4663,9 @@
         "实现：Skill文档提交命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-006",
@@ -4685,9 +4685,9 @@
         "实现：Skill任务状态查询命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-007",
@@ -4707,9 +4707,9 @@
         "实现：Skill字段候选读取命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-008",
@@ -4729,9 +4729,9 @@
         "实现：Skill质量问题读取命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-009",
@@ -4795,9 +4795,9 @@
         "实现：Skill已确认成果读取命令",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-012",
@@ -4817,9 +4817,9 @@
         "实现：Skill草稿状态明确标记",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-013",
@@ -4848,8 +4848,8 @@
       "phase": "P5",
       "category": "skill",
       "priority": "P1",
-      "name": "Skill无权文档拒绝",
-      "description": "完成并验证：Skill无权文档拒绝",
+      "name": "Skill不存在文档与不可达服务错误",
+      "description": "开放系统不设用户权限；完成并验证不存在业务文档与业务服务不可达时的明确错误，不伪装成授权拒绝。",
       "dependencies": [
         "FE-001"
       ],
@@ -4858,12 +4858,12 @@
         "tests/business/test_skill_contract.py"
       ],
       "steps": [
-        "实现：Skill无权文档拒绝",
+        "实现：Skill不存在文档与不可达服务错误",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-015",
@@ -4883,9 +4883,9 @@
         "实现：Skill禁止直连MinerU原始API",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-016",
@@ -4905,9 +4905,9 @@
         "实现：Skill禁止自动确认结果",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-017",
@@ -4949,9 +4949,9 @@
         "实现：Skill远程上传能力禁用",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-019",
@@ -4971,9 +4971,9 @@
         "实现：Skill故障错误解释",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；麒麟与真实模型未验收。"
     },
     {
       "id": "SKL-020",
