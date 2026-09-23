@@ -29,7 +29,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 
 class BusinessStoreError(ValueError):
@@ -98,7 +98,13 @@ class BusinessStore:
                         storage_key TEXT NOT NULL UNIQUE,
                         sha256 TEXT NOT NULL,
                         size INTEGER NOT NULL CHECK(size > 0),
-                        created_at_ms INTEGER NOT NULL
+                        created_at_ms INTEGER NOT NULL,
+                        template_code TEXT,
+                        template_version INTEGER,
+                        CHECK ((template_code IS NULL AND template_version IS NULL) OR
+                               (template_code IS NOT NULL AND template_version IS NOT NULL)),
+                        FOREIGN KEY (template_code, template_version)
+                            REFERENCES template_versions(code, version) ON DELETE RESTRICT
                     );
                     CREATE INDEX documents_created ON documents(created_at_ms);
                     CREATE TABLE tasks (
@@ -153,12 +159,12 @@ class BusinessStore:
                         created_at_ms INTEGER NOT NULL,
                         PRIMARY KEY (code, version)
                     );
-                    PRAGMA user_version = 2;
-                    COMMIT;
                     """
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
+                database.execute("PRAGMA user_version = 3")
+                database.execute("COMMIT")
 
     @staticmethod
     def _fields_json(fields: tuple[TemplateField, ...]) -> str:
@@ -250,30 +256,41 @@ class BusinessStore:
             ).fetchall()
         return tuple(self._template_from_row(row) for row in rows)
 
-    def create_document(self, upload: StoredUpload, *, original_name: str) -> BusinessDocument:
-        document = self._new_document(upload, original_name=original_name)
+    def create_document(
+        self, upload: StoredUpload, *, original_name: str, template_code: str | None = None
+    ) -> BusinessDocument:
         with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            template_version = self._resolve_template_version(database, template_code)
+            document = self._new_document(
+                upload, original_name=original_name, template_code=template_code, template_version=template_version
+            )
             self._insert_document(database, document)
         return document
 
     def create_document_with_task(
-        self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None
+        self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None,
+        template_code: str | None = None,
     ) -> tuple[BusinessDocument, IngestTask]:
         """Persist a document and recoverable initial task in one transaction."""
-        document = self._new_document(upload, original_name=original_name)
-        now = _now_ms()
-        task = IngestTask(
-            id=uuid.uuid4().hex,
-            document_id=document.id,
-            requested_tier=requested_tier,
-            actual_tier=None,
-            status="uploaded",
-            parse_ids=(),
-            error_code=None,
-            created_at_ms=now,
-            updated_at_ms=now,
-        )
         with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            template_version = self._resolve_template_version(database, template_code)
+            document = self._new_document(
+                upload, original_name=original_name, template_code=template_code, template_version=template_version
+            )
+            now = _now_ms()
+            task = IngestTask(
+                id=uuid.uuid4().hex,
+                document_id=document.id,
+                requested_tier=requested_tier,
+                actual_tier=None,
+                status="uploaded",
+                parse_ids=(),
+                error_code=None,
+                created_at_ms=now,
+                updated_at_ms=now,
+            )
             self._insert_document(database, document)
             database.execute(
                 "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -282,7 +299,20 @@ class BusinessStore:
         return document, task
 
     @staticmethod
-    def _new_document(upload: StoredUpload, *, original_name: str) -> BusinessDocument:
+    def _resolve_template_version(database: sqlite3.Connection, code: str | None) -> int | None:
+        if code is None:
+            return None
+        row = database.execute(
+            "SELECT current_version FROM templates WHERE code=? AND enabled=1", (code,)
+        ).fetchone()
+        if row is None:
+            raise BusinessStoreError("Selected template does not exist or is disabled")
+        return int(row["current_version"])
+
+    @staticmethod
+    def _new_document(
+        upload: StoredUpload, *, original_name: str, template_code: str | None, template_version: int | None
+    ) -> BusinessDocument:
         if not original_name.strip():
             raise BusinessStoreError("Original document name is required")
         if not _SHA256_RE.fullmatch(upload.sha256) or upload.size < 1:
@@ -297,12 +327,14 @@ class BusinessStore:
             sha256=upload.sha256,
             size=upload.size,
             created_at_ms=_now_ms(),
+            template_code=template_code,
+            template_version=template_version,
         )
 
     @staticmethod
     def _insert_document(database: sqlite3.Connection, document: BusinessDocument) -> None:
         database.execute(
-            "INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 document.id,
                 document.original_name,
@@ -310,6 +342,8 @@ class BusinessStore:
                 document.sha256,
                 document.size,
                 document.created_at_ms,
+                document.template_code,
+                document.template_version,
             ),
         )
 

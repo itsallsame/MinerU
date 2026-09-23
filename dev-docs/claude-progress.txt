@@ -144,8 +144,6 @@ Evidence: dev-docs/evidence/2026-09-23-p3-versioned-evidence.md
 Limits: no real target Linux/GPU/container test, no guaranteed retention under manual cleanup or storage loss, no business field generation or review/result workflow.
 Next: Build template/field candidate domain and extraction against versioned evidence; design consistent backup/restore and disk retention before production acceptance.
 
-=== Known constraints and unresolved inputs ===
-
 === 2026-09-23 Session 13 (Open versioned template contract) ===
 Status: In progress; P3 template binding/extraction/review/result remain open
 Changes:
@@ -155,6 +153,16 @@ Changes:
 Verification: 10 focused tests and Ruff pass. Full business suite rerun with permitted local socket binds: 62 passed, 2 warnings (45.27 s). The initial sandbox-denied socket run was environmental.
 Evidence: dev-docs/evidence/2026-09-23-p3-template-contract.md
 Next: Bind a template version to each document/extraction run, generate evidence-backed field candidates and quality issues, then review/confirmed result workflows.
+
+=== 2026-09-23 Session 14 (Document template binding) ===
+Status: In progress; P3 extraction/review/result and target deployment remain open
+Changes:
+- Added optional template selection on upload, frozen template version in the same document/task transaction, and template fields in document API.
+- Unknown/disabled templates fail before Doclib submission and trigger unregistered upload cleanup; schema 3 rejects prior prototypes without migration.
+- Made default-template seeding and schema initialization one atomic transaction.
+Verification: Full business suite 65 passed, 2 warnings (46.48 s) with local sockets permitted; Ruff passed.
+Evidence: dev-docs/evidence/2026-09-23-p3-template-binding.md
+Next: Extract evidence-backed field candidates from the selected historical parse and issue required-field quality problems; then implement review/confirmation.
 
 === Known constraints and unresolved inputs ===
 

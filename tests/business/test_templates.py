@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -9,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
+from mineru.business.documents import ImmutableUploadStore
 from mineru.business.domain import TemplateField
 from mineru.business.store import BusinessStore, BusinessStoreError
 
@@ -81,3 +83,29 @@ def test_template_api_is_open_and_old_version_is_readable(tmp_path: Path) -> Non
     assert client.get("/api/business/templates/sample?version=1").json()["fields"][0]["code"] == "title"
     assert client.get("/api/business/templates/sample?version=3").status_code == 404
     assert client.post("/api/business/templates/sample/disable").json()["enabled"] is False
+
+
+def test_document_freezes_selected_template_version_without_user_identity(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    uploads = ImmutableUploadStore(tmp_path, max_bytes=1024)
+    first = store.create_template(code="my_report", name="我的报告", fields=(TemplateField("title", "标题"),))
+    old_document = store.create_document(
+        uploads.store(io.BytesIO(b"<h1>First</h1>"), filename="first.html"),
+        original_name="first.html", template_code="my_report",
+    )
+    store.update_template("my_report", name="二版", fields=(TemplateField("date", "日期", "date"),))
+    new_document = store.create_document(
+        uploads.store(io.BytesIO(b"<h1>Second</h1>"), filename="second.html"),
+        original_name="second.html", template_code="my_report",
+    )
+    assert old_document.template_code == new_document.template_code == first.code
+    assert old_document.template_version == 1
+    assert new_document.template_version == 2
+    assert store.get_document(old_document.id) == old_document
+    assert not hasattr(old_document, "owner_id")
+    store.disable_template("my_report")
+    with pytest.raises(BusinessStoreError, match="disabled"):
+        store.create_document(
+            uploads.store(io.BytesIO(b"<h1>Third</h1>"), filename="third.html"),
+            original_name="third.html", template_code="my_report",
+        )

@@ -69,6 +69,8 @@ class DocumentView(BaseModel):
     sha256: str
     size: int
     created_at_ms: int
+    template_code: str | None
+    template_version: int | None
 
     @classmethod
     def from_record(cls, document: BusinessDocument) -> DocumentView:
@@ -78,6 +80,8 @@ class DocumentView(BaseModel):
             sha256=document.sha256,
             size=document.size,
             created_at_ms=document.created_at_ms,
+            template_code=document.template_code,
+            template_version=document.template_version,
         )
 
 
@@ -207,11 +211,14 @@ def create_app(
         return TemplateView.from_record(template)
 
     @app.post("/api/business/documents", response_model=SubmissionView, status_code=202)
-    def submit_document(file: Annotated[UploadFile, File()], tier: Annotated[Tier | None, Form()] = None) -> SubmissionView:
+    def submit_document(
+        file: Annotated[UploadFile, File()], tier: Annotated[Tier | None, Form()] = None,
+        template_code: Annotated[str | None, Form()] = None,
+    ) -> SubmissionView:
         if not file.filename:
             raise HTTPException(status_code=422, detail="File name is required")
         try:
-            result = workflow.submit(file.file, filename=file.filename, tier=tier)
+            result = workflow.submit(file.file, filename=file.filename, tier=tier, template_code=template_code)
         except UploadError as exc:
             status_code = 413 if "exceeds" in str(exc) else 422
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc

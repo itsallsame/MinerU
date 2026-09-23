@@ -18,6 +18,8 @@ class BusinessDocument:
     sha256: str
     size: int
     created_at_ms: int
+    template_code: str | None
+    template_version: int | None
 
 
 @dataclass(frozen=True)
