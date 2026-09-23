@@ -78,6 +78,8 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             ))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, [run]))
             page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, [evidence]))
+            page.route("**/api/business/revisions/rev-0/extractions", lambda route: fulfill(route, []))
+            page.route("**/api/business/revisions/rev-0/evidence", lambda route: fulfill(route, []))
             page.route("**/api/business/revisions/rev-1/outline", lambda route: fulfill(route, {
                 "revision_id": "rev-1", "scanned_pages": 1, "next_page": None,
                 "items": [{"level": 1, "title": "年度通知目录", "page_no": 1,
@@ -186,6 +188,17 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 notice.pdf，已解析").click()
             page.get_by_text("机器候选 · 未确认").wait_for()
+            page.locator('select[aria-label="选择解析修订"]').select_option("rev-0")
+            page.get_by_text("解析页范围：1-2", exact=False).wait_for()
+            page.get_by_label("历史解析页码").fill("1")
+            page.get_by_role("button", name="读取这一页").click()
+            page.locator(".historical-content").get_by_text("# 旧版标题").wait_for()
+            page.locator('select[aria-label="选择解析修订"]').select_option("rev-1")
+            page.get_by_text("机器候选 · 未确认").wait_for()
+            assert page.locator(".historical-content").count() == 0, "old revision text leaked into current revision"
+            page.get_by_label("历史解析页码").fill("1")
+            page.get_by_role("button", name="读取这一页").click()
+            page.locator(".historical-content").get_by_text("# 年度通知目录").wait_for()
             source_page = page.get_by_label("查看 PDF 原文页码")
             source_page.fill("2")
             page.get_by_role("button", name="打开页并查关联字段").click()
@@ -206,7 +219,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="读取标题目录").click()
             page.get_by_text("年度通知目录 · 第 1 页").wait_for()
             page.get_by_role("button", name="读取所在页").click()
-            page.get_by_text("# 年度通知目录").wait_for()
+            page.locator(".historical-content").get_by_text("# 年度通知目录").wait_for()
             structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="原生解析块结构"))
             structure.get_by_role("button", name="查看本页块").click()
             structure.get_by_text("年度通知原生标题").wait_for()

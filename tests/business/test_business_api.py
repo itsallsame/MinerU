@@ -233,6 +233,17 @@ def test_open_document_library_capabilities_and_source(tmp_path: Path) -> None:
     pdf_source = client.get(f"/api/business/documents/{second.id}/source")
     assert pdf_source.status_code == 200
     assert pdf_source.headers["content-disposition"].startswith("inline;")
+    office = uploads.store(io.BytesIO(b"mock-office"), filename="report.docx")
+    image = uploads.store(io.BytesIO(b"mock-image"), filename="scan.png")
+    office_document, _ = store.create_document_with_task(office, original_name="report.docx", requested_tier=None)
+    image_document, _ = store.create_document_with_task(image, original_name="scan.png", requested_tier="flash")
+    office_source = client.get(f"/api/business/documents/{office_document.id}/source")
+    assert office_source.content == b"mock-office"
+    assert office_source.headers["content-disposition"].startswith("attachment;")
+    assert office_source.headers["x-content-type-options"] == "nosniff"
+    image_source = client.get(f"/api/business/documents/{image_document.id}/source")
+    assert image_source.content == b"mock-image"
+    assert image_source.headers["content-disposition"].startswith("inline;")
     assert client.get("/api/business/documents/unknown/source").status_code == 404
     assert client.head("/api/business/documents/unknown/source").status_code == 404
     assert first_task.document_id == first.id

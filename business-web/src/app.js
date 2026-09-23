@@ -494,10 +494,13 @@ function renderDetail() {
       source.append(retrySource);
     }
   } else {
-    const download = element("a", "", kind === "download" ? "下载原文件 ↗" : "在新窗口打开原文 ↗");
+    const download = element("a", "", kind === "download" ? "下载原文件 ↓" : "在新窗口打开原文 ↗");
     download.href = sourceUrl;
-    download.target = "_blank";
-    download.rel = "noopener noreferrer";
+    if (kind === "download") download.download = record.original_name;
+    else {
+      download.target = "_blank";
+      download.rel = "noopener noreferrer";
+    }
     const sourceActions = element("div", "detail-actions");
     sourceActions.append(download);
     source.append(sourceActions);
