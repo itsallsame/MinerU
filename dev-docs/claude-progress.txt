@@ -608,3 +608,13 @@ Changes: Browser regression switches the same business document old→new revisi
 Verification: Playwright review workflow and backend revision-bound historical read tests passed. Real business samples and Kylin/NVIDIA environment remain unverified.
 Evidence: dev-docs/evidence/2026-09-23-source-formats-revisions.md
 Next: FE-016 true cancellation, FE-033 structure edit, FE-046/047/050 broader UX tests and offline target gates. Keep goal active.
+
+=== 2026-09-24 Session 56 (Structure-edit scope boundary) ===
+Status: In progress; FE-033 remains incomplete (63/241 passed)
+Changes:
+- Audited the current revision-bound native block tree against review/evidence persistence: it is machine-generated, read-only, and child paths do not have independent precise locators.
+- Documented immutable overlay constraints and two materially different edit scopes; asked the user to choose before committing a schema/API that could invalidate evidence semantics.
+- Reaffirmed no user or permission model; review actions remain content-state changes.
+Verification: Read-only code/design inspection and JSON/diff validation; no FE-033 implementation or target-machine claim.
+Evidence: dev-docs/2026-09-24-structure-edit-scope.md
+Next: Use the chosen scope to implement append-only structure decisions through store/API/Web/Skill with identity and browser tests; continue FE-016 and offline gates. Keep goal active.

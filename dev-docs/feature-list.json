@@ -4181,7 +4181,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "当前仅有只读原生块树；人工修改范围（类型/标题级别，或还包括文本与父子关系）已向用户确认中。共同不可变性、证据与验收约束见 dev-docs/2026-09-24-structure-edit-scope.md。保持未完成。"
     },
     {
       "id": "FE-034",
