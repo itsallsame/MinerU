@@ -4135,9 +4135,9 @@
         "实现：原文与字段双向联动",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "实现可信的页级双向联动：PDF 输入页码或图片原图入口可列当前修订该页已冻结证据及当前运行关联字段，字段经证据核验可回到 PDF 页/原图；变化或不可用不可靠回跳。浏览器内嵌 PDF 无法回传原生文字选区，故不承诺像素级点击/高亮；无冻结证据不推断无字段。Web test/build 与 Playwright PDF、图片、深链回归通过。"
     },
     {
       "id": "FE-032",

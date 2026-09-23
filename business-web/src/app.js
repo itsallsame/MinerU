@@ -21,17 +21,34 @@ const state = {
   auditRequest: 0,
   auditBefore: null,
   auditItems: [],
+  sourcePageNo: 1,
 };
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
     const item = state.items.find((entry) => entry.document.id === state.selectedId)
       || (state.selectedSearchDocument ? { document: state.selectedSearchDocument } : null);
-    if (!item || sourcePreviewKind(item.document.original_name) !== "pdf") return false;
-    const frame = byId("detail-content").querySelector("iframe.source-preview");
-    if (!frame) return false;
-    frame.src = `${businessApi.sourceUrl(item.document.id)}#page=${evidence.page_no}`;
-    frame.scrollIntoView({ behavior: "smooth", block: "center" });
-    return true;
+    if (!item) return false;
+    const kind = sourcePreviewKind(item.document.original_name);
+    if (kind === "pdf") {
+      const frame = byId("detail-content").querySelector("iframe.source-preview");
+      if (!frame) return false;
+      state.sourcePageNo = evidence.page_no;
+      const pageInput = byId("detail-content").querySelector('input[aria-label="查看 PDF 原文页码"]');
+      if (pageInput) pageInput.value = String(evidence.page_no);
+      frame.src = `${businessApi.sourceUrl(item.document.id)}#page=${evidence.page_no}`;
+      review.showSourcePage(evidence.page_no);
+      frame.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    }
+    if (kind === "image" && evidence.page_no === 1) {
+      const preview = byId("detail-content").querySelector("img.source-preview");
+      if (!preview) return false;
+      state.sourcePageNo = 1;
+      review.showSourcePage(1);
+      preview.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    }
+    return false;
   },
 });
 const templateManager = createTemplateManager(byId("template-manager-content"), {
@@ -220,6 +237,9 @@ async function openEvidenceLink() {
     const evidence = await businessApi.inspectEvidence(match[1]);
     const record = await businessApi.document(evidence.document_id);
     await selectDocument(record.id, record, { revisionId: evidence.revision_id, evidenceId: evidence.id });
+    state.sourcePageNo = evidence.page_no;
+    renderDetail();
+    review.showSourcePage(evidence.page_no);
   } catch (error) {
     showError(`证据链接不可用：${error.message}`);
   }
@@ -350,8 +370,32 @@ function renderDetail() {
   sourceActions.append(download);
   source.append(sourceActions);
   if (kind === "pdf") {
+    const pageForm = element("form", "source-page-form");
+    const pageLabel = element("label", "", "按原文页码查字段");
+    const pageInput = element("input");
+    pageInput.type = "number";
+    pageInput.min = "1";
+    pageInput.max = "100000";
+    pageInput.required = true;
+    pageInput.value = String(state.sourcePageNo);
+    pageInput.setAttribute("aria-label", "查看 PDF 原文页码");
+    const pageButton = element("button", "secondary-button", "打开页并查关联字段");
+    pageButton.type = "submit";
+    pageLabel.append(pageInput);
+    pageForm.append(pageLabel, pageButton);
+    pageForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const pageNo = Number(pageInput.value);
+      if (!Number.isInteger(pageNo) || pageNo < 1) return;
+      state.sourcePageNo = pageNo;
+      preview.src = `${sourceUrl}#page=${pageNo}`;
+      if (!review.showSourcePage(pageNo, { scroll: true })) {
+        showError("请等待业务文档修订加载后再查关联字段。");
+      }
+    });
+    source.append(pageForm);
     const preview = element("iframe", "source-preview");
-    preview.src = sourceUrl;
+    preview.src = `${sourceUrl}#page=${state.sourcePageNo}`;
     preview.title = `${record.original_name} PDF 原文预览`;
     source.append(preview);
   } else if (kind === "image") {
@@ -359,6 +403,13 @@ function renderDetail() {
     preview.src = sourceUrl;
     preview.alt = `${record.original_name} 原图`;
     source.append(preview);
+    const findFields = element("button", "secondary-button", "查找此图的关联字段");
+    findFields.type = "button";
+    findFields.addEventListener("click", () => {
+      state.sourcePageNo = 1;
+      if (!review.showSourcePage(1, { scroll: true })) showError("请等待业务文档修订加载后再查关联字段。");
+    });
+    source.append(findFields);
   } else {
     source.append(element("p", "preview-note", "该格式暂不支持浏览器原文预览。可下载原文件；不会伪造 PDF 页码或坐标。"));
   }
@@ -379,6 +430,7 @@ function renderDetail() {
 }
 
 async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
+  if (state.selectedId !== id) state.sourcePageNo = 1;
   state.selectedId = id;
   state.selectedSearchDocument = searchDocument;
   state.revisions = [];

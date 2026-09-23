@@ -170,6 +170,16 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 notice.pdf，已解析").click()
             page.get_by_text("机器候选 · 未确认").wait_for()
+            source_page = page.get_by_label("查看 PDF 原文页码")
+            source_page.fill("2")
+            page.get_by_role("button", name="打开页并查关联字段").click()
+            page.get_by_text("此修订在该页尚无冻结证据").wait_for()
+            assert page.locator("iframe.source-preview").get_attribute("src").endswith("#page=2")
+            source_page.fill("1")
+            page.get_by_role("button", name="打开页并查关联字段").click()
+            page.get_by_role("button", name="定位字段：标题 · 机器候选").click()
+            assert page.locator(".field-review.active").get_attribute("data-field-code") == "title"
+            assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
             diff = page.locator(".review-section").filter(has=page.get_by_role("heading", name="解析修订逐页差异"))
             diff.get_by_role("button", name="比较修订").click()
             diff.get_by_text("第 1 页 · 页文本不同").wait_for()
@@ -194,7 +204,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.locator(".evidence-snippet").get_by_text("标题：年度通知").wait_for()
             assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
             assert page.locator(".field-review.active").count() == 1
-            page.get_by_role("button", name="标题 · 机器候选").click()
+            page.get_by_role("button", name="标题 · 机器候选", exact=True).click()
             assert page.locator(".field-review.active").get_attribute("data-field-code") == "title"
             page.get_by_role("button", name="尝试跳转当前原文页").click()
             assert page.locator("iframe.source-preview").get_attribute("src").endswith("#page=1")
@@ -206,7 +216,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_text("已复核：年度通知").wait_for()
             page.get_by_role("button", name="查看已复核字段的证据").click()
             assert page.locator(".evidence-snippet mark").inner_text() == "年度通知"
-            assert page.get_by_role("button", name="标题 · 已复核决定").count() == 1
+            assert page.get_by_role("button", name="标题 · 已复核决定", exact=True).count() == 1
             assert confirm_button.is_disabled(), "An open issue must still block confirmation"
             page.get_by_label("多个候选值冲突处理原因").fill("与原文一致")
             page.get_by_role("button", name="标记已解决").click()
@@ -239,6 +249,15 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="查看已复核字段的证据").click()
             page.get_by_text("该复核值不在冻结片段中逐字出现").wait_for()
             assert page.locator(".evidence-snippet mark").count() == 0
+            document["original_name"] = "scan.png"
+            navigation_status = "current_match"
+            page.goto(base_url, wait_until="networkidle")
+            page.get_by_role("button", name="查看 scan.png，已解析").click()
+            page.get_by_role("button", name="查找此图的关联字段").click()
+            page.get_by_role("button", name="定位字段：标题 · 已复核决定").click()
+            assert page.locator(".field-review.active").get_attribute("data-field-code") == "title"
+            page.get_by_role("button", name="尝试跳转当前原文页").click()
+            assert page.locator("img.source-preview").count() == 1
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             assert not errors, errors

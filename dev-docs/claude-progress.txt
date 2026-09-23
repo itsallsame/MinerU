@@ -390,3 +390,12 @@ Changes:
 Verification: Web 10 tests/8-asset build, Playwright candidate/reviewed/no-match/reverse navigation and review regression passed. First browser approval timed out; identical retry passed.
 Evidence: dev-docs/evidence/2026-09-23-field-evidence-highlight.md
 Next: Complete original-source-side field navigation, error recovery and accessibility, then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 37 (Source-page to field links) ===
+Status: In progress; FE-031 completed at explicit page-level scope (53/241), wider P4/P6 gates remain open
+Changes:
+- Added PDF page and single-page image source controls that index only current-revision frozen evidence and current-run field relations; no-evidence/loading/error states avoid false absence claims.
+- Kept verified field→frozen evidence→PDF page/image navigation, plus source→evidence→field focus; evidence deep links set the page index.
+Verification: Web 10 tests/8-asset build; Playwright PDF page/no-evidence/field lookup, image lookup/back navigation, review and evidence-link regressions passed. Initial browser failure was an ambiguous test locator, fixed with exact matching.
+Evidence: dev-docs/evidence/2026-09-23-source-field-links.md
+Next: P4 async error recovery/accessibility and more complete regression, then four-class annotated acceptance and isolated Kylin/NVIDIA gates. Keep goal active.

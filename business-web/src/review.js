@@ -51,6 +51,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     inspection: null, reading: null, outline: null, structure: null, error: "", busy: false, generation: 0,
     diff: null, diffOtherId: null, diffPreview: null,
     selectedFieldCode: null, inspectionHighlightValue: null,
+    sourcePageNo: null,
+    revisionLoading: false, runLoading: false,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -70,6 +72,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.diffPreview = null;
     state.selectedFieldCode = null;
     state.inspectionHighlightValue = null;
+    state.sourcePageNo = null;
+    state.revisionLoading = false;
+    state.runLoading = false;
     root.replaceChildren();
     root.hidden = true;
   }
@@ -93,6 +98,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     const generation = ++state.generation;
     state.runId = runId;
     state.extraction = null;
+    state.runLoading = true;
     state.inspection = null;
     state.selectedFieldCode = null;
     state.inspectionHighlightValue = null;
@@ -105,6 +111,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       ]);
       if (generation !== state.generation) return;
       state.extraction = extraction;
+      state.runLoading = false;
       state.runs = state.runs.map((run) => run.id === runId ? extraction.run : run);
       state.template = template;
       state.decisions = decisions;
@@ -114,6 +121,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       render();
     } catch (error) {
       if (generation !== state.generation) return;
+      state.runLoading = false;
       state.error = `复核数据读取失败：${error.message}`;
       render();
     }
@@ -139,6 +147,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.results = [];
     state.audit = [];
     state.evidence = [];
+    state.revisionLoading = true;
+    state.runLoading = false;
     render();
     try {
       const [runs, evidence] = await Promise.all([
@@ -147,6 +157,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (generation !== state.generation) return;
       state.runs = runs;
       state.evidence = evidence;
+      state.revisionLoading = false;
       if (targetRunId && !runs.some((run) => run.id === targetRunId)) {
         throw new Error("审计记录对应的提取运行不属于此解析修订。");
       }
@@ -158,6 +169,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       }
     } catch (error) {
       if (generation !== state.generation) return;
+      state.revisionLoading = false;
       state.error = `解析修订读取失败：${error.message}`;
       render();
     }
@@ -179,6 +191,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.inspection = null;
     state.selectedFieldCode = null;
     state.inspectionHighlightValue = null;
+    state.sourcePageNo = null;
+    state.revisionLoading = false;
+    state.runLoading = false;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -230,15 +245,18 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function inspectEvidence(evidenceId, fieldCode = null, value = null) {
+    let inspected = false;
     await perform(async () => {
       const inspection = await businessApi.inspectEvidence(evidenceId);
       state.selectedFieldCode = fieldCode;
       state.inspectionHighlightValue = value;
       state.inspection = inspection;
+      inspected = true;
     });
-    if (state.inspection?.id === evidenceId) {
+    if (inspected) {
       root.querySelector(".evidence-inspection")?.scrollIntoView({ block: "center" });
     }
+    return inspected;
   }
 
   function focusField(fieldCode, value = null) {
@@ -248,6 +266,67 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     const card = [...root.querySelectorAll(".field-review")].find((node) => node.dataset.fieldCode === fieldCode);
     card?.focus({ preventScroll: true });
     card?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function linkedFieldsForEvidence(evidenceId) {
+    const linked = new Map();
+    for (const candidate of state.extraction?.candidates || []) {
+      if (candidate.evidence_id === evidenceId) linked.set(candidate.field_code, {
+        value: candidate.value, kind: "机器候选",
+      });
+    }
+    for (const decision of latestDecisions(state.decisions).values()) {
+      if (decision.evidence_id === evidenceId) linked.set(decision.field_code, {
+        value: decision.value, kind: "已复核决定",
+      });
+    }
+    return linked;
+  }
+
+  function showSourcePage(pageNo, { scroll = false } = {}) {
+    if (!state.document || !state.revisionId || !Number.isInteger(pageNo) || pageNo < 1) return false;
+    state.sourcePageNo = pageNo;
+    render();
+    if (scroll) root.querySelector(".source-field-index")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return true;
+  }
+
+  function renderSourceFieldIndex() {
+    if (state.sourcePageNo === null) return null;
+    const box = section(`原文第 ${state.sourcePageNo} 页 → 字段`);
+    box.classList.add("source-field-index");
+    box.append(element("p", "review-hint", "按原文页码查看当前解析修订已冻结的证据及其字段关联；只显示已冻结范围，不代表该页全部内容或所有字段。"));
+    if (state.revisionLoading) {
+      box.append(element("p", "review-hint", "正在读取当前解析修订的冻结证据…"));
+      return box;
+    }
+    if (state.error.startsWith("解析修订读取失败")) {
+      box.append(element("p", "error-banner", "此修订证据尚不可用，不能判断该页是否有关联字段。"));
+      return box;
+    }
+    const evidenceOnPage = state.evidence.filter((item) => item.page_no === state.sourcePageNo);
+    if (!evidenceOnPage.length) {
+      box.append(element("p", "review-hint", "此修订在该页尚无冻结证据；不能据此判断原文没有相关字段。"));
+    }
+    for (const evidence of evidenceOnPage) {
+      const row = element("div", "source-field-row");
+      row.append(element("p", "", `冻结证据 · ${evidence.block_no ? `块 ${evidence.block_no}` : "页级"} · ${evidence.snippet.slice(0, 120)}`));
+      row.append(button("核验此冻结证据", () => inspectEvidence(evidence.id), state.busy));
+      const linked = linkedFieldsForEvidence(evidence.id);
+      if (state.runLoading) row.append(element("p", "review-hint", "正在读取当前提取运行的字段关联…"));
+      else if (state.runs.length && !state.extraction) row.append(element("p", "error-banner", "提取运行未能加载，字段关联状态未知。"));
+      else if (["queued", "running"].includes(state.extraction?.run.status)) row.append(element("p", "review-hint", "字段提取尚未完成，当前没有可复核的关联字段。"));
+      else if (state.extraction?.run.status === "failed") row.append(element("p", "error-banner", "字段提取失败；不展示可能不完整的候选关联。"));
+      else if (!linked.size) row.append(element("p", "review-hint", "此证据在当前提取运行中尚无关联字段。"));
+      for (const [fieldCode, relation] of linked) {
+        const label = state.template?.fields.find((field) => field.code === fieldCode)?.label || fieldCode;
+        row.append(button(`定位字段：${label} · ${relation.kind}`, async () => {
+          if (await inspectEvidence(evidence.id, fieldCode, relation.value)) focusField(fieldCode, relation.value);
+        }, state.busy));
+      }
+      box.append(row);
+    }
+    return box;
   }
 
   async function readHistorical(locator) {
@@ -517,17 +596,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (state.inspectionHighlightValue && !parts.some((part) => part.match)) {
         card.append(element("p", "review-hint", "该复核值不在冻结片段中逐字出现；保留证据关联，但不伪造原文高亮。"));
       }
-      const linked = new Map();
-      for (const candidate of state.extraction?.candidates || []) {
-        if (candidate.evidence_id === info.id) linked.set(candidate.field_code, {
-          value: candidate.value, kind: "机器候选",
-        });
-      }
-      for (const decision of latestDecisions(state.decisions).values()) {
-        if (decision.evidence_id === info.id) linked.set(decision.field_code, {
-          value: decision.value, kind: "已复核决定",
-        });
-      }
+      const linked = linkedFieldsForEvidence(info.id);
       if (linked.size) {
         card.append(element("p", "review-hint", "此冻结证据关联的字段："));
         const links = element("div", "evidence-field-links");
@@ -749,8 +818,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       state.busy || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
+    const sourceLinks = renderSourceFieldIndex();
     const diff = renderRevisionDiff();
-    root.append(...(diff ? [diff] : []), renderOutline(), renderStructure(), renderReading(), renderEvidence());
+    root.append(...(sourceLinks ? [sourceLinks] : []), ...(diff ? [diff] : []), renderOutline(), renderStructure(), renderReading(), renderEvidence());
     if (!state.document.template_code) {
       root.append(element("p", "review-hint", "此文档上传时未绑定业务模板；不能在当前修订上执行模板字段提取。"));
       return;
@@ -783,5 +853,5 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  return { clear, setDocument, refreshActive, readHistorical };
+  return { clear, setDocument, refreshActive, readHistorical, showSourcePage };
 }
