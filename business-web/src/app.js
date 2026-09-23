@@ -312,6 +312,43 @@ async function searchDocuments(event) {
       open.type = "button";
       open.addEventListener("click", () => selectDocument(hit.document.id, hit.document));
       row.append(open);
+      const findPages = element("button", "secondary-button", "查找原文页");
+      findPages.type = "button";
+      const matches = element("div", "page-matches");
+      async function scan(startPage = null) {
+        findPages.disabled = true;
+        matches.append(element("p", "review-hint", "正在扫描历史解析页（每次最多 25 页）…"));
+        try {
+          const found = await businessApi.searchRevision(hit.revision_id, query, startPage);
+          if (requestNumber !== state.searchRequest) return;
+          matches.lastElementChild.remove();
+          for (const match of found.items) {
+            const result = element("div", "page-match");
+            result.append(element("p", "", `第 ${match.page_no} 页 · 机器解析命中，未人工确认：${match.snippet}`));
+            const read = element("button", "secondary-button", "打开并读取此页");
+            read.type = "button";
+            read.addEventListener("click", async () => {
+              await selectDocument(hit.document.id, hit.document, { revisionId: hit.revision_id });
+              await review.readHistorical(match.locator);
+            });
+            result.append(read);
+            matches.append(result);
+          }
+          if (!found.items.length) matches.append(element("p", "review-hint", "本次扫描的页中没有命中。"));
+          if (found.next_page !== null) {
+            const more = element("button", "secondary-button", "继续扫描后续页");
+            more.type = "button";
+            more.addEventListener("click", () => { more.remove(); scan(found.next_page); });
+            matches.append(more);
+          }
+        } catch (error) {
+          matches.replaceChildren(element("p", "error-banner", `历史页检索失败：${error.message}`));
+        } finally {
+          findPages.disabled = false;
+        }
+      }
+      findPages.addEventListener("click", () => { matches.replaceChildren(); scan(); });
+      row.append(findPages, matches);
       root.append(row);
     }
     if (!page.scan_complete) root.append(element("p", "review-hint", "检索达到返回或扫描上限，后续匹配结果可能尚未列出。"));

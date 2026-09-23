@@ -155,6 +155,10 @@ def parser() -> argparse.ArgumentParser:
     search = commands.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
+    search_pages = commands.add_parser("search-pages")
+    search_pages.add_argument("revision_id")
+    search_pages.add_argument("query")
+    search_pages.add_argument("--start-page", type=int)
     read = commands.add_parser("read")
     read.add_argument("revision_id")
     read.add_argument("locator")
@@ -179,6 +183,11 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "search":
         query = urlencode({"query": args.query, "limit": args.limit})
         return client.request("GET", f"/search?{query}")
+    if command == "search-pages":
+        params = {"query": args.query}
+        if args.start_page is not None:
+            params["start_page"] = args.start_page
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/search?{urlencode(params)}")
     if command == "read":
         query = urlencode({"locator": args.locator, "limit": args.limit})
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/content?{query}")

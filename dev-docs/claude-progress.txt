@@ -284,3 +284,13 @@ Changes:
 Verification: 107 business tests passed, 7 Web tests passed, 7 offline Web assets built; 3 Playwright synthetic-record flows passed; Ruff and diff checks passed. Two dependency deprecation warnings remain.
 Evidence: dev-docs/evidence/2026-09-23-real-pdf-composite-revision.md
 Next: Complete four-class annotated business samples, structure/page-block evidence and template/quality UX, then offline Kylin/NVIDIA acceptance. Do not claim production readiness from Mac-only validation.
+
+=== 2026-09-23 Session 26 (Revision-bound page search) ===
+Status: In progress; P4/P5 block-level evidence/structure and P1/P6 target gates remain open
+Changes:
+- Added bounded historical revision page search with exact business revision/batch routing, page locator, 25-page continuation and explicit failure on truncated content.
+- Connected Web document-search hits to page search and historical read; added the same business API operation to the fork-owned Skill.
+- Preserved unconfirmed machine-text labeling; did not claim page hits are frozen evidence or reviewed conclusions.
+Verification: 108 business tests passed/2 dependency warnings; Web 7 tests and 7-asset build passed; Playwright discovery flow passed against the built bundle; Skill quick validation, Ruff and diff checks passed.
+Evidence: dev-docs/evidence/2026-09-23-revision-page-search.md
+Next: Add structure and block-level evidence/search review, four-class annotated sample acceptance, template/quality UX, then isolated Kylin/NVIDIA target checks. Keep goal active.

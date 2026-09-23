@@ -68,6 +68,8 @@ P2 发现 `ensure_parse` 接收的是 **worker 可访问的本地绝对路径**�
 
 第三组实现补齐业务范围内的两条只读契约：`GET /api/business/search` 复用 Doclib 当前索引，但只返回能映射到**已完成业务解析修订**的业务文档，省略 Doclib 文件路径，并标记 `current_index_unconfirmed`。同字节不同业务文档分别列出；一次最多扫描 500 个 Doclib 命中，`scan_complete=false` 明示检索可能未穷尽。Doclib 检索只有文档级片段、没有页块定位器，片段不得当作冻结证据或精确引用。`GET /api/business/revisions/{id}/content` 按页选择业务修订保存的历史 parse ID 读取指定 locator，核对源 SHA-256、short ID、tier 与请求定位器，返回 `historical_parse_unconfirmed`、有界内容和安全续读 locator；不返回 Doclib parse ID 或 asset 路径。它是机器解析文本，不等于人工确认或不可变证据。Web 与自有 Skill 都只访问这两条业务 API。**P4/P5 仍未完成**：搜索结果的页块证据列表、结构树、修订差异、模板管理/统计、真实样本端到端和目标机验收仍开放。
 
+第四组补充修订内页检索：`GET /api/business/revisions/{id}/search` 在指定历史业务修订上逐页读取，每次最多扫描 25 页，以 `next_page` 续扫；每页只返回首个文本命中及页定位器，状态固定为 `historical_parse_unconfirmed`。该接口在页面内容截断、身份不符或历史批次不可读时失败，不把部分扫描误报为“无结果”。Web 可从文档级预览进入历史页搜索与读取；自有 Skill 的 `search-pages` 使用同一业务 API。页命中**不是冻结证据或人工确认结论**，也没有块级定位与完整召回保证；P4 的页块证据列表仍未完成。
+
 ## 核心流程
 
 1. 上传原文，做格式/大小/安全校验与哈希计算，建立业务文档身份并交给 Doclib 入库。

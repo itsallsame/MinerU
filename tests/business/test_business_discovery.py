@@ -136,6 +136,54 @@ def test_progressive_read_crosses_historical_parse_batch_boundary(tmp_path: Path
         discovery.read(revision.id, f"doc:{short_id}/tier:flash/page:3")
 
 
+def test_revision_search_returns_bounded_page_locators_from_historical_batches(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=sha, short_id=short_id, tier="flash", page_range=page_range,
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_range in ((8, "1-25"), (9, "26-27")))
+    revision = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.6")
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        page_no = int(locator.rsplit("page:", 1)[1])
+        assert parse_id == (8 if page_no <= 25 else 9)
+        return DocContentResponse(
+            sha256=sha, short_id=short_id, tier="flash",
+            content="Needle on this page" if page_no == 26 else "Other text",
+            request_scope=ContentRequestScope(locator=locator),
+        )
+
+    doclib.read_parse_content.side_effect = read
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    first = discovery.search_revision(revision.id, "needle")
+    assert first.items == () and first.scanned_pages == 25 and first.next_page == 26
+    second = discovery.search_revision(revision.id, "needle", start_page=first.next_page)
+    assert len(second.items) == 1 and second.items[0].page_no == 26
+    assert second.items[0].locator == f"doc:{short_id}/tier:flash/page:26"
+    assert second.next_page is None and second.scanned_pages == 2
+    with pytest.raises(DiscoveryError, match="invalid_search_request"):
+        discovery.search_revision(revision.id, "needle", start_page=28)
+
+    api = TestClient(create_app(
+        workflow=Mock(), store=store, discovery=discovery,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    response = api.get(f"/api/business/revisions/{revision.id}/search", params={"query": "needle", "start_page": 26})
+    assert response.status_code == 200
+    assert response.json()["items"][0]["state"] == "historical_parse_unconfirmed"
+    assert "/private/" not in response.text and "parse_id" not in response.text
+    assert api.get("/api/business/revisions/missing/search", params={"query": "needle"}).status_code == 404
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: DocContentResponse(
+        sha256=sha, short_id=short_id, tier="flash", content="Partial",
+        request_scope=ContentRequestScope(locator=locator), truncated=True,
+    )
+    incomplete = api.get(f"/api/business/revisions/{revision.id}/search", params={"query": "needle"})
+    assert incomplete.status_code == 409 and incomplete.json()["detail"] == "historical_content_truncated"
+
+
 def test_revision_read_rejects_identity_drift_and_worker_outage(tmp_path: Path) -> None:
     store, doclib, document_a, _document_b, revision_a, _revision_b = _fixture(tmp_path)
     sha = store.get_document(document_a).sha256

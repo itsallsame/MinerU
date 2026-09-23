@@ -408,6 +408,14 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
         params={"locator": f"doc:{revisions[0]['short_id']}/tier:flash/page:13"},
     )
     assert last_page.status_code == 200, last_page.text
+    page_matches = client.get(
+        f"/api/business/revisions/{revisions[0]['id']}/search", params={"query": "afforestation"},
+    )
+    assert page_matches.status_code == 200, page_matches.text
+    assert page_matches.json()["items"]
+    assert all(item["locator"].startswith(f"doc:{revisions[0]['short_id']}/tier:flash/page:")
+               for item in page_matches.json()["items"])
+    assert page_matches.json()["next_page"] is None
 
     captured = client.post(f"/api/business/revisions/{revisions[0]['id']}/evidence", json={"locator": locator})
     assert captured.status_code == 201, captured.text

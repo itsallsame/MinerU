@@ -1,7 +1,10 @@
 """Business workflows over Doclib and the business store."""
 
 from .documents import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
-from .discovery import BusinessDiscovery, BusinessSearchHit, BusinessSearchPage, DiscoveryError, HistoricalRead
+from .discovery import (
+    BusinessDiscovery, BusinessSearchHit, BusinessSearchPage, DiscoveryError, HistoricalRead,
+    RevisionSearchHit, RevisionSearchPage,
+)
 from .evidence import EvidenceCaptureError, EvidenceInspection, EvidenceReader, EvidenceWriter, NavigationStatus
 from .extractions import FieldExtraction
 from .extraction_worker import ExtractionWorker
@@ -15,6 +18,8 @@ __all__ = [
     "BusinessSearchPage",
     "DiscoveryError",
     "HistoricalRead",
+    "RevisionSearchHit",
+    "RevisionSearchPage",
     "EvidenceCaptureError",
     "EvidenceInspection",
     "EvidenceReader",

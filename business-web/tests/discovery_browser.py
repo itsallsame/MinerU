@@ -47,6 +47,11 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.route("**/api/business/documents/*/revisions", lambda route: fulfill(route, [revision]))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, []))
             page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, []))
+            page.route("**/api/business/revisions/rev-1/search?*", lambda route: fulfill(route, {
+                "revision_id": "rev-1", "scanned_pages": 1, "next_page": None,
+                "items": [{"locator": first, "page_no": 1, "snippet": "年度通知原文",
+                           "state": "historical_parse_unconfirmed"}],
+            }))
 
             def read(route: object) -> None:
                 calls.append(route.request.url)
@@ -64,10 +69,10 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_label("检索已解析的业务文档").fill("年度通知")
             page.get_by_role("button", name="检索", exact=True).click()
             page.get_by_text("当前索引预览，未人工确认：年度通知摘要").wait_for()
-            page.get_by_role("button", name="打开业务文档").click()
+            page.get_by_role("button", name="查找原文页").click()
+            page.get_by_text("机器解析命中，未人工确认：年度通知原文").wait_for()
+            page.get_by_role("button", name="打开并读取此页").click()
             page.get_by_text("检索未返回任务状态").wait_for()
-            page.get_by_label("历史解析页码").fill("1")
-            page.get_by_role("button", name="读取这一页").click()
             page.get_by_text("第一段历史内容").wait_for()
             page.get_by_role("button", name="继续读取下一段").click()
             page.get_by_text("第二段历史内容").wait_for()

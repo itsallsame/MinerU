@@ -55,6 +55,7 @@ from ..services import (
     FieldExtraction,
     HistoricalRead,
     NavigationStatus,
+    RevisionSearchPage,
 )
 from ..store import BusinessStore, BusinessStoreError
 
@@ -392,6 +393,28 @@ class HistoricalReadView(BaseModel):
         return cls(**vars(read))
 
 
+class RevisionSearchHitView(BaseModel):
+    locator: str
+    page_no: int
+    snippet: str
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+
+class RevisionSearchView(BaseModel):
+    revision_id: str
+    items: list[RevisionSearchHitView]
+    next_page: int | None
+    scanned_pages: int
+
+    @classmethod
+    def from_page(cls, page: RevisionSearchPage) -> RevisionSearchView:
+        return cls(
+            revision_id=page.revision_id,
+            items=[RevisionSearchHitView(**vars(hit)) for hit in page.items],
+            next_page=page.next_page, scanned_pages=page.scanned_pages,
+        )
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -478,6 +501,24 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return HistoricalReadView.from_read(discovery.read(revision_id, locator, limit=limit))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/search", response_model=RevisionSearchView)
+    def search_revision_content(
+        revision_id: str,
+        query: Annotated[str, Query(min_length=1, max_length=200)],
+        start_page: Annotated[int | None, Query(ge=1)] = None,
+    ) -> RevisionSearchView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return RevisionSearchView.from_page(discovery.search_revision(revision_id, query, start_page=start_page))
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else
@@ -763,6 +804,8 @@ __all__ = [
     "IssueResolutionView",
     "QualityIssueView",
     "RevisionView",
+    "RevisionSearchHitView",
+    "RevisionSearchView",
     "SubmissionView",
     "TaskView",
     "TemplateCreateRequest",

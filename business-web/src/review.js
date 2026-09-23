@@ -550,5 +550,5 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  return { clear, setDocument, refreshActive };
+  return { clear, setDocument, refreshActive, readHistorical };
 }

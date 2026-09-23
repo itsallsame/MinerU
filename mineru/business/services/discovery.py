@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ...doclib import DoclibInterface
@@ -46,10 +47,26 @@ class HistoricalRead:
     next_locator: str | None
 
 
+@dataclass(frozen=True)
+class RevisionSearchHit:
+    locator: str
+    page_no: int
+    snippet: str
+
+
+@dataclass(frozen=True)
+class RevisionSearchPage:
+    revision_id: str
+    items: tuple[RevisionSearchHit, ...]
+    next_page: int | None
+    scanned_pages: int
+
+
 class BusinessDiscovery:
     """Never expose Doclib-only documents, paths, parse IDs, or mutable hits as reviewed evidence."""
 
     _MAX_SCAN = 500
+    _REVISION_SCAN_PAGES = 25
 
     def __init__(self, *, store: BusinessStore, doclib: DoclibInterface) -> None:
         self._store = store
@@ -139,5 +156,40 @@ class BusinessDiscovery:
             next_locator=next_locator,
         )
 
+    def search_revision(self, revision_id: str, query: str, *, start_page: int | None = None) -> RevisionSearchPage:
+        query = query.strip()
+        if not query or len(query) > 200 or (start_page is not None and start_page < 1):
+            raise DiscoveryError("invalid_search_request")
+        revision = self._store.get_revision(revision_id)
+        if revision is None:
+            raise DiscoveryError("revision_not_found")
+        pages = sorted(parse_page_range_set(revision.page_range))
+        if start_page is not None and start_page not in pages:
+            raise DiscoveryError("invalid_search_request")
+        start = pages.index(start_page) if start_page is not None else 0
+        window = pages[start:start + self._REVISION_SCAN_PAGES]
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        found: list[RevisionSearchHit] = []
+        for page_no in window:
+            locator = page_ref(revision.short_id, revision.tier, page_no)
+            content = self.read(revision_id, locator, limit=30000)
+            if content.truncated:
+                raise DiscoveryError("historical_content_truncated")
+            match = pattern.search(content.content)
+            if match is None:
+                continue
+            left = max(0, match.start() - 90)
+            right = min(len(content.content), match.end() + 90)
+            found.append(RevisionSearchHit(locator, page_no, content.content[left:right]))
+        next_index = start + len(window)
+        return RevisionSearchPage(
+            revision_id=revision_id, items=tuple(found),
+            next_page=pages[next_index] if next_index < len(pages) else None,
+            scanned_pages=len(window),
+        )
 
-__all__ = ["BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead"]
+
+__all__ = [
+    "BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead",
+    "RevisionSearchHit", "RevisionSearchPage",
+]
