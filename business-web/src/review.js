@@ -110,7 +110,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  async function selectRevision(revisionId) {
+  async function selectRevision(revisionId, targetRunId = null) {
     const generation = ++state.generation;
     state.revisionId = revisionId;
     state.runId = null;
@@ -133,8 +133,11 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (generation !== state.generation) return;
       state.runs = runs;
       state.evidence = evidence;
+      if (targetRunId && !runs.some((run) => run.id === targetRunId)) {
+        throw new Error("审计记录对应的提取运行不属于此解析修订。");
+      }
       if (runs.length) {
-        await loadRun(runs[0].id);
+        await loadRun(targetRunId || runs[0].id);
       } else {
         state.error = "";
         render();
@@ -146,7 +149,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  async function setDocument(documentRecord, revisions, { revisionId = null, evidenceId = null } = {}) {
+  async function setDocument(documentRecord, revisions, { revisionId = null, evidenceId = null, runId = null } = {}) {
     state.generation += 1;
     state.document = documentRecord;
     state.revisions = revisions;
@@ -169,7 +172,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (revisionId && !revisions.some((revision) => revision.id === revisionId)) {
       throw new Error("证据对应的解析修订已不存在，无法打开证据链接。");
     }
-    if (revisions.length) await selectRevision(revisionId || revisions[0].id);
+    if (revisions.length) await selectRevision(revisionId || revisions[0].id, runId);
     if (evidenceId) {
       if (!state.evidence.some((evidence) => evidence.id === evidenceId)) {
         throw new Error("证据不属于当前解析修订，无法打开证据链接。");

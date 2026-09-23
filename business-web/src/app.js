@@ -18,6 +18,9 @@ const state = {
   searchRequest: 0,
   polling: false,
   uploading: false,
+  auditRequest: 0,
+  auditBefore: null,
+  auditItems: [],
 };
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
@@ -88,6 +91,71 @@ async function refreshQualityStats() {
     root.replaceChildren(grid, element("p", "review-hint", "按业务记录累计；任务、修订、运行和成果版本可一对多。未处理问题按问题条目计。统计不代表字段准确率或人工评估结果。"));
   } catch (error) {
     root.replaceChildren(element("p", "error-banner", `统计不可用：${error.message}`));
+  }
+}
+
+const auditActions = {
+  field_decided: "字段决定",
+  issue_resolved: "问题处理",
+  result_confirmed: "成果确认",
+};
+
+function renderAudit() {
+  const root = byId("audit-content");
+  root.replaceChildren();
+  if (!state.auditItems.length) root.append(element("p", "review-hint", "暂无审计记录。"));
+  for (const record of state.auditItems) {
+    const event = record.event;
+    const card = element("article", "audit-record");
+    card.append(element("strong", "", `${record.document_name} · ${auditActions[event.action] || event.action}`));
+    card.append(element("p", "review-hint", `${new Date(event.created_at_ms).toLocaleString("zh-CN")} · 入口：${event.source} · 运行 ${event.run_id.slice(0, 12)}…`));
+    const detail = element("details");
+    detail.append(element("summary", "", "查看变更与原因"));
+    detail.append(element("p", "audit-value", `原值：${event.old_value ?? "（无）"}`));
+    detail.append(element("p", "audit-value", `新值：${event.new_value}`));
+    if (event.reason) detail.append(element("p", "audit-value", `原因：${event.reason}`));
+    card.append(detail);
+    const open = element("button", "secondary-button", "打开对应提取运行");
+    open.type = "button";
+    open.addEventListener("click", async () => {
+      open.disabled = true;
+      try {
+        const documentRecord = await businessApi.document(record.document_id);
+        await selectDocument(record.document_id, documentRecord, {
+          revisionId: record.revision_id, runId: event.run_id,
+        });
+        byId("workbench").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (error) {
+        showError(`审计记录无法打开：${error.message}`);
+      } finally {
+        open.disabled = false;
+      }
+    });
+    card.append(open);
+    root.append(card);
+  }
+  byId("audit-more").hidden = !state.auditBefore;
+}
+
+async function loadAudit(reset = false) {
+  const requestNumber = ++state.auditRequest;
+  const before = reset ? null : state.auditBefore;
+  const more = byId("audit-more");
+  more.disabled = true;
+  if (reset) byId("audit-content").replaceChildren(element("p", "review-hint", "正在读取审计记录…"));
+  try {
+    const page = await businessApi.auditPage(before);
+    if (requestNumber !== state.auditRequest || !byId("audit-panel").open) return;
+    state.auditItems = reset ? page.items : [...state.auditItems, ...page.items];
+    state.auditBefore = page.next_before;
+    renderAudit();
+  } catch (error) {
+    if (requestNumber !== state.auditRequest) return;
+    const root = byId("audit-content");
+    if (reset) root.replaceChildren();
+    root.append(element("p", "error-banner", `审计记录不可用：${error.message}`));
+  } finally {
+    if (requestNumber === state.auditRequest) more.disabled = false;
   }
 }
 
@@ -480,6 +548,9 @@ byId("upload-form").addEventListener("submit", submitFiles);
 byId("search-form").addEventListener("submit", searchDocuments);
 byId("quality-panel").addEventListener("toggle", () => { if (byId("quality-panel").open) refreshQualityStats(); });
 byId("quality-refresh").addEventListener("click", refreshQualityStats);
+byId("audit-panel").addEventListener("toggle", () => { if (byId("audit-panel").open) loadAudit(true); });
+byId("audit-refresh").addEventListener("click", () => loadAudit(true));
+byId("audit-more").addEventListener("click", () => loadAudit());
 window.addEventListener("hashchange", openEvidenceLink);
 byId("refresh").addEventListener("click", refreshDocuments);
 for (const id of ["status-filter", "template-filter"]) {

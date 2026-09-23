@@ -20,6 +20,8 @@ from ...types import Tier
 from ..documents.uploads import StoredUpload
 from ..domain import (
     AuditEvent,
+    AuditPage,
+    AuditRecord,
     BUILTIN_TEMPLATES,
     BusinessDocument,
     ConfirmedField,
@@ -815,6 +817,37 @@ class BusinessStore:
                 "SELECT * FROM audit_events WHERE run_id=? ORDER BY rowid", (run_id,)
             ).fetchall()
         return tuple(AuditEvent(**dict(row)) for row in rows)
+
+    def audit_page(self, *, limit: int = 20, before: str | None = None) -> AuditPage:
+        """Page immutable events by insertion order; newer concurrent events cannot shift older pages."""
+        if not 1 <= limit <= 100:
+            raise BusinessStoreError("Audit page limit must be between 1 and 100")
+        with closing(self._connect()) as database:
+            database.execute("BEGIN")
+            cursor_rowid: int | None = None
+            if before is not None:
+                cursor = database.execute("SELECT rowid FROM audit_events WHERE id=?", (before,)).fetchone()
+                if cursor is None:
+                    raise BusinessStoreError("Audit cursor not found")
+                cursor_rowid = int(cursor["rowid"])
+            rows = database.execute(
+                "SELECT a.*, r.revision_id, v.document_id, d.original_name AS document_name "
+                "FROM audit_events a JOIN extraction_runs r ON r.id=a.run_id "
+                "JOIN revisions v ON v.id=r.revision_id JOIN documents d ON d.id=v.document_id "
+                "WHERE (? IS NULL OR a.rowid < ?) ORDER BY a.rowid DESC LIMIT ?",
+                (cursor_rowid, cursor_rowid, limit + 1),
+            ).fetchall()
+            database.rollback()
+        items = tuple(
+            AuditRecord(
+                event=AuditEvent(**{key: row[key] for key in (
+                    "id", "run_id", "action", "target_id", "source", "old_value", "new_value", "reason", "created_at_ms"
+                )}),
+                document_id=row["document_id"], document_name=row["document_name"],
+                revision_id=row["revision_id"],
+            ) for row in rows[:limit]
+        )
+        return AuditPage(items=items, next_before=items[-1].event.id if len(rows) > limit else None)
 
     def create_document(
         self, upload: StoredUpload, *, original_name: str, template_code: str | None = None

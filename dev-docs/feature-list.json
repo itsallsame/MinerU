@@ -4421,9 +4421,9 @@
         "实现：审计记录页面",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "新增全局审计游标分页 API 与 Web 折叠页；展示文档、动作、来源、变更值和原因，并能打开对应修订/提取运行。来源不代表个人身份；Web test/build、后端契约与 Playwright 分页/安全文本/跳转/窄屏验证通过。"
     },
     {
       "id": "FE-045",

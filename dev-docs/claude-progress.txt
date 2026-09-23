@@ -363,3 +363,12 @@ Changes:
 Verification: targeted backend 12 passed, full business 119 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright lazy load/refresh/390px viewport passed. Initial sandboxed full run could not bind local Doclib sockets; identical rerun with local-listener permission passed.
 Evidence: dev-docs/evidence/2026-09-23-quality-stats.md
 Next: Complete global audit view and other P4 UX, four-class annotated acceptance, isolated Kylin/NVIDIA gates. Keep goal active.
+
+=== 2026-09-23 Session 34 (Open global audit view) ===
+Status: In progress; FE-044 completed (50/241), wider P4/P6 gates remain open
+Changes:
+- Added business-wide append-order cursor paging for audit events, joined to document/revision/run identities without a user model.
+- Added lazy Web audit feed with change details and exact-run navigation; source remains an entry channel, not a person.
+Verification: targeted backend 9 passed, full business 120 passed/2 dependency warnings, Web 9 tests/8-asset build, Playwright paging/safe text/run navigation/390px viewport passed.
+Evidence: dev-docs/evidence/2026-09-23-global-audit-web.md
+Next: Continue other P4 UX, four-class annotated acceptance, and isolated Kylin/NVIDIA gates. Keep goal active.

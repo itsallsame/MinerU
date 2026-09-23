@@ -81,6 +81,44 @@ def test_quality_stats_count_workflow_records_not_accuracy(tmp_path: Path) -> No
     assert "accuracy" not in after
 
 
+def test_global_audit_cursor_is_stable_and_open_api_has_no_identity(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
+    store.confirm_result(run_id, source="skill")
+    newest = store.audit_page(limit=1)
+    assert len(newest.items) == 1 and newest.next_before is not None
+    assert newest.items[0].event.action == "result_confirmed"
+    assert newest.items[0].document_name == "notice.html"
+    assert newest.items[0].event.source == "skill"
+    assert not hasattr(newest.items[0].event, "user_id")
+    store.decide_field(
+        run_id, field_code="title", value="通知（修订）", evidence_id=evidence_id,
+        source="api", reason="复核后修订",
+    )
+    older = store.audit_page(limit=1, before=newest.next_before)
+    assert [item.event.action for item in older.items] == ["field_decided"]
+    assert older.next_before is None
+    assert [item.event.action for item in store.audit_page().items] == [
+        "field_decided", "result_confirmed", "field_decided",
+    ]
+    with pytest.raises(BusinessStoreError, match="cursor not found"):
+        store.audit_page(before="missing")
+    with pytest.raises(BusinessStoreError, match="limit"):
+        store.audit_page(limit=101)
+
+    client = TestClient(create_app(
+        workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock(),
+    ))
+    response = client.get("/api/business/audit?limit=1")
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["document_name"] == "notice.html"
+    assert item["event"]["source"] == "api"
+    assert "user_id" not in item and "user_id" not in item["event"]
+    assert client.get("/api/business/audit?limit=101").status_code == 422
+    assert client.get("/api/business/audit?before=missing").status_code == 404
+
+
 def test_manual_correction_keeps_old_confirmed_result_immutable(tmp_path: Path) -> None:
     store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
     store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")

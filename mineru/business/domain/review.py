@@ -72,7 +72,22 @@ class AuditEvent:
     created_at_ms: int
 
 
+@dataclass(frozen=True)
+class AuditRecord:
+    event: AuditEvent
+    document_id: str
+    document_name: str
+    revision_id: str
+
+
+@dataclass(frozen=True)
+class AuditPage:
+    items: tuple[AuditRecord, ...]
+    next_before: str | None
+
+
 __all__ = [
-    "AuditEvent", "ConfirmedField", "ConfirmedResult", "DecisionBasis", "FieldDecision", "IssueResolution",
+    "AuditEvent", "AuditPage", "AuditRecord", "ConfirmedField", "ConfirmedResult", "DecisionBasis", "FieldDecision",
+    "IssueResolution",
     "IssueResolutionStatus", "ReviewSource",
 ]

@@ -24,6 +24,7 @@ from ...types import Tier
 from ..documents import ImmutableUploadStore, UploadError
 from ..domain import (
     AuditEvent,
+    AuditPage,
     BusinessDocument,
     ConfirmedField,
     ConfirmedResult,
@@ -167,6 +168,25 @@ class AuditEventView(BaseModel):
     @classmethod
     def from_record(cls, event: AuditEvent) -> AuditEventView:
         return cls(**vars(event))
+
+
+class AuditRecordView(BaseModel):
+    event: AuditEventView
+    document_id: str
+    document_name: str
+    revision_id: str
+
+
+class AuditPageView(BaseModel):
+    items: list[AuditRecordView]
+    next_before: str | None
+
+    @classmethod
+    def from_page(cls, page: AuditPage) -> AuditPageView:
+        return cls(items=[AuditRecordView(
+            event=AuditEventView.from_record(record.event), document_id=record.document_id,
+            document_name=record.document_name, revision_id=record.revision_id,
+        ) for record in page.items], next_before=page.next_before)
 
 
 class ExtractionRunView(BaseModel):
@@ -742,6 +762,13 @@ def create_app(
         if store.get_extraction(run_id) is None:
             raise HTTPException(status_code=404, detail="Extraction not found")
         return [AuditEventView.from_record(item) for item in store.list_audit_events(run_id)]
+
+    @app.get("/api/business/audit", response_model=AuditPageView)
+    def audit_page(limit: Annotated[int, Query(ge=1, le=100)] = 20, before: str | None = None) -> AuditPageView:
+        try:
+            return AuditPageView.from_page(store.audit_page(limit=limit, before=before))
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=202)
     def extract_fields(revision_id: str) -> ExtractionRunView:

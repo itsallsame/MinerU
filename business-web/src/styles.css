@@ -67,6 +67,18 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .quality-metric { border: 1px solid #e2ebe3; background: #f8fbf8; border-radius: 9px; padding: 10px; }
 .quality-metric strong { display: block; color: #245e42; font-size: 21px; }
 .quality-metric span { color: #647b69; font-size: 11px; }
+.audit-panel { margin-top: 18px; border: 1px solid #dce8de; border-radius: 12px; background: #fff; padding: 15px; }
+.audit-panel > summary { cursor: pointer; color: #2c6047; font-size: 13px; font-weight: 700; }
+.audit-panel > summary span { color: #819188; font-size: 11px; font-weight: 400; margin-left: 8px; }
+.audit-actions { margin: 13px 0; }
+.audit-content { display: grid; gap: 9px; }
+.audit-record { padding: 12px; border: 1px solid #e2ebe3; border-radius: 9px; background: #f8fbf8; min-width: 0; }
+.audit-record strong { color: #245e42; font-size: 12px; overflow-wrap: anywhere; }
+.audit-record p { margin: 7px 0; }
+.audit-record details { font-size: 11px; color: #546e5c; margin: 9px 0; }
+.audit-record summary { cursor: pointer; }
+.audit-value { white-space: pre-wrap; overflow-wrap: anywhere; }
+#audit-more { margin-top: 10px; }
 .search-panel { margin-top: 24px; border: 1px solid #dce8de; border-radius: 12px; background: #fff; padding: 15px; }
 .search-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .search-form label { color: #486854; font-size: 12px; font-weight: 700; flex: 1 1 100%; }
