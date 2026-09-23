@@ -299,7 +299,7 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     assert outline_result["items"][0]["state"] == "historical_parse_unconfirmed"
     doclib.read_parse_structure.return_value = ParseStructureResponse(
         sha256=digest, short_id=digest[:12], tier="flash", page_no=1,
-        blocks=[ParseBlockSummary(type="doc_title", block_no=1, locator=f"{locator}/block:1",
+        blocks=[ParseBlockSummary(type="doc_title", block_no=1, locator=f"{locator}/block:1", path=[0],
                                   preview="Notice historical text", level=1)],
     )
     structure_args = script.parser().parse_args(["structure", overview["revision"]["id"], "1"])

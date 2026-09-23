@@ -58,6 +58,7 @@ from ..services import (
     RevisionSearchPage,
     RevisionOutlinePage,
     BusinessStructurePage,
+    StructureBlock,
 )
 from ..store import BusinessStore, BusinessStoreError
 
@@ -444,10 +445,20 @@ class StructureBlockView(BaseModel):
     type: str
     block_no: int | None
     locator: str
+    path: tuple[int, ...]
     preview: str
     level: int | None
     bbox: tuple[float, float, float, float] | None
+    children: list[StructureBlockView]
     state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+    @classmethod
+    def from_block(cls, block: StructureBlock) -> StructureBlockView:
+        return cls(
+            type=block.type, block_no=block.block_no, locator=block.locator, path=block.path,
+            preview=block.preview, level=block.level, bbox=block.bbox,
+            children=[cls.from_block(child) for child in block.children],
+        )
 
 
 class BusinessStructureView(BaseModel):
@@ -460,7 +471,7 @@ class BusinessStructureView(BaseModel):
     def from_page(cls, page: BusinessStructurePage) -> BusinessStructureView:
         return cls(
             document_id=page.document_id, revision_id=page.revision_id, page_no=page.page_no,
-            blocks=[StructureBlockView(**vars(block)) for block in page.blocks],
+            blocks=[StructureBlockView.from_block(block) for block in page.blocks],
         )
 
 

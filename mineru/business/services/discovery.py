@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from ...doclib import DoclibInterface
 from ...doclib.locators import parse_content_cursor
 from ...doclib.locators import page_ref
+from ...doclib.types import ParseBlockSummary
 from ...parser.page_range import parse_page_range_set
 from ...errors import MineruError, ServerNotRunningError
 from ...types import Tier
@@ -83,9 +84,11 @@ class StructureBlock:
     type: str
     block_no: int | None
     locator: str
+    path: tuple[int, ...]
     preview: str
     level: int | None
     bbox: tuple[float, float, float, float] | None
+    children: tuple[StructureBlock, ...]
 
 
 @dataclass(frozen=True)
@@ -284,8 +287,14 @@ class BusinessDiscovery:
         ):
             raise DiscoveryError("historical_structure_mismatch")
         seen: set[int] = set()
-        blocks: list[StructureBlock] = []
-        for block in response.blocks:
+        node_count = 0
+
+        def check_block(block: ParseBlockSummary, *, path: tuple[int, ...], anchor: str | None = None,
+                        parent_block_no: int | None = None) -> StructureBlock:
+            nonlocal node_count
+            node_count += 1
+            if node_count > 2000 or len(path) > 16 or tuple(block.path) != path:
+                raise DiscoveryError("historical_structure_mismatch")
             try:
                 cursor = parse_content_cursor(block.locator)
             except ValueError as exc:
@@ -294,13 +303,27 @@ class BusinessDiscovery:
                 cursor.short_id.lower() != revision.short_id.lower() or cursor.tier != revision.tier
                 or cursor.page_no != page_no or cursor.char_offset is not None
                 or cursor.block_no != block.block_no or len(block.preview) > 200
+                or (anchor is not None and block.locator != anchor)
+                or (anchor is not None and block.block_no != parent_block_no)
             ):
                 raise DiscoveryError("historical_structure_mismatch")
+            return StructureBlock(
+                type=block.type, block_no=block.block_no, locator=block.locator,
+                path=path, preview=block.preview, level=block.level, bbox=block.bbox,
+                children=tuple(
+                    check_block(child, path=(*path, position), anchor=block.locator,
+                                parent_block_no=block.block_no)
+                    for position, child in enumerate(block.children)
+                ),
+            )
+
+        blocks: list[StructureBlock] = []
+        for position, block in enumerate(response.blocks):
             if block.block_no is not None:
                 if block.block_no in seen:
                     raise DiscoveryError("historical_structure_mismatch")
                 seen.add(block.block_no)
-            blocks.append(StructureBlock(**block.model_dump()))
+            blocks.append(check_block(block, path=(position,)))
         return BusinessStructurePage(revision.document_id, revision_id, page_no, tuple(blocks))
 
 

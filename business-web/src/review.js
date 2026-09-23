@@ -270,7 +270,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   function renderStructure() {
     const box = section("原生解析块结构");
-    box.append(element("p", "review-hint", "按历史解析批次读取真实顶层块类型与可用坐标；机器结果未人工确认，块与原文的对应仍需复核。"));
+    box.append(element("p", "review-hint", "按历史解析批次读取原生父子块树；子节点沿用顶层块定位器，不代表子节点精确定位。机器结果未人工确认。"));
     const form = element("form", "read-form");
     const label = element("label", "", "结构页码");
     const input = element("input");
@@ -293,15 +293,18 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (!state.structure) return box;
     box.append(element("p", "review-hint", `第 ${state.structure.page_no} 页 · ${state.structure.blocks.length} 个顶层块`));
     if (!state.structure.blocks.length) box.append(element("p", "review-hint", "此页没有可列出的顶层块。"));
-    for (const block of state.structure.blocks) {
+    function appendBlock(block, depth = 0) {
       const row = element("div", "structure-block");
-      const labelText = `${block.type}${block.level ? ` · 标题级别 ${block.level}` : ""}${block.block_no ? ` · 块 ${block.block_no}` : " · 页级定位"}`;
+      row.style.marginLeft = `${Math.min(depth, 8) * 18}px`;
+      const labelText = `${block.type}${block.level ? ` · 标题级别 ${block.level}` : ""}${block.block_no ? ` · 块 ${block.block_no}` : " · 页级定位"}${depth ? " · 父块定位" : ""}`;
       row.append(element("strong", "", labelText));
       if (block.preview) row.append(element("span", "", block.preview));
       if (block.bbox) row.append(element("small", "", `坐标：${block.bbox.join(", ")}`));
-      row.append(button("读取此块", () => readHistorical(block.locator), state.busy));
+      if (!depth) row.append(button("读取此块", () => readHistorical(block.locator), state.busy));
       box.append(row);
+      for (const child of block.children || []) appendBlock(child, depth + 1);
     }
+    for (const block of state.structure.blocks) appendBlock(block);
     return box;
   }
 

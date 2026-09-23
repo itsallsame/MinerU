@@ -72,9 +72,9 @@ P2 发现 `ensure_parse` 接收的是 **worker 可访问的本地绝对路径**�
 
 模板管理 Web 已接入现有开放业务 API：展示内置和自定义模板，内置模板只读；自定义模板支持创建、按字段顺序配置代码/名称/类型/必填、新增不可变版本及停用。停用前要求页面确认，停用后新上传不能再选，旧文档绑定的版本不改写。Web 不引入用户、角色、所有者或审批权限。当前字段类型仍只支持 `text/date/list`，不包含正则、标准化、置信阈值或结构编辑；P4 的质量统计、结构树和页块证据仍未完成。
 
-历史标题目录新增 `GET /api/business/revisions/{id}/outline`：按业务修订的历史 parse 批次读取 Markdown，识别 ATX 标题级别并排除代码围栏，每次最多 25 页、以 `next_page` 续扫；任一页截断或身份不符即报错，不输出不完整的“完整目录”。Web 目录项可读到所在页，自有 Skill `outline` 走同一业务 API。此目录是**Markdown 标题的派生视图**，不是 Doclib 原生模型块树；只有页级定位，不保证标题完整或块级证据。因此 FE-023 解析结构树仍不标完成，后续须实现并验证原生块结构与历史批次绑定。
+历史标题目录新增 `GET /api/business/revisions/{id}/outline`：按业务修订的历史 parse 批次读取 Markdown，识别 ATX 标题级别并排除代码围栏，每次最多 25 页、以 `next_page` 续扫；任一页截断或身份不符即报错，不输出不完整的“完整目录”。Web 目录项可读到所在页，自有 Skill `outline` 走同一业务 API。此目录是**Markdown 标题的派生视图**，不是 Doclib 原生模型块树；只有页级定位，不保证标题完整或块级证据。原生块树另见下一段，标题目录本身不充当 FE-023 的完成依据。
 
-原生块摘要现从 Doclib 公共接口 `read_parse_structure(parse_id,page_no)` 读取持久化 Middle JSON 的指定历史批次与页，不让业务服务直接打开 Doclib 私有文件。返回顶层块类型、持久块索引、可用标题级别/bbox、仅限文本类块的 200 字符预览及定位器；没有索引的块只给页级定位。业务 API `/api/business/revisions/{id}/structure?page_no=...` 按修订页映射挑选批次并核对 SHA-256、short ID、tier、页码和定位器，不外露 parse ID/宿主路径。Web 与自有 Skill 都通过该业务 API 查看/读取原生块。它仍不是完整嵌套的表格/列表/图像结构树，且机器结果未人工确认；FE-023 继续开放。
+原生块树从 Doclib 公共接口 `read_parse_structure(parse_id,page_no)` 读取持久化 Middle JSON 的指定历史批次与页，不让业务服务直接打开 Doclib 私有文件。返回模型父子块类型、原生层级路径、可用标题级别/bbox、文本类块的 200 字符预览和顶层块定位器；子块只继承其顶层块定位器，不声称子块精确定位。每页最多 500 个顶层块、2000 个总节点、16 层，越界则拒绝而非悄悄截断。业务 API `/api/business/revisions/{id}/structure?page_no=...` 按修订页映射挑选批次并递归核对 SHA-256、short ID、tier、页码、节点路径和顶层定位器，不外露 parse ID/宿主路径。Web 与自有 Skill 都通过该业务 API 查看原生树。FE-023 按“展示模型实际存在的解析结构树”完成；模型未提供的表格单元格层级、子节点精确定位及人工确认不在其完成声明内。FE-018 搜索结果证据列表仍开放。
 
 ## 核心流程
 

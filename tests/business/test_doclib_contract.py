@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -275,6 +276,34 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
         client.read_parse_content(999999, locator)
     with pytest.raises(MineruError, match="does not belong"):
         client.read_parse_content(first_id, f"doc:{first_info.short_id}/tier:basic/page:1/block:1")
+
+
+def test_native_structure_preserves_nested_model_blocks_without_child_locator_claim(
+    live_doclib: tuple[DoclibClient, Path, Path],
+) -> None:
+    client, root, home = live_doclib
+    source = root / "nested.html"
+    source.write_text("<h1>Native tree</h1>", encoding="utf-8")
+    submitted = DoclibGateway(client, shared_root=root).submit(source)
+    _wait_for_parse(client, list(submitted.parse_ids))
+    parse = client.get_parse(submitted.parse_ids[0])
+    middle_path = Path(parse_batch_json_path(
+        str(home / "doclib"), submitted.sha256, "flash", parse.page_range, parse.done_at,
+    ))
+    middle = json.loads(middle_path.read_text(encoding="utf-8"))
+    middle["pages"][0]["blocks"] = [{
+        "type": "list", "index": 0,
+        "content": [{"type": "text", "content": [{"type": "text", "content": "Nested item"}]}],
+    }]
+    middle_path.write_text(json.dumps(middle), encoding="utf-8")
+    tree = client.read_parse_structure(parse.id, 1)
+    assert len(tree.blocks) == 1
+    parent = tree.blocks[0]
+    assert parent.type == "list" and parent.path == [0]
+    assert len(parent.children) == 1
+    child = parent.children[0]
+    assert child.type == "text" and child.path == [0, 0] and child.preview == "Nested item"
+    assert child.locator == parent.locator and child.block_no == parent.block_no
 
 
 def test_published_upload_can_be_submitted_to_doclib(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

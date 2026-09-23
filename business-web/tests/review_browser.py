@@ -75,8 +75,12 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             }))
             page.route("**/api/business/revisions/rev-1/structure?*", lambda route: fulfill(route, {
                 "document_id": document["id"], "revision_id": "rev-1", "page_no": 1,
-                "blocks": [{"type": "doc_title", "block_no": 1, "locator": f"{evidence['locator']}/block:1",
-                            "preview": "年度通知原生标题", "level": 1, "bbox": [1, 2, 3, 4],
+                "blocks": [{"type": "list", "block_no": 1, "locator": f"{evidence['locator']}/block:1",
+                            "path": [0], "preview": "", "level": None, "bbox": [1, 2, 3, 4],
+                            "children": [{"type": "doc_title", "block_no": 1,
+                                          "locator": f"{evidence['locator']}/block:1", "path": [0, 0],
+                                          "preview": "年度通知原生标题", "level": 1, "bbox": None,
+                                          "children": [], "state": "historical_parse_unconfirmed"}],
                             "state": "historical_parse_unconfirmed"}],
             }))
             page.route("**/api/business/revisions/rev-1/content?*", lambda route: fulfill(route, {
@@ -154,7 +158,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="原生解析块结构"))
             structure.get_by_role("button", name="查看本页块").click()
             structure.get_by_text("年度通知原生标题").wait_for()
-            assert structure.get_by_text("doc_title · 标题级别 1 · 块 1").count() == 1
+            assert structure.get_by_text("doc_title · 标题级别 1 · 块 1 · 父块定位").count() == 1
             confirm_button = page.get_by_role("button", name="确认并生成不可变成果版本")
             assert confirm_button.is_disabled()
             assert page.get_by_text("必填字段「标题」尚未作出复核决定").count() == 1

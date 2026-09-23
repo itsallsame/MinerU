@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 46,
+  "completed_features": 47,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3959,9 +3959,9 @@
         "实现：解析结构树",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "历史批次 Middle JSON 的原生父子模型块树；Doclib/业务 API/Web/Skill 同契约，子节点仅复用顶层块定位器。112 项业务测试、41 项相关 Doclib 测试、Web test/build 与 Playwright 通过。模型未提供的表格单元格结构及人工证据不在本项完成声明内。"
     },
     {
       "id": "FE-024",

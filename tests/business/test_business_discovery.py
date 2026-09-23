@@ -274,12 +274,15 @@ def test_native_structure_is_routed_to_the_historical_page_batch_and_sanitized(t
     block_locator = f"doc:{short_id}/tier:flash/page:2/block:3"
     doclib.read_parse_structure.return_value = ParseStructureResponse(
         sha256=sha, short_id=short_id, tier="flash", page_no=2,
-        blocks=[ParseBlockSummary(type="paragraph_title", block_no=3, locator=block_locator,
-                                  preview="Historical section", level=2, bbox=(1, 2, 3, 4))],
+        blocks=[ParseBlockSummary(type="list", block_no=3, locator=block_locator, path=[0],
+                                  children=[ParseBlockSummary(
+                                      type="paragraph_title", block_no=3, locator=block_locator, path=[0, 0],
+                                      preview="Historical section", level=2, bbox=(1, 2, 3, 4),
+                                  )])],
     )
     discovery = BusinessDiscovery(store=store, doclib=doclib)
     page = discovery.structure(revision.id, 2)
-    assert page.document_id == document_id and page.blocks[0].level == 2
+    assert page.document_id == document_id and page.blocks[0].children[0].level == 2
     doclib.read_parse_structure.assert_called_once_with(9, 2)
 
     api = TestClient(create_app(
@@ -290,12 +293,22 @@ def test_native_structure_is_routed_to_the_historical_page_batch_and_sanitized(t
     response = api.get(f"/api/business/revisions/{revision.id}/structure", params={"page_no": 2})
     assert response.status_code == 200 and response.json()["blocks"][0]["locator"] == block_locator
     assert response.json()["blocks"][0]["state"] == "historical_parse_unconfirmed"
+    assert response.json()["blocks"][0]["children"][0]["path"] == [0, 0]
     assert "parse_id" not in response.text and "/private/" not in response.text
     assert api.get(f"/api/business/revisions/{revision.id}/structure", params={"page_no": 3}).status_code == 422
 
     doclib.read_parse_structure.return_value = ParseStructureResponse(
         sha256="0" * 64, short_id=short_id, tier="flash", page_no=2,
         blocks=[ParseBlockSummary(type="text", block_no=3, locator=block_locator)],
+    )
+    with pytest.raises(DiscoveryError, match="historical_structure_mismatch"):
+        discovery.structure(revision.id, 2)
+
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=sha, short_id=short_id, tier="flash", page_no=2,
+        blocks=[ParseBlockSummary(type="list", block_no=3, locator=block_locator, path=[0],
+                                  children=[ParseBlockSummary(type="text", block_no=4, locator=block_locator,
+                                                              path=[0, 0], preview="forged")])],
     )
     with pytest.raises(DiscoveryError, match="historical_structure_mismatch"):
         discovery.structure(revision.id, 2)

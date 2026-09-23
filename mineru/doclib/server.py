@@ -700,7 +700,38 @@ class DoclibServer(AsyncDoclibInterface):
             raise InvalidRequestError("invalid_structure", "Page has too many top-level blocks.", "page_no")
         blocks: list[ParseBlockSummary] = []
         seen_indices: set[int] = set()
-        for block in page.blocks:
+        node_count = 0
+
+        def summarize(block: BlockBase, *, path: list[int], anchor: str, block_no: int | None) -> ParseBlockSummary:
+            nonlocal node_count
+            node_count += 1
+            if node_count > 2000 or len(path) > 16:
+                raise InvalidRequestError("invalid_structure", "Page block tree exceeds structural limits.", "page_no")
+            content = getattr(block, "content", None)
+            children = [
+                summarize(child, path=[*path, position], anchor=anchor, block_no=block_no)
+                for position, child in enumerate(content)
+                if isinstance(child, BlockBase)
+            ] if isinstance(content, list) else []
+            preview = ""
+            if block.type in {
+                BlockType.TEXT, BlockType.REF_TEXT, BlockType.DOC_TITLE, BlockType.PARAGRAPH_TITLE,
+                BlockType.HEADER, BlockType.FOOTER, BlockType.PAGE_NUMBER, BlockType.ASIDE_TEXT,
+                BlockType.PAGE_FOOTNOTE, BlockType.IMAGE_CAPTION, BlockType.IMAGE_FOOTNOTE,
+                BlockType.TABLE_CAPTION, BlockType.TABLE_FOOTNOTE, BlockType.CHART_CAPTION,
+                BlockType.CHART_FOOTNOTE, BlockType.CODE_CAPTION, BlockType.CODE_FOOTNOTE,
+                BlockType.ALGORITHM_BODY,
+            }:
+                preview = _structure_text_preview(content if isinstance(content, list) else [])
+            elif block.type == BlockType.CODE_BODY and isinstance(content, str):
+                preview = re.sub(r"\s+", " ", content).strip()[:200]
+            return ParseBlockSummary(
+                type=block.type.value, block_no=block_no, locator=anchor, path=path,
+                preview=preview, level=getattr(block, "level", None), bbox=block.bbox,
+                children=children,
+            )
+
+        for position, block in enumerate(page.blocks):
             block_no = block.index + 1 if block.index is not None else None
             if block_no is not None:
                 if block_no in seen_indices:
@@ -710,17 +741,7 @@ class DoclibServer(AsyncDoclibInterface):
                 block_ref(row["short_id"], row["tier"], page_no, block_no)
                 if block_no is not None else page_ref(row["short_id"], row["tier"], page_no)
             )
-            preview = ""
-            if block.type in {
-                BlockType.TEXT, BlockType.REF_TEXT, BlockType.DOC_TITLE, BlockType.PARAGRAPH_TITLE,
-                BlockType.HEADER, BlockType.FOOTER, BlockType.PAGE_NUMBER, BlockType.ASIDE_TEXT,
-                BlockType.PAGE_FOOTNOTE,
-            }:
-                preview = _structure_text_preview(getattr(block, "content", []))
-            blocks.append(ParseBlockSummary(
-                type=block.type.value, block_no=block_no, locator=locator,
-                preview=preview, level=getattr(block, "level", None), bbox=block.bbox,
-            ))
+            blocks.append(summarize(block, path=[position], anchor=locator, block_no=block_no))
         return ParseStructureResponse(
             sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"],
             page_no=page_no, blocks=blocks,

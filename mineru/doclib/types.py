@@ -280,9 +280,11 @@ class ParseBlockSummary(DoclibModel):
     type: str
     block_no: int | None = None
     locator: str
+    path: list[int] = Field(default_factory=list)
     preview: str = ""
     level: int | None = None
     bbox: tuple[float, float, float, float] | None = None
+    children: list[ParseBlockSummary] = Field(default_factory=list)
 
 
 class ParseStructureResponse(DoclibModel):

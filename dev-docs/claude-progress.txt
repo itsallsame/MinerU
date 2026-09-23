@@ -324,3 +324,13 @@ Changes:
 Verification: 111 business tests/2 dependency warnings, 41 related Doclib upstream tests, Web 9 tests/8 assets, Playwright review flow, Skill validation, Ruff/diff checks passed. Real HTML old/new batch and 13-page PDF last-page cases passed.
 Evidence: dev-docs/evidence/2026-09-23-native-historical-blocks.md
 Next: Add nested block hierarchy and block-level search/evidence workflow, four-class annotated business acceptance, then isolated Kylin/NVIDIA target validation. Keep goal active.
+
+=== 2026-09-23 Session 30 (Historical native model tree) ===
+Status: In progress; FE-023 completed (47/241), FE-018/P4 evidence and P1/P6 target gates remain open
+Changes:
+- Extended parse-pinned native structure with bounded recursive model nodes, explicit structural paths and inherited top-level locator anchors.
+- Business API recursively rejects identity/path/anchor drift; Web renders nested rows and never offers fake child-specific reads. Skill receives the same nested business response.
+- Marked FE-023 complete only for actual MinerU model hierarchy, not table cells absent from the model or reviewed evidence.
+Verification: 112 business tests/2 dependency warnings, 41 related Doclib tests, Web 9 tests/8 offline assets, Playwright nested-tree and review flow, Ruff passed. Real local Doclib read of a valid nested Middle JSON tree passed.
+Evidence: dev-docs/evidence/2026-09-23-native-historical-tree.md
+Next: Implement FE-018 search result evidence list with truthful page/block provenance, four-class annotated business acceptance, and isolated Kylin/NVIDIA target validation. Keep goal active.
