@@ -594,3 +594,10 @@ Changes: Office original shows explicit browser-preview limitation and a same-pa
 Verification: Playwright DOM/download-link semantics; backend TestClient attachment and nosniff response. Simulated browser routing does not prove an actual Office download event.
 Evidence: dev-docs/evidence/2026-09-23-source-formats-revisions.md
 Next: Verify historical Markdown and revision switching separately. Keep goal active.
+
+=== 2026-09-23 Session 55d (Historical Markdown panel) ===
+Status: In progress; FE-024 verified complete (62/241 passed)
+Changes: Browser workflow now asserts raw page Markdown from both old and new parse revisions in the progressive-reading panel; stale prior text is cleared on switch.
+Verification: Playwright review workflow passed; backend revision-bound historical read suite 12 passed; Web 11 tests/8-asset build passed. Simulated browser API only.
+Evidence: dev-docs/evidence/2026-09-23-source-formats-revisions.md
+Next: Verify revision selection itself and continue P4 gaps. Keep goal active.

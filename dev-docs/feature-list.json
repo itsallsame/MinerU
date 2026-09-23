@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 61,
+  "completed_features": 62,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -3981,9 +3981,9 @@
         "实现：解析Markdown面板",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-23",
+      "notes": "Playwright 在历史解析渐进读取面板分别读取旧/新修订页 Markdown，并验证旧文本切换时清空；后端修订绑定的内容读取测试通过。机器文本明确未确认。证据：dev-docs/evidence/2026-09-23-source-formats-revisions.md"
     },
     {
       "id": "FE-025",
