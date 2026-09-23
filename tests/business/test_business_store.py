@@ -104,6 +104,28 @@ def test_completed_revision_and_frozen_evidence_survive_reparse_and_restart(tmp_
     assert reopened.list_evidence(second.id) == ()
 
 
+def test_multi_batch_revision_persists_page_to_parse_mapping_and_rejects_overlap(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"%PDF-1.7\nlong"), filename="report.pdf")
+    document = business.create_document(upload, original_name="report.pdf")
+    first = _done_parse(upload.sha256, parse_id=17).model_copy(update={"short_id": upload.sha256[:7], "page_range": "1-10"})
+    second = _done_parse(upload.sha256, parse_id=18).model_copy(update={"short_id": upload.sha256[:7], "page_range": "11-13"})
+    revision = business.add_completed_revision(document.id, parse=(first, second), producer_version="4.0.6")
+    reopened = BusinessStore(tmp_path / "business" / "business.sqlite3")
+    reopened.initialize()
+    persisted = reopened.get_revision(revision.id)
+    assert persisted == revision
+    assert persisted.page_range == "1-13"
+    assert persisted.parse_id_for_page(1) == 17
+    assert persisted.parse_id_for_page(13) == 18
+    assert persisted.parse_id_for_page(14) is None
+    with pytest.raises(BusinessStoreError, match="does not belong"):
+        reopened.capture_evidence(revision.id, locator=f"doc:{revision.short_id}/tier:flash/page:14", snippet="Wrong")
+    overlap = second.model_copy(update={"page_range": "10-13"})
+    with pytest.raises(BusinessStoreError, match="overlap"):
+        business.add_completed_revision(document.id, parse=(first, overlap), producer_version="4.0.6")
+
+
 def test_revision_and_locator_must_match_document_identity(tmp_path: Path) -> None:
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Source</h1>"), filename="report.html")
@@ -150,7 +172,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 6")
+        database.execute("PRAGMA user_version = 7")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()
@@ -159,10 +181,10 @@ def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> Non
 def test_previous_prototype_schema_is_refused_without_migration(tmp_path: Path) -> None:
     database_path = tmp_path / "old-prototype.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 5")
+        database.execute("PRAGMA user_version = 6")
         database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
         database.execute("INSERT INTO old_business_data VALUES ('preserve')")
-    with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 5"):
+    with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 6"):
         BusinessStore(database_path).initialize()
     with closing(sqlite3.connect(database_path)) as database:
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"

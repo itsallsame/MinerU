@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from ...doclib import DoclibInterface
 from ...doclib.locators import parse_content_cursor
+from ...doclib.locators import page_ref
+from ...parser.page_range import parse_page_range_set
 from ...errors import MineruError, ServerNotRunningError
 from ...types import Tier
 from ..domain import BusinessDocument
@@ -103,8 +105,11 @@ class BusinessDiscovery:
             raise DiscoveryError("invalid_content_locator") from exc
         if cursor.short_id.lower() != revision.short_id.lower() or cursor.tier != revision.tier:
             raise DiscoveryError("invalid_content_locator")
+        parse_id = revision.parse_id_for_page(cursor.page_no)
+        if parse_id is None:
+            raise DiscoveryError("invalid_content_locator")
         try:
-            response = self._doclib.read_parse_content(revision.doclib_parse_id, locator, limit=limit)
+            response = self._doclib.read_parse_content(parse_id, locator, limit=limit)
         except ServerNotRunningError as exc:
             raise DiscoveryError("doclib_unavailable") from exc
         except MineruError as exc:
@@ -122,6 +127,12 @@ class BusinessDiscovery:
                 raise DiscoveryError("historical_content_mismatch") from exc
             if next_cursor.short_id.lower() != revision.short_id.lower() or next_cursor.tier != revision.tier:
                 raise DiscoveryError("historical_content_mismatch")
+            if revision.parse_id_for_page(next_cursor.page_no) is None:
+                raise DiscoveryError("historical_content_mismatch")
+        if next_locator is None:
+            later_pages = sorted(page for page in parse_page_range_set(revision.page_range) if page > cursor.page_no)
+            if later_pages:
+                next_locator = page_ref(revision.short_id, revision.tier, later_pages[0])
         return HistoricalRead(
             document_id=revision.document_id, revision_id=revision.id, locator=locator,
             tier=revision.tier, content=response.content, truncated=response.truncated,

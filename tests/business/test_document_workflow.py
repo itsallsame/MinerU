@@ -28,13 +28,16 @@ def _parse_response(path: str, *, parse_id: int = 7) -> ParseResponse:
     )
 
 
-def _parse_info(sha256: str, *, status: str = "done", parse_id: int = 7) -> ParseInfo:
+def _parse_info(
+    sha256: str, *, status: str = "done", parse_id: int = 7,
+    page_range: str = "1", short_id: str | None = None,
+) -> ParseInfo:
     return ParseInfo(
         id=parse_id,
         sha256=sha256,
-        short_id=sha256[:12],
+        short_id=short_id or sha256[:12],
         tier="flash",
-        page_range="1",
+        page_range=page_range,
         status=status,
         privacy="local",
         created_at=1,
@@ -87,6 +90,64 @@ def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> 
     with pytest.raises(DocumentWorkflowError, match="not found"):
         resumed.refresh("unknown")
     assert store.get_document(submitted.document.id) == submitted.document
+
+
+def test_pdf_all_pages_become_one_logical_revision_across_parse_batches(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+
+    def ensure(request: object) -> ParseResponse:
+        assert request.page_range == "all" and request.remote is False
+        response = _parse_response(request.path)
+        return response.model_copy(update={"page_range": "1-13", "created_parse_ids": [7, 8]})
+
+    client.ensure_parse.side_effect = ensure
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"%PDF-1.7\nlong document"), filename="report.pdf", tier="flash")
+    assert submitted.task.parse_ids == (7, 8)
+    client.get_parse.side_effect = lambda parse_id: _parse_info(
+        submitted.document.sha256, parse_id=parse_id,
+        page_range="1-10" if parse_id == 7 else "11-13", short_id=submitted.document.sha256[:7],
+    )
+    client.get_doc.return_value.page_count = 13
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revisions = store.list_revisions(submitted.document.id)
+    assert len(revisions) == 1
+    assert revisions[0].page_range == "1-13"
+    assert revisions[0].short_id == submitted.document.sha256[:7]
+    assert revisions[0].parse_id_for_page(1) == 7
+    assert revisions[0].parse_id_for_page(13) == 8
+    assert revisions[0].parse_id_for_page(14) is None
+
+
+def test_pdf_missing_pages_fail_without_creating_a_completed_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"%PDF-1.7\nlong document"), filename="report.pdf", tier="flash")
+    client.get_parse.return_value = _parse_info(submitted.document.sha256, page_range="1-10")
+    client.get_doc.return_value.page_count = 13
+    task = workflow.refresh(submitted.task.id)
+    assert task.status == "failed" and task.error_code == "parse_coverage_incomplete"
+    assert store.list_revisions(submitted.document.id) == ()
+    workflow.retry(task.id)
+    assert client.ensure_parse.call_args.args[0].force is True
+
+
+def test_overlapping_batches_fail_as_retryable_task_without_a_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path).model_copy(
+        update={"created_parse_ids": [7, 8]}
+    )
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Lantern</h1>"), filename="report.html")
+    client.get_parse.side_effect = lambda parse_id: _parse_info(
+        submitted.document.sha256, parse_id=parse_id, page_range="1"
+    )
+    failed = workflow.refresh(submitted.task.id)
+    assert failed.status == "failed" and failed.error_code == "parse_batch_invalid"
+    assert store.list_revisions(submitted.document.id) == ()
+    workflow.retry(failed.id)
+    assert client.ensure_parse.call_args.args[0].force is True
 
 
 def test_doclib_outage_keeps_source_and_failed_task_for_retry(tmp_path: Path) -> None:

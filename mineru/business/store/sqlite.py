@@ -15,6 +15,7 @@ from pathlib import Path
 
 from ...doclib.locators import parse_content_cursor
 from ...doclib.types import ParseInfo
+from ...parser.page_range import format_page_range, parse_page_range_set
 from ...types import Tier
 from ..documents.uploads import StoredUpload
 from ..domain import (
@@ -29,6 +30,7 @@ from ..domain import (
     FieldDecision,
     IngestTask,
     IssueResolution,
+    ParseBatch,
     ParseRevision,
     QualityIssue,
     ReviewSource,
@@ -39,7 +41,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 6
+_SCHEMA_VERSION = 7
 
 
 class BusinessStoreError(ValueError):
@@ -137,6 +139,8 @@ class BusinessStore:
                         id TEXT PRIMARY KEY,
                         document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE RESTRICT,
                         doclib_parse_id INTEGER NOT NULL CHECK(doclib_parse_id > 0),
+                        parse_batches_json TEXT NOT NULL,
+                        page_range TEXT NOT NULL,
                         sha256 TEXT NOT NULL,
                         short_id TEXT NOT NULL,
                         tier TEXT NOT NULL CHECK(tier IN ('flash', 'basic', 'standard', 'advanced')),
@@ -271,7 +275,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 6")
+                database.execute("PRAGMA user_version = 7")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -1010,30 +1014,47 @@ class BusinessStore:
         self,
         document_id: str,
         *,
-        parse: ParseInfo,
+        parse: ParseInfo | tuple[ParseInfo, ...],
         producer_version: str,
         model_ref: str | None = None,
     ) -> ParseRevision:
-        if parse.status != "done":
+        parses = (parse,) if isinstance(parse, ParseInfo) else parse
+        if not parses or any(item.status != "done" for item in parses):
             raise BusinessStoreError("Only completed Doclib parses can become evidence revisions")
         if not producer_version.strip():
             raise BusinessStoreError("Producer version is required")
+        first = parses[0]
+        pages: set[int] = set()
+        batches: list[ParseBatch] = []
+        for item in parses:
+            if (item.sha256, item.short_id, item.tier) != (first.sha256, first.short_id, first.tier):
+                raise BusinessStoreError("Parse batches do not share a document identity and tier")
+            batch_pages = parse_page_range_set(item.page_range)
+            if not batch_pages or pages & batch_pages or item.id < 1:
+                raise BusinessStoreError("Parse batches overlap or have invalid page coverage")
+            pages.update(batch_pages)
+            batches.append(ParseBatch(item.id, item.page_range))
+        batches.sort(key=lambda batch: min(parse_page_range_set(batch.page_range)))
+        parse_batches = tuple(batches)
+        page_range = format_page_range(pages)
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             document = database.execute("SELECT sha256 FROM documents WHERE id=?", (document_id,)).fetchone()
             if document is None:
                 raise BusinessStoreError("Business document not found")
-            if parse.sha256 != document["sha256"]:
+            if first.sha256 != document["sha256"]:
                 raise BusinessStoreError("Doclib parse source does not match the business document")
             existing = database.execute(
-                "SELECT * FROM revisions WHERE document_id=? AND doclib_parse_id=?", (document_id, parse.id)
+                "SELECT * FROM revisions WHERE document_id=? AND doclib_parse_id=?", (document_id, first.id)
             ).fetchone()
             if existing is not None:
-                revision = ParseRevision(**dict(existing))
+                revision = self._revision_from_row(existing)
                 if (
-                    revision.sha256 != parse.sha256
-                    or revision.short_id != parse.short_id
-                    or revision.tier != parse.tier
+                    revision.sha256 != first.sha256
+                    or revision.short_id != first.short_id
+                    or revision.tier != first.tier
+                    or revision.parse_batches != parse_batches
+                    or revision.page_range != page_range
                     or revision.producer_version != producer_version
                     or revision.model_ref != model_ref
                 ):
@@ -1042,20 +1063,24 @@ class BusinessStore:
             revision = ParseRevision(
                 id=uuid.uuid4().hex,
                 document_id=document_id,
-                doclib_parse_id=parse.id,
-                sha256=parse.sha256,
-                short_id=parse.short_id,
-                tier=parse.tier,
+                doclib_parse_id=first.id,
+                parse_batches=parse_batches,
+                page_range=page_range,
+                sha256=first.sha256,
+                short_id=first.short_id,
+                tier=first.tier,
                 producer_version=producer_version,
                 model_ref=model_ref,
                 created_at_ms=_now_ms(),
             )
             database.execute(
-                "INSERT INTO revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     revision.id,
                     revision.document_id,
                     revision.doclib_parse_id,
+                    json.dumps([vars(batch) for batch in revision.parse_batches]),
+                    revision.page_range,
                     revision.sha256,
                     revision.short_id,
                     revision.tier,
@@ -1069,14 +1094,20 @@ class BusinessStore:
     def get_revision(self, revision_id: str) -> ParseRevision | None:
         with closing(self._connect()) as database:
             row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
-        return ParseRevision(**dict(row)) if row is not None else None
+        return self._revision_from_row(row) if row is not None else None
 
     def list_revisions(self, document_id: str) -> tuple[ParseRevision, ...]:
         with closing(self._connect()) as database:
             rows = database.execute(
                 "SELECT * FROM revisions WHERE document_id=? ORDER BY created_at_ms DESC, id DESC", (document_id,)
             ).fetchall()
-        return tuple(ParseRevision(**dict(row)) for row in rows)
+        return tuple(self._revision_from_row(row) for row in rows)
+
+    @staticmethod
+    def _revision_from_row(row: sqlite3.Row) -> ParseRevision:
+        payload = dict(row)
+        payload["parse_batches"] = tuple(ParseBatch(**item) for item in json.loads(payload.pop("parse_batches_json")))
+        return ParseRevision(**payload)
 
     def capture_evidence(
         self,
@@ -1099,6 +1130,8 @@ class BusinessStore:
                 raise BusinessStoreError("Parse revision not found")
             if cursor.short_id.lower() != row["short_id"].lower() or cursor.tier != row["tier"]:
                 raise BusinessStoreError("Locator does not belong to the parse revision")
+            if cursor.page_no not in parse_page_range_set(row["page_range"]):
+                raise BusinessStoreError("Locator page does not belong to the parse revision")
             evidence = EvidenceSnapshot(
                 id=uuid.uuid4().hex,
                 revision_id=revision_id,

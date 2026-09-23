@@ -19,7 +19,8 @@ def main(base_url: str) -> None:
         "size": 100, "created_at_ms": now, "template_code": None, "template_version": None,
     }
     revision = {
-        "id": "rev-1", "document_id": document["id"], "tier": "flash",
+        "id": "rev-1", "document_id": document["id"], "short_id": document["sha256"][:12],
+        "tier": "flash", "page_range": "1",
         "producer_version": "4.0.6", "model_ref": None, "created_at_ms": now,
     }
     evidence = {

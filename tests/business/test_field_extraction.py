@@ -74,6 +74,44 @@ def test_explicit_labels_create_unconfirmed_candidates_and_missing_issue(tmp_pat
     doclib.read_parse_content.assert_any_call(7, store.get_evidence(candidates[0].evidence_id).locator, limit=30000)
 
 
+def test_multi_batch_revision_extracts_each_page_from_its_historical_batch(tmp_path: Path) -> None:
+    store = BusinessStore(tmp_path / "business.sqlite3")
+    store.initialize()
+    upload = ImmutableUploadStore(tmp_path, max_bytes=1024).store(
+        io.BytesIO(b"%PDF-1.7\nsource"), filename="source.pdf"
+    )
+    document = store.create_document(upload, original_name="source.pdf", template_code="official_document")
+    short_id = upload.sha256[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=upload.sha256, short_id=short_id, tier="flash",
+        page_range=str(page_no), status="done", privacy="local", created_at=1,
+        updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((7, 1), (8, 2)))
+    revision = store.add_completed_revision(document.id, parse=parses, producer_version="4.0.6")
+    doclib = Mock(spec=DoclibInterface)
+    doclib.get_parse.side_effect = lambda parse_id: parses[parse_id - 7]
+    doclib.get_doc.return_value.page_count = 2
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        assert parse_id == (7 if "/page:1" in locator else 8)
+        return DocContentResponse(
+            sha256=upload.sha256, short_id=short_id, tier="flash",
+            content="标题：年度通知" if parse_id == 7 else "发文单位：办公室",
+            request_scope=ContentRequestScope(locator=locator),
+        )
+
+    doclib.read_parse_content.side_effect = read
+    extractor = FieldExtraction(store=store, doclib=doclib, evidence_writer=EvidenceWriter(store=store, doclib=doclib))
+    extractor.enqueue(revision.id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    assert {(item.field_code, item.value) for item in store.list_field_candidates(run.id)} == {
+        ("title", "年度通知"), ("issuer", "办公室"),
+    }
+    assert store.list_quality_issues(run.id) == ()
+    assert {call.args[0] for call in doclib.read_parse_content.call_args_list} == {7, 8}
+
+
 def test_missing_required_and_conflicting_values_are_blocking(tmp_path: Path) -> None:
     store, _doclib, extractor, revision_id = _fixture(
         tmp_path, content="标题：第一版\n标题：第二版\n发文单位：办公室"

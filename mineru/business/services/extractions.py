@@ -50,15 +50,17 @@ class FieldExtraction:
         assert revision is not None and template is not None
         try:
             self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
-            parse = self._doclib.get_parse(revision.doclib_parse_id)
-            if (
-                parse.status not in ("done", "superseded")
-                or parse.sha256 != revision.sha256
-                or parse.short_id != revision.short_id
-                or parse.tier != revision.tier
-            ):
-                return self._fail(run, "historical_parse_mismatch")
-            page_numbers = sorted(parse_page_range_set(parse.page_range))
+            for batch in revision.parse_batches:
+                parse = self._doclib.get_parse(batch.parse_id)
+                if (
+                    parse.status not in ("done", "superseded")
+                    or parse.sha256 != revision.sha256
+                    or parse.short_id != revision.short_id
+                    or parse.tier != revision.tier
+                    or parse.page_range != batch.page_range
+                ):
+                    return self._fail(run, "historical_parse_mismatch")
+            page_numbers = sorted(parse_page_range_set(revision.page_range))
             if not page_numbers or len(page_numbers) > _MAX_PAGES:
                 return self._fail(run, "page_range_unsupported")
             doc = self._doclib.get_doc(revision.sha256)
@@ -70,7 +72,9 @@ class FieldExtraction:
             for page_no in page_numbers:
                 self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
                 locator = page_ref(revision.short_id, revision.tier, page_no)
-                page = self._doclib.read_parse_content(revision.doclib_parse_id, locator, limit=_PAGE_LIMIT)
+                parse_id = revision.parse_id_for_page(page_no)
+                assert parse_id is not None
+                page = self._doclib.read_parse_content(parse_id, locator, limit=_PAGE_LIMIT)
                 if (
                     page.truncated
                     or page.sha256 != revision.sha256

@@ -227,7 +227,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     page.type = "number";
     page.min = "1";
     page.max = "100000";
-    page.value = "1";
+    page.value = revision ? String(Number.parseInt(revision.page_range, 10) || 1) : "1";
     page.required = true;
     page.setAttribute("aria-label", "历史解析页码");
     const start = element("button", "secondary-button", "读取这一页");
@@ -239,10 +239,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       event.preventDefault();
       const pageNo = Number(page.value);
       if (!revision || !Number.isInteger(pageNo) || pageNo < 1) return;
-      readHistorical(`doc:${state.document.sha256.slice(0, 12)}/tier:${revision.tier}/page:${pageNo}`);
+      readHistorical(`doc:${revision.short_id}/tier:${revision.tier}/page:${pageNo}`);
     });
     box.append(form);
-    box.append(element("p", "review-hint", "读取指定解析修订的历史内容；这是机器解析文本，未人工确认，也不是冻结证据。"));
+    box.append(element("p", "review-hint", `解析页范围：${revision?.page_range || "未知"}。这是机器解析文本，未人工确认，也不是冻结证据。`));
     if (state.reading) {
       box.append(element("p", "review-hint", `当前定位器：${state.reading.locator}`));
       box.append(element("pre", "historical-content", state.reading.content || "该位置没有可读取的文本。"));
@@ -278,7 +278,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     page.type = "number";
     page.min = "1";
     page.max = "100000";
-    page.value = "1";
+    page.value = revision ? String(Number.parseInt(revision.page_range, 10) || 1) : "1";
     page.required = true;
     page.setAttribute("aria-label", "原文页码");
     const captureButton = element("button", "secondary-button", "采集第 N 页");
@@ -290,7 +290,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       event.preventDefault();
       const pageNumber = Number(page.value);
       if (!Number.isInteger(pageNumber) || pageNumber < 1 || !revision) return;
-      const locator = `doc:${state.document.sha256.slice(0, 12)}/tier:${revision.tier}/page:${pageNumber}`;
+      const locator = `doc:${revision.short_id}/tier:${revision.tier}/page:${pageNumber}`;
       perform(async () => {
         const created = await businessApi.captureEvidence(revision.id, locator);
         state.evidence = await businessApi.revisionEvidence(revision.id);
@@ -492,7 +492,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     const revisionSelect = element("select");
     revisionSelect.setAttribute("aria-label", "选择解析修订");
     for (const revision of state.revisions) {
-      const option = element("option", "", `${revision.tier.toUpperCase()} · ${new Date(revision.created_at_ms).toLocaleString("zh-CN")}`);
+      const option = element("option", "", `${revision.tier.toUpperCase()} · 第 ${revision.page_range} 页 · ${new Date(revision.created_at_ms).toLocaleString("zh-CN")}`);
       option.value = revision.id;
       revisionSelect.append(option);
     }

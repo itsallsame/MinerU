@@ -8,10 +8,11 @@ from typing import BinaryIO
 
 from ...doclib import DoclibInterface
 from ...errors import MineruError
+from ...parser.page_range import parse_page_range_set
 from ...types import Tier
 from ..documents import DoclibGateway, DocumentIntegrityError, ImmutableUploadStore, resolve_parse_tier
 from ..domain import BusinessDocument, IngestTask
-from ..store import BusinessStore
+from ..store import BusinessStore, BusinessStoreError
 
 
 class DocumentWorkflowError(RuntimeError):
@@ -77,7 +78,8 @@ class DocumentWorkflow:
     def _submit_existing(self, task: IngestTask, *, source_path: Path, expected_sha256: str) -> IngestTask:
         try:
             submitted = self._gateway.submit(
-                source_path, tier=task.requested_tier, force=task.error_code == "doclib_parse_failed"
+                source_path, tier=task.requested_tier,
+                force=task.error_code in ("doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"),
             )
             if submitted.sha256 != expected_sha256:
                 raise DocumentIntegrityError("Doclib submission no longer matches the business source")
@@ -105,8 +107,22 @@ class DocumentWorkflow:
             return self._store.mark_task_failed(task.id, error_code="doclib_parse_failed")
         if not all(parse.status == "done" for parse in parses):
             return task
-        for parse in parses:
-            self._store.add_completed_revision(task.document_id, parse=parse, producer_version=self._producer_version)
+        document = self._store.get_document(task.document_id)
+        assert document is not None
+        if document.original_name.lower().endswith(".pdf"):
+            try:
+                doc = self._doclib.get_doc(document.sha256)
+            except MineruError:
+                return task
+            covered_pages = set().union(*(parse_page_range_set(parse.page_range) for parse in parses))
+            if not isinstance(doc.page_count, int) or doc.page_count < 1 or covered_pages != set(range(1, doc.page_count + 1)):
+                return self._store.mark_task_failed(task.id, error_code="parse_coverage_incomplete")
+        try:
+            self._store.add_completed_revision(
+                task.document_id, parse=tuple(parses), producer_version=self._producer_version
+            )
+        except BusinessStoreError:
+            return self._store.mark_task_failed(task.id, error_code="parse_batch_invalid")
         return self._store.mark_task_done(task.id)
 
 

@@ -17,11 +17,12 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
         "size": 100, "created_at_ms": now, "template_code": None, "template_version": None,
     }
     revision = {
-        "id": "rev-1", "document_id": document["id"], "tier": "flash",
+        "id": "rev-1", "document_id": document["id"], "short_id": document["sha256"][:7],
+        "tier": "flash", "page_range": "1",
         "producer_version": "4.0.6", "model_ref": None, "created_at_ms": now,
     }
-    first = f"doc:{document['sha256'][:12]}/tier:flash/page:1"
-    second = f"doc:{document['sha256'][:12]}/tier:flash/page:1/block:2"
+    first = f"doc:{document['sha256'][:7]}/tier:flash/page:1"
+    second = f"doc:{document['sha256'][:7]}/tier:flash/page:1/block:2"
     calls: list[str] = []
 
     def fulfill(route: object, payload: object) -> None:
@@ -71,6 +72,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="继续读取下一段").click()
             page.get_by_text("第二段历史内容").wait_for()
             assert len(calls) == 2
+            assert "doc%3Abbbbbbb" in calls[0]
             if screenshot:
                 page.screenshot(path=str(screenshot), full_page=True)
             page.set_viewport_size({"width": 390, "height": 844})

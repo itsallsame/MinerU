@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ...types import Tier
+from ...parser.page_range import parse_page_range_set
 
 TaskStatus = Literal["uploaded", "submitted", "done", "failed"]
 
@@ -36,16 +37,30 @@ class IngestTask:
 
 
 @dataclass(frozen=True)
+class ParseBatch:
+    parse_id: int
+    page_range: str
+
+
+@dataclass(frozen=True)
 class ParseRevision:
     id: str
     document_id: str
     doclib_parse_id: int
+    parse_batches: tuple[ParseBatch, ...]
+    page_range: str
     sha256: str
     short_id: str
     tier: Tier
     producer_version: str
     model_ref: str | None
     created_at_ms: int
+
+    def parse_id_for_page(self, page_no: int) -> int | None:
+        for batch in self.parse_batches:
+            if page_no in parse_page_range_set(batch.page_range):
+                return batch.parse_id
+        return None
 
 
 @dataclass(frozen=True)
@@ -62,4 +77,4 @@ class EvidenceSnapshot:
     created_at_ms: int
 
 
-__all__ = ["BusinessDocument", "EvidenceSnapshot", "IngestTask", "ParseRevision", "TaskStatus"]
+__all__ = ["BusinessDocument", "EvidenceSnapshot", "IngestTask", "ParseBatch", "ParseRevision", "TaskStatus"]

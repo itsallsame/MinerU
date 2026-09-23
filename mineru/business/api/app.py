@@ -332,7 +332,9 @@ class CapabilitiesView(BaseModel):
 class RevisionView(BaseModel):
     id: str
     document_id: str
+    short_id: str
     tier: Tier
+    page_range: str
     producer_version: str
     model_ref: str | None
     created_at_ms: int
@@ -342,7 +344,9 @@ class RevisionView(BaseModel):
         return cls(
             id=revision.id,
             document_id=revision.document_id,
+            short_id=revision.short_id,
             tier=revision.tier,
+            page_range=revision.page_range,
             producer_version=revision.producer_version,
             model_ref=revision.model_ref,
             created_at_ms=revision.created_at_ms,

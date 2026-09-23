@@ -262,7 +262,7 @@ function renderDetail() {
   revisions.append(element("h3", "", "解析修订"));
   if (state.revisions.length) {
     for (const revision of state.revisions) {
-      const row = element("div", "revision-item", `${revision.tier.toUpperCase()} · MinerU ${revision.producer_version}`);
+      const row = element("div", "revision-item", `${revision.tier.toUpperCase()} · 第 ${revision.page_range} 页 · MinerU ${revision.producer_version}`);
       row.append(element("small", "", new Date(revision.created_at_ms).toLocaleString("zh-CN")));
       revisions.append(row);
     }

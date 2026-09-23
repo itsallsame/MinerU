@@ -73,8 +73,12 @@ class DoclibGateway:
         if not path.is_file() or not path.is_relative_to(self._shared_root):
             raise DocumentPathError("Source must be a regular file inside the shared ingestion root")
         resolved_tier = resolve_parse_tier(path, tier)
+        extension = normalize_parse_extension(path)
         before = _sha256_file(path)
-        response = self._client.ensure_parse(ParseRequest(path=str(path), tier=resolved_tier, force=force, remote=False))
+        response = self._client.ensure_parse(ParseRequest(
+            path=str(path), tier=resolved_tier, page_range="all" if extension == "pdf" else None,
+            force=force, remote=False,
+        ))
         after = _sha256_file(path)
         if before != after or response.sha256 != before:
             raise DocumentIntegrityError("Source bytes changed while Doclib ingested the file")

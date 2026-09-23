@@ -18,9 +18,11 @@ from openpyxl import Workbook
 from PIL import Image
 from pptx import Presentation
 from reportlab.pdfgen import canvas
+from fastapi.testclient import TestClient
 
+from mineru.business.api import create_app
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import BusinessDiscovery, EvidenceReader, EvidenceWriter, FieldExtraction
+from mineru.business.services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter, FieldExtraction
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
@@ -351,6 +353,84 @@ def test_text_pdf_flash_parse_and_locator(live_doclib: tuple[DoclibClient, Path,
     assert "Project Lantern" in content.content
     assert content.content_ranges
     assert client.read_content(content.content_ranges[0].start).sha256 == submitted.sha256
+
+
+def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    sample = Path(__file__).resolve().parents[2] / "demo" / "pdfs" / "demo1.pdf"
+    assert sample.is_file()
+    upload_root = root / "business-uploads"
+    upload_root.mkdir()
+    uploads = ImmutableUploadStore(upload_root, max_bytes=5 * 1024 * 1024)
+    store = BusinessStore(root / "paper-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=uploads, store=store, gateway=DoclibGateway(doclib, shared_root=upload_root),
+        doclib=doclib, producer_version="4.0.6",
+    )
+    client = TestClient(create_app(
+        workflow=workflow, store=store, uploads=uploads,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+        discovery=BusinessDiscovery(store=store, doclib=doclib),
+    ))
+    with sample.open("rb") as source:
+        uploaded = client.post("/api/business/documents", files={"file": (sample.name, source, "application/pdf")},
+                               data={"tier": "flash"})
+    assert uploaded.status_code == 202, uploaded.text
+    payload = uploaded.json()
+    document = payload["document"]
+    task_id = payload["task"]["id"]
+    assert payload["task"]["status"] == "submitted"
+    assert client.get(f"/api/business/documents/{document['id']}/source").content == sample.read_bytes()
+
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        task = client.get(f"/api/business/tasks/{task_id}").json()
+        if task["status"] in ("done", "failed"):
+            break
+        time.sleep(0.2)
+    else:
+        raise AssertionError("Repository PDF business parse did not reach a terminal state")
+    assert task["status"] == "done", task
+    revisions = client.get(f"/api/business/documents/{document['id']}/revisions").json()
+    assert len(revisions) == 1 and revisions[0]["tier"] == "flash"
+    assert revisions[0]["page_range"] == "1-13"
+    locator = f"doc:{revisions[0]['short_id']}/tier:flash/page:1"
+    historical = client.get(f"/api/business/revisions/{revisions[0]['id']}/content", params={"locator": locator})
+    assert historical.status_code == 200, historical.text
+    assert "afforestation" in historical.json()["content"].lower()
+    assert historical.json()["state"] == "historical_parse_unconfirmed"
+    last_page = client.get(
+        f"/api/business/revisions/{revisions[0]['id']}/content",
+        params={"locator": f"doc:{revisions[0]['short_id']}/tier:flash/page:13"},
+    )
+    assert last_page.status_code == 200, last_page.text
+
+    captured = client.post(f"/api/business/revisions/{revisions[0]['id']}/evidence", json={"locator": locator})
+    assert captured.status_code == 201, captured.text
+    inspected = client.get(f"/api/business/evidence/{captured.json()['id']}")
+    assert inspected.status_code == 200
+    assert inspected.json()["snippet"] == captured.json()["snippet"]
+    assert inspected.json()["navigation_status"] == "current_match"
+    searched = client.get("/api/business/search", params={"query": "afforestation"})
+    assert searched.status_code == 200, searched.text
+    assert any(item["document"]["id"] == document["id"] for item in searched.json()["items"])
+
+    # Identical bytes create a separate business document but reuse the local
+    # Doclib parse without leaking its batch IDs through the public API.
+    with sample.open("rb") as source:
+        duplicate = client.post("/api/business/documents", files={"file": (sample.name, source, "application/pdf")},
+                                data={"tier": "flash"})
+    assert duplicate.status_code == 202, duplicate.text
+    duplicate_doc = duplicate.json()["document"]
+    assert duplicate_doc["id"] != document["id"]
+    duplicate_task = client.get(f"/api/business/tasks/{duplicate.json()['task']['id']}").json()
+    assert duplicate_task["status"] == "done", duplicate_task
+    duplicate_revisions = client.get(f"/api/business/documents/{duplicate_doc['id']}/revisions").json()
+    assert len(duplicate_revisions) == 1 and duplicate_revisions[0]["page_range"] == "1-13"
 
 
 @pytest.mark.parametrize("extension", ["docx", "pptx", "xlsx"])

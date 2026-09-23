@@ -108,6 +108,34 @@ def test_revision_read_uses_historical_parse_id_and_returns_safe_continuation(tm
     assert too_large.status_code == 422
 
 
+def test_progressive_read_crosses_historical_parse_batch_boundary(tmp_path: Path) -> None:
+    store, doclib, document_id, _other, _revision, _other_revision = _fixture(tmp_path)
+    sha = store.get_document(document_id).sha256
+    short_id = sha[:7]
+    parses = tuple(ParseInfo(
+        id=parse_id, sha256=sha, short_id=short_id, tier="flash", page_range=str(page_no),
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    ) for parse_id, page_no in ((8, 1), (9, 2)))
+    revision = store.add_completed_revision(document_id, parse=parses, producer_version="4.0.6")
+
+    def read(parse_id: int, locator: str, *, limit: int) -> DocContentResponse:
+        assert parse_id == (8 if "/page:1" in locator else 9)
+        return DocContentResponse(
+            sha256=sha, short_id=short_id, tier="flash", content=f"Page from batch {parse_id}",
+            request_scope=ContentRequestScope(locator=locator),
+        )
+
+    doclib.read_parse_content.side_effect = read
+    discovery = BusinessDiscovery(store=store, doclib=doclib)
+    first = discovery.read(revision.id, f"doc:{short_id}/tier:flash/page:1")
+    assert first.content == "Page from batch 8"
+    assert first.next_locator == f"doc:{short_id}/tier:flash/page:2"
+    second = discovery.read(revision.id, first.next_locator)
+    assert second.content == "Page from batch 9" and second.next_locator is None
+    with pytest.raises(DiscoveryError, match="invalid_content_locator"):
+        discovery.read(revision.id, f"doc:{short_id}/tier:flash/page:3")
+
+
 def test_revision_read_rejects_identity_drift_and_worker_outage(tmp_path: Path) -> None:
     store, doclib, document_a, _document_b, revision_a, _revision_b = _fixture(tmp_path)
     sha = store.get_document(document_a).sha256

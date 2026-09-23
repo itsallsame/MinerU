@@ -24,7 +24,8 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
         "status": "done", "error_code": None, "created_at_ms": now, "updated_at_ms": now,
     }
     revision = {
-        "id": "rev-1", "document_id": document["id"], "tier": "basic", "producer_version": "4.0.6",
+        "id": "rev-1", "document_id": document["id"], "short_id": document["sha256"][:7],
+        "tier": "basic", "page_range": "1", "producer_version": "4.0.6",
         "model_ref": None, "created_at_ms": now,
     }
     run = {
@@ -37,7 +38,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
     }
     evidence = {
         "id": "evidence-1", "revision_id": revision["id"], "document_id": document["id"],
-        "locator": f"doc:{document['sha256'][:12]}/tier:basic/page:1", "page_no": 1, "block_no": None,
+        "locator": f"doc:{document['sha256'][:7]}/tier:basic/page:1", "page_no": 1, "block_no": None,
         "bbox": None, "snippet": "标题：年度通知", "snippet_sha256": "d" * 64, "created_at_ms": now,
     }
     issue = {
@@ -76,6 +77,11 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.route("**/api/business/extractions/run-1/decisions", lambda route: fulfill(route, decisions))
             page.route("**/api/business/extractions/run-1/results", lambda route: fulfill(route, results))
             page.route("**/api/business/extractions/run-1/audit", lambda route: fulfill(route, []))
+            page.route("**/api/business/templates/official_document?version=1", lambda route: fulfill(route, {
+                "code": "official_document", "name": "公文", "version": 1, "built_in": True,
+                "enabled": True, "created_at_ms": now,
+                "fields": [{"code": "title", "label": "标题", "type": "text", "required": True}],
+            }))
 
             def decide(route: object) -> None:
                 payload = json.loads(route.request.post_data)

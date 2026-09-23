@@ -77,8 +77,11 @@ class EvidenceWriter:
             raise EvidenceCaptureError("invalid_evidence_locator") from exc
         if cursor.short_id.lower() != revision.short_id.lower() or cursor.tier != revision.tier:
             raise EvidenceCaptureError("invalid_evidence_locator")
+        parse_id = revision.parse_id_for_page(cursor.page_no)
+        if parse_id is None:
+            raise EvidenceCaptureError("invalid_evidence_locator")
         try:
-            content = self._doclib.read_parse_content(revision.doclib_parse_id, locator, limit=30000)
+            content = self._doclib.read_parse_content(parse_id, locator, limit=30000)
         except MineruError as exc:
             raise EvidenceCaptureError("historical_content_unavailable") from exc
         if content.truncated or not content.content.strip():
