@@ -891,7 +891,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Mac 合成发布回归已证明：仅更换新宿主模型目录/来源锁/清单时，可保持源码、基础/worker/业务镜像 ID、wheelhouse 与 Web 制品不变，形成与前版关联的新 release.json；新旧记录均可独立核验，错配旧模型目录会拒绝。流程见 dev-docs/offline-deployment.md 与 dev-docs/evidence/2026-09-24-model-only-release.md。尚未取得真实新权重、麒麟 amd64/NVIDIA 镜像与现场模型加载/解析验收，保持未完成。"
     },
     {
       "id": "INF-028",

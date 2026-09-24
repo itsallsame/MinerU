@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -55,12 +56,18 @@ def _release(tmp_path: Path, *, previous: bool = False) -> dict[str, object]:
         local_dir = model_dir / repo.local_name
         local_dir.mkdir()
         (local_dir / "weights.bin").write_bytes(b"weights")
-    (model_dir / ".mineru_source_lock.json").write_text(json.dumps({
-        "schema": 1, "source": "huggingface",
-        "repos": [{"repo": repo.name, "repo_id": repo.repos["huggingface"],
-                   "revision": str(index + 1) * 40, "file_count": 1}
-                  for index, repo in enumerate(model_repos)],
-    }))
+    (model_dir / ".mineru_source_lock.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "source": "huggingface",
+                "repos": [
+                    {"repo": repo.name, "repo_id": repo.repos["huggingface"], "revision": str(index + 1) * 40, "file_count": 1}
+                    for index, repo in enumerate(model_repos)
+                ],
+            }
+        )
+    )
     model_manifest = tmp_path / "model-manifest.json"
     offline_package.create_manifest(model_dir, model_manifest)
     web_dist = tmp_path / "web-dist"
@@ -107,6 +114,68 @@ def test_imported_release_artifacts_match_selected_record(tmp_path: Path) -> Non
     assert result["web_assets_verified"] == 1
     assert result["worker_image_id"] == WORKER_ID
     assert result["release_manifest_sha256"] == _hash(artifacts["release_path"].read_bytes())
+
+
+def test_model_only_release_reuses_code_images_and_keeps_prior_models(tmp_path: Path) -> None:
+    first = _release(tmp_path)
+    first_record = json.loads(first["release_path"].read_text())
+    first_model_hash = _hash((first["model_dir"] / MINERU_4_MODELS_TORCH.local_name / "weights.bin").read_bytes())
+    next_model_dir = tmp_path / "models-v2"
+    shutil.copytree(first["model_dir"], next_model_dir)
+    (next_model_dir / MINERU_4_MODELS_TORCH.local_name / "weights.bin").write_bytes(b"revised weights")
+    source_lock = next_model_dir / ".mineru_source_lock.json"
+    lock = json.loads(source_lock.read_text())
+    lock["repos"][0]["revision"] = "f" * 40
+    source_lock.write_text(json.dumps(lock))
+    next_model_manifest = tmp_path / "model-manifest-v2.json"
+    offline_package.create_manifest(next_model_dir, next_model_manifest)
+    next_record = release_manifest.build_release_record(
+        revision=REVISION,
+        worker=first["worker"],
+        business=first["business"],
+        base=first["base"],
+        wheelhouse=first["wheelhouse"],
+        model_manifest=next_model_manifest,
+        model_source_lock=source_lock,
+        web_dist=first["web_dist"],
+        previous_release=first["release_path"],
+    )
+    next_release = tmp_path / "release-v2.json"
+    next_release.write_text(json.dumps(next_record))
+    assert next_record["worker_image_id"] == first_record["worker_image_id"] == WORKER_ID
+    assert next_record["business_image_id"] == first_record["business_image_id"] == BUSINESS_ID
+    assert next_record["base_image_id"] == first_record["base_image_id"] == BASE_ID
+    assert next_record["source_revision"] == first_record["source_revision"] == REVISION
+    assert next_record["wheelhouse"] == first_record["wheelhouse"]
+    assert next_record["business_web"] == first_record["business_web"]
+    assert next_record["model"]["manifest_sha256"] != first_record["model"]["manifest_sha256"]
+    assert next_record["previous_release_sha256"] == _hash(first["release_path"].read_bytes())
+    report = verify_offline_release.verify_release(
+        release_path=next_release,
+        worker=first["worker"],
+        business=first["business"],
+        base=first["base"],
+        wheelhouse=first["wheelhouse"],
+        model_manifest=next_model_manifest,
+        model_dir=next_model_dir,
+        web_dist=first["web_dist"],
+        previous_release=first["release_path"],
+    )
+    assert report["result"] == "artifact_integrity_passed" and report["model_files_verified"] == 3
+    assert _hash((first["model_dir"] / MINERU_4_MODELS_TORCH.local_name / "weights.bin").read_bytes()) == first_model_hash
+    assert verify_offline_release.verify_release(**first)["result"] == "artifact_integrity_passed"
+    with pytest.raises(ValueError, match="not bound"):
+        verify_offline_release.verify_release(
+            release_path=next_release,
+            worker=first["worker"],
+            business=first["business"],
+            base=first["base"],
+            wheelhouse=first["wheelhouse"],
+            model_manifest=next_model_manifest,
+            model_dir=first["model_dir"],
+            web_dist=first["web_dist"],
+            previous_release=first["release_path"],
+        )
 
 
 def test_imported_release_rejects_wheelhouse_file_excluded_from_build_context(tmp_path: Path) -> None:

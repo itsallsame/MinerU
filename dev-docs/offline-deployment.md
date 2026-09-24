@@ -20,6 +20,12 @@
 
 `--reuse-wheelhouse` 只证明上述两个声明的依赖输入文件未变，不验证 wheelhouse 的实际内容、Python ABI、基础镜像、CUDA/vLLM 组合或模型与源码兼容性。任一依赖输入变化、基础镜像/ABI变化或版本组合不确定时，须制备新的目标 Linux wheelhouse，按后续发布清单和制品核验流程重新验收。源码包验证也不代替镜像构建、模型加载和真实文件测试。旧源码提交、镜像、模型目录、清单和业务状态备份都应保留到回退窗口结束，不能以更新源码检出代替数据库回退。
 
+## 仅模型更新，不重建代码镜像
+
+若新权重与**当前已锁定**的 MinerU 源码、Torch/CUDA/vLLM、推理接口均兼容，可保持 `source_revision`、基础镜像 ID、worker/业务镜像 ID、wheelhouse 和 Web 制品不变。先按准备步骤 2 在联网准备机取得两个仓库的精确提交，写入**新**模型目录、目录内来源锁和目录外清单；不要覆盖旧模型目录。经批准介质传入隔离区后，使用当前镜像引用、当前 wheelhouse/Web 制品及新模型清单和来源锁执行步骤 5 的 `release_manifest.py`，以新路径输出 `release.json`，并传 `--previous-release /旧版/release.json`。新发布记录应只在模型字段及前版关联哈希上发生预期变化；核对两个代码镜像的不可变 ID 与旧版完全相同。
+
+切换前依步骤 6 用**新模型目录**验证导入制品；将 `MINERU_MODELS_HOST_DIR`、`MINERU_MODEL_MANIFEST_HOST_FILE` 与 `MINERU_EXPECTED_MODEL_MANIFEST_SHA256` 一起切至新版，重新执行步骤 7 的宿主布局校验和 Compose 配置检查，重建/重启 worker 使其重新加载权重，并执行步骤 8–9 的运行态、模型加载与真实文件验收。业务镜像无需重建或重传，但切换窗口仍须按任务状态和业务备份流程安排；仅校验清单不能证明新模型能加载或解析质量达标。若模型需要新推理代码、依赖或接口适配，则**不是**仅模型更新，必须连同源码、镜像及相应制品按完整流程发布。旧模型目录、清单、发布记录、镜像及匹配业务状态备份保留至回退窗口结束；失败时按旧记录整组切回并复验。
+
 ## 准备与验证步骤
 
 1. 在联网的 **Linux amd64** 准备机锁定 MinerU 提交和已导入的 NVIDIA/vLLM 基础镜像。先记录 `docker image inspect <本地基础镜像> --format '{{.Id}}'` 给出的不可变 ID，并确认该镜像与目标 NVIDIA 驱动/CUDA 组合相容。预先建立本版受控约束目录，设置 `MINERU_BASE_IMAGE=<本地基础镜像>` 和 `MINERU_BASE_IMAGE_ID=<不可变sha256镜像ID>`，运行 `python3 -m scripts.inspect_worker_base --base-image "$MINERU_BASE_IMAGE" --expected-id "$MINERU_BASE_IMAGE_ID" --output /受控目录/本版新建/base-constraints.txt`。检查命令只运行本机已导入镜像，使用 `--pull=never --network=none --read-only`，拒绝非 `linux/amd64`、镜像 ID 不符、宿主准备 Python 与镜像 ABI 不同，直接从镜像读取已安装的 Torch、Torchvision、vLLM 精确版本；约束文件不覆盖旧版。设置 `MINERU_BASE_CONSTRAINTS` 为该新文件，再运行 `sh scripts/prepare-worker-wheelhouse.sh`。准备脚本会用同一镜像重新核对 ID、ABI 和约束文件内容，任一不符即在编译/下载之前退出；uv 锁解析显式使用同一个 `python3` 解释器。随后只在尚无 `wheelhouse/` 的新工作目录中，于同一文件系统的 `.wheelhouse-stage.*` 暂存目录编译带哈希锁文件并下载 wheel。下载完成后，脚本按不可变 ID 启动同一基础镜像，以 `--pull=never --network=none --read-only` 和只读 bind 卷对暂存 wheelhouse 执行 `pip install --dry-run --ignore-installed --no-deps --require-hashes`：在正式发布前核对镜像自身能选择并校验每个锁定 wheel；失败保留暂存目录，不发布 `wheelhouse/`。这仍不是实际安装、GPU 推理或目标麒麟兼容性测试；全部成功才发布。旧 wheelhouse 须另存，不混入新锁。当前只有 Mac 模拟 Docker/准备流程测试，尚无真实 Linux 制品，不能视为已完成。

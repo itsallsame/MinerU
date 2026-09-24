@@ -1112,3 +1112,11 @@ Changes: Verify result JSON checksum on every detail/list read and all prior ver
 Verification: Focused result tests 12 passed; final Mac business 342 passed/2 skipped/2 dependency warnings. Ruff lint, JSON and diff checks passed. This detects mismatched saved bytes, not administrator-resistant tampering; real four-class samples and isolated Kylin/NVIDIA remain open.
 Evidence: dev-docs/evidence/2026-09-24-confirmed-result-integrity.md
 Next: Continue P3/P4 quality and release work, and obtain annotated four-class samples plus target machine access. Keep Goal active.
+
+=== 2026-09-24 Session 124 (model-only offline release boundary) ===
+Status: In progress; INF-027 and P3/P6 real-sample/target gates remain open
+Discovery: Existing release tooling permits a new model manifest and source lock with unchanged source, base/worker/business image IDs, wheelhouse, and Web artifacts, but lacked a direct regression proving both releases remain independently valid. The Mac Docker daemon again failed its bounded read-only probe, so actual build-context and model reload are unverified.
+Changes: Added a synthetic model-only release test: new host model directory, changed weight/source revision, new manifest and previous-release link; asserts code image IDs and source unchanged, both old/new releases verify, and a new record paired with the old model directory fails closed. Documented the exact offline switch/restart/rollback boundary and compatibility caveat. No user/role/permission system, image, model weight or schema change.
+Verification: Focused release test 1 passed; final Mac business suite 343 passed/2 skipped/2 dependency warnings. Ruff lint/format, JSON and diff checks passed. No real Kylin amd64/NVIDIA, weight-load or four-class sample acceptance is claimed.
+Evidence: dev-docs/evidence/2026-09-24-model-only-release.md
+Next: Obtain real weights and target machine for INF-027 and P6; continue business quality work in the meantime. Keep Goal active.
