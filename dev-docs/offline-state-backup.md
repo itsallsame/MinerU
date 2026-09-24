@@ -4,7 +4,7 @@
 
 ## 停机备份
 
-先选定与当前部署完全相同的 Compose 文件、环境文件和三个宿主挂载目录。在受控维护窗口停 `business-api` 与 `doclib-worker`，确认没有其他进程写这三个目录。工具会再次读取所选 Compose 项目的服务状态；Docker 不可用、状态无法解析或服务仍在运行时直接拒绝。该检查不能发现另一个 Compose 项目或宿主进程对目录的写入，需现场核实。
+先选定与当前部署完全相同的 Compose 文件、环境文件和三个宿主挂载目录。在受控维护窗口停 `business-api` 与 `doclib-worker`，确认没有其他进程写这三个目录。工具会再次读取所选 Compose 项目的服务状态，并扫描本机**所有运行中 Docker 容器**的挂载：若有可写 bind/volume 挂载与任一所选状态目录重叠（包括父目录挂载），直接拒绝；Docker 不可用、容器清单/挂载无法完整读取或所选服务仍在运行也拒绝。该检查只是一个时间点，无法阻止随后新容器启动，也不能发现宿主机普通进程写入；维护窗口仍须现场核实。
 
 ```bash
 docker compose --file docker/compose.business.yaml --env-file /受控部署目录/business.env stop business-api doclib-worker
@@ -21,7 +21,7 @@ docker compose --file docker/compose.business.yaml --env-file /受控部署目�
 
 ## 恢复及版本回退
 
-恢复只写入**三个全新的、此前不存在的目标目录**，不覆盖现有挂载数据；目标目录的父目录须已存在。先执行 `verify`，并找回与备份匹配的原发布清单。`restore` 会强制逐字节核对所选 `release.json` 的 SHA-256，在不匹配时写入任何新目录之前拒绝；之后仍须在停服状态运行：
+恢复只写入**三个全新的、此前不存在的目标目录**，不覆盖现有挂载数据；目标目录的父目录须已存在。先执行 `verify`，并找回与备份匹配的原发布清单。`restore` 会强制逐字节核对所选 `release.json` 的 SHA-256，在不匹配时写入任何新目录之前拒绝；复制前还检查所有运行容器是否可写挂载新目标目录或备份目录；之后仍须在停服状态运行：
 
 ```bash
 .venv/bin/python -m scripts.business_state_backup restore \

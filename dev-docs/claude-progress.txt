@@ -1136,3 +1136,11 @@ Changes: Validate the historical revision short hash against source SHA-256 and 
 Verification: Evaluator tests 11 passed, including real FastAPI response and mixed-version synthetic cases; final Mac business suite 346 passed/2 skipped/2 dependency warnings. Ruff lint and diff checks passed. This is not four-class real-sample accuracy or Kylin/GPU proof.
 Evidence: dev-docs/evidence/2026-09-24-sample-report-provenance.md
 Next: Obtain annotated real samples and target machine; archive sample report with the selected release, artifact and runtime reports. Keep Goal active.
+
+=== 2026-09-24 Session 127 (global Docker writer check before backup) ===
+Status: In progress; QA-033/034 and P1/P6 Kylin/NVIDIA gates remain open
+Discovery: State backup only checked the selected Compose project's two services. A second running container could writable-mount the same business/Doclib/original-file directory or its parent while a supposedly quiesced copy ran.
+Changes: Before create/restore, scan all running Docker containers and reject writable bind/volume mounts overlapping protected state, backup or new restore targets. Docker listing/inspection failures fail closed; read-only or unrelated mounts pass. Updated offline backup instructions and corrected stale QA-033 schema note to 13. No auth/user/role/permission, model or schema change.
+Verification: Backup tests 11 passed; final Mac business suite 348 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This is a mocked Docker-inspect contract, not an actual Kylin backup/restore or proof against host processes and post-check races.
+Evidence: dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md
+Next: On the target isolated machine, run a controlled backup/restore and rollback with real data and artifacts; keep a maintenance-window fence against non-Docker host writers and new containers. Keep Goal active.

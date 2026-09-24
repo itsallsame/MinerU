@@ -352,3 +352,53 @@ def test_compose_stop_check_fails_closed_on_running_or_unavailable_docker(
     monkeypatch.setattr(backup.subprocess, "run", unavailable)
     with pytest.raises(backup.BackupError, match="Cannot verify"):
         backup._assert_services_stopped(compose)
+
+
+def test_stop_check_rejects_other_running_containers_with_writable_state_mounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    business, doclib, shared, _release = _state(tmp_path)
+    compose = tmp_path / "compose.yaml"
+    compose.write_text("services: {}", encoding="utf-8")
+    mounts = [{"Type": "bind", "Source": str(business.parent), "RW": True}]
+
+    def docker(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        if command[:2] == ["docker", "compose"]:
+            return SimpleNamespace(stdout='[{"Service":"business-api","State":"exited"}]')
+        if command == ["docker", "ps", "--quiet"]:
+            return SimpleNamespace(stdout="abc123\n")
+        if command == ["docker", "container", "inspect", "abc123"]:
+            return SimpleNamespace(stdout=json.dumps([
+                {"Id": "abc123456", "State": {"Running": True}, "Mounts": mounts},
+            ]))
+        raise AssertionError(command)
+
+    monkeypatch.setattr(backup.subprocess, "run", docker)
+    with pytest.raises(backup.BackupError, match="writable state mount"):
+        backup._assert_services_stopped(compose, protected_dirs=(business, doclib, shared))
+    mounts[0] = {"Type": "bind", "Source": str(business), "RW": False}
+    backup._assert_services_stopped(compose, protected_dirs=(business, doclib, shared))
+    mounts[0] = {"Type": "bind", "Source": str(tmp_path / "unrelated"), "RW": True}
+    backup._assert_services_stopped(compose, protected_dirs=(business, doclib, shared))
+
+    mounts[0] = {"Type": "bind", "Source": str(tmp_path), "RW": True}
+    with pytest.raises(backup.BackupError, match="writable state mount"):
+        backup._assert_services_stopped(compose, protected_dirs=(tmp_path / "new-restore-target",))
+
+
+def test_stop_check_fails_closed_if_global_container_inspection_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compose = tmp_path / "compose.yaml"
+    compose.write_text("services: {}", encoding="utf-8")
+
+    def docker(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        if command[:2] == ["docker", "compose"]:
+            return SimpleNamespace(stdout="")
+        if command == ["docker", "ps", "--quiet"]:
+            return SimpleNamespace(stdout="abc123\n")
+        raise FileNotFoundError("docker inspect unavailable")
+
+    monkeypatch.setattr(backup.subprocess, "run", docker)
+    with pytest.raises(backup.BackupError, match="Cannot inspect all running Docker container mounts"):
+        backup._assert_services_stopped(compose, protected_dirs=(tmp_path / "data",))

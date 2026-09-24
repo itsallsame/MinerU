@@ -132,7 +132,56 @@ def _verify_business_database(path: Path) -> None:
         raise BackupError("Business SQLite schema or integrity check failed")
 
 
-def _assert_services_stopped(compose_file: Path, env_file: Path | None = None) -> None:
+def _assert_no_running_container_writes(protected_dirs: tuple[Path, ...]) -> None:
+    """Reject writable mounts overlapping the selected state, including other Compose projects."""
+    try:
+        listed = subprocess.run(
+            ["docker", "ps", "--quiet"], capture_output=True, text=True, check=True, timeout=40,
+        )
+        container_ids = listed.stdout.splitlines()
+        if not container_ids:
+            return
+        inspected = subprocess.run(
+            ["docker", "container", "inspect", *container_ids],
+            capture_output=True, text=True, check=True, timeout=40,
+        )
+        containers = json.loads(inspected.stdout)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as exc:
+        raise BackupError("Cannot inspect all running Docker container mounts") from exc
+    if not isinstance(containers, list) or len(containers) != len(container_ids):
+        raise BackupError("Running Docker container mount inventory is incomplete")
+    protected = tuple(path.resolve() for path in protected_dirs)
+    for container_id, container in zip(container_ids, containers):
+        if (
+            not isinstance(container, dict)
+            or not isinstance(container.get("Id"), str)
+            or not container["Id"].startswith(container_id)
+            or not isinstance(container.get("State"), dict)
+            or not isinstance(container.get("Mounts"), list)
+        ):
+            raise BackupError("Running Docker container mount inventory is incomplete")
+        if container["State"].get("Running") is not True:
+            continue
+        for mount in container["Mounts"]:
+            if not isinstance(mount, dict) or mount.get("Type") not in ("bind", "volume", "tmpfs"):
+                raise BackupError("Running Docker container mount inventory is incomplete")
+            if mount["Type"] == "tmpfs":
+                continue
+            if not isinstance(mount.get("RW"), bool):
+                raise BackupError("Running Docker container mount inventory is incomplete")
+            if not mount["RW"]:
+                continue
+            source = mount.get("Source")
+            if not isinstance(source, str) or not source.startswith("/"):
+                raise BackupError("Running Docker container mount inventory is incomplete")
+            mounted = Path(source).resolve()
+            if any(mounted.is_relative_to(path) or path.is_relative_to(mounted) for path in protected):
+                raise BackupError("A running Docker container has a writable state mount")
+
+
+def _assert_services_stopped(
+    compose_file: Path, env_file: Path | None = None, protected_dirs: tuple[Path, ...] = (),
+) -> None:
     if compose_file.is_symlink() or not compose_file.is_file():
         raise BackupError("Compose file must be an existing real file")
     command = ["docker", "compose", "--file", str(compose_file)]
@@ -142,22 +191,23 @@ def _assert_services_stopped(compose_file: Path, env_file: Path | None = None) -
         command.extend(("--env-file", str(env_file)))
     command.extend(("ps", "--all", "--format", "json", "business-api", "doclib-worker"))
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
+        result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=40)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise BackupError("Cannot verify that both business services are stopped") from exc
     raw = result.stdout.strip()
-    if not raw:
-        return
-    try:
-        data = json.loads(raw)
-    except ValueError:
+    if raw:
         try:
-            data = [json.loads(line) for line in raw.splitlines()]
-        except ValueError as exc:
-            raise BackupError("Cannot parse Docker Compose service states") from exc
-    entries = data if isinstance(data, list) else [data]
-    if any(not isinstance(entry, dict) or entry.get("State") not in ("exited", "created", "dead") for entry in entries):
-        raise BackupError("Stop business-api and doclib-worker before copying state")
+            data = json.loads(raw)
+        except ValueError:
+            try:
+                data = [json.loads(line) for line in raw.splitlines()]
+            except ValueError as exc:
+                raise BackupError("Cannot parse Docker Compose service states") from exc
+        entries = data if isinstance(data, list) else [data]
+        if any(not isinstance(entry, dict) or entry.get("State") not in ("exited", "created", "dead") for entry in entries):
+            raise BackupError("Stop business-api and doclib-worker before copying state")
+    if protected_dirs:
+        _assert_no_running_container_writes(protected_dirs)
 
 
 def _valid_relative(name: str) -> bool:
@@ -326,7 +376,10 @@ def main() -> int:
                 shared_documents_dir=args.shared_documents_dir,
                 release_manifest=args.release_manifest,
                 output=args.output,
-                check_stopped=lambda: _assert_services_stopped(args.compose_file, args.env_file),
+                check_stopped=lambda: _assert_services_stopped(
+                    args.compose_file, args.env_file,
+                    (args.business_dir, args.doclib_dir, args.shared_documents_dir),
+                ),
             )
             print(f"Offline state backup created: {args.output}")
         else:
@@ -336,7 +389,10 @@ def main() -> int:
                 business_dir=args.business_dir,
                 doclib_dir=args.doclib_dir,
                 shared_documents_dir=args.shared_documents_dir,
-                check_stopped=lambda: _assert_services_stopped(args.compose_file, args.env_file),
+                check_stopped=lambda: _assert_services_stopped(
+                    args.compose_file, args.env_file,
+                    (args.business_dir, args.doclib_dir, args.shared_documents_dir, args.backup),
+                ),
             )
             print("Offline state restored to new directories; inspect ownership and run runtime verification")
     except (BackupError, OSError, UnicodeError) as exc:

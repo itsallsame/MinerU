@@ -5798,7 +5798,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已提供停服后 schema 8 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具，Mac 合成回归通过；目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md"
+      "notes": "已提供停服后 schema 13 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md"
     },
     {
       "id": "QA-034",
