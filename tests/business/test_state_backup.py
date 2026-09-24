@@ -71,7 +71,7 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
         "doclib_dir": restored / "doclib",
         "shared_documents_dir": restored / "shared",
     }
-    backup.restore_backup(backup=output, check_stopped=stopped, **targets)
+    backup.restore_backup(backup=output, release_manifest=release, check_stopped=stopped, **targets)
     assert stopped_checks == 2
     assert (restored / "shared" / "opaque.html").read_bytes() == (shared / "opaque.html").read_bytes()
     assert (restored / "doclib" / "parsed-result.bin").read_bytes() == (doclib / "parsed-result.bin").read_bytes()
@@ -127,6 +127,7 @@ def test_backup_never_overwrites_output_or_existing_restore_target(tmp_path: Pat
     with pytest.raises(backup.BackupError, match="new path"):
         backup.restore_backup(
             backup=fresh,
+            release_manifest=release,
             business_dir=destination,
             doclib_dir=tmp_path / "restore-doclib",
             shared_documents_dir=tmp_path / "restore-shared",
@@ -134,6 +135,42 @@ def test_backup_never_overwrites_output_or_existing_restore_target(tmp_path: Pat
         )
     assert (destination / "keep.txt").read_text() == "keep"
     assert not (tmp_path / "restore-doclib").exists()
+
+
+def test_restore_requires_exact_selected_release_before_writing(tmp_path: Path) -> None:
+    business, doclib, shared, release = _state(tmp_path)
+    output = tmp_path / "backup"
+    backup.create_backup(
+        business_dir=business,
+        doclib_dir=doclib,
+        shared_documents_dir=shared,
+        release_manifest=release,
+        output=output,
+        check_stopped=lambda: None,
+    )
+    other_release = tmp_path / "other-release.json"
+    other_release.write_text(json.dumps({"schema": 3, "source_revision": "b" * 40}), encoding="utf-8")
+    destinations = {
+        "business_dir": tmp_path / "restored-business",
+        "doclib_dir": tmp_path / "restored-doclib",
+        "shared_documents_dir": tmp_path / "restored-shared",
+    }
+
+    def should_not_check_services() -> None:
+        pytest.fail("A wrong release must be rejected before the stop check or any write")
+
+    with pytest.raises(backup.BackupError, match="differs from the backup release"):
+        backup.restore_backup(
+            backup=output, release_manifest=other_release, check_stopped=should_not_check_services, **destinations
+        )
+    assert not any(path.exists() for path in destinations.values())
+
+    missing_release = tmp_path / "missing-release.json"
+    with pytest.raises(backup.BackupError, match="existing real file"):
+        backup.restore_backup(
+            backup=output, release_manifest=missing_release, check_stopped=should_not_check_services, **destinations
+        )
+    assert not any(path.exists() for path in destinations.values())
 
 
 def test_tamper_or_incomplete_backup_cannot_be_restored(tmp_path: Path) -> None:
@@ -154,6 +191,7 @@ def test_tamper_or_incomplete_backup_cannot_be_restored(tmp_path: Path) -> None:
     with pytest.raises(backup.BackupError, match="checksum mismatch"):
         backup.restore_backup(
             backup=output,
+            release_manifest=release,
             business_dir=tmp_path / "restored-business",
             doclib_dir=tmp_path / "restored-doclib",
             shared_documents_dir=tmp_path / "restored-shared",
@@ -187,6 +225,7 @@ def test_malformed_completed_manifest_is_rejected_before_restore(tmp_path: Path)
     with pytest.raises(backup.BackupError, match="unsupported identity"):
         backup.restore_backup(
             backup=output,
+            release_manifest=release,
             business_dir=tmp_path / "restored-business",
             doclib_dir=tmp_path / "restored-doclib",
             shared_documents_dir=tmp_path / "restored-shared",

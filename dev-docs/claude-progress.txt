@@ -870,3 +870,10 @@ Changes: Added stop-checked, complete-marker-verified, no-overwrite backup and n
 Verification: Six synthetic backup/restore tests, full Mac business suite 223 passed/1 skipped and Ruff passed. No Kylin/NVIDIA/air-gap or real-data recovery claim.
 Evidence: dev-docs/evidence/2026-09-24-offline-state-backup.md
 Next: Rehearse backup, restore and release rollback with actual artifacts on isolated Kylin; continue P4 and P6 gates. Keep goal active.
+
+=== 2026-09-24 Session 92 (backup release identity on restore) ===
+Status: In progress; 78/241 passed; QA-034 target rollback still incomplete
+Changes: Restore now requires the selected original release manifest and checks its exact SHA-256 against the backup before any destination is created. CLI and runbook require the release path; open-system contract remains unchanged.
+Verification: Wrong/missing release regression, targeted backup 7 passed, full Mac business 224 passed/1 skipped, Ruff and format checks passed. No matching real Kylin images/models or target rollback rehearsal.
+Evidence: dev-docs/evidence/2026-09-24-offline-state-backup.md
+Next: Validate exact release/model/image pair and restored state on isolated Kylin; continue P4/P6 gaps. Keep goal active.

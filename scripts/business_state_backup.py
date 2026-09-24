@@ -267,6 +267,7 @@ def verify_backup(backup: Path) -> dict[str, Any]:
 def restore_backup(
     *,
     backup: Path,
+    release_manifest: Path,
     business_dir: Path,
     doclib_dir: Path,
     shared_documents_dir: Path,
@@ -274,6 +275,10 @@ def restore_backup(
 ) -> None:
     """Restore only to three new paths; never overwrite or remove existing data."""
     record = verify_backup(backup)
+    if release_manifest.is_symlink() or not release_manifest.is_file():
+        raise BackupError("Selected release manifest must be an existing real file")
+    if _digest(release_manifest) != record["release_sha256"]:
+        raise BackupError("Selected release manifest differs from the backup release")
     targets = {"business": business_dir, "doclib": doclib_dir, "shared_documents": shared_documents_dir}
     resolved = {name: path.resolve() for name, path in targets.items()}
     _separate({**resolved, "backup": backup.resolve()})
@@ -304,6 +309,7 @@ def main() -> int:
             command.add_argument("--output", type=Path, required=True)
         else:
             command.add_argument("--backup", type=Path, required=True)
+            command.add_argument("--release-manifest", type=Path, required=True)
     commands.add_parser("verify").add_argument("--backup", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -323,6 +329,7 @@ def main() -> int:
         else:
             restore_backup(
                 backup=args.backup,
+                release_manifest=args.release_manifest,
                 business_dir=args.business_dir,
                 doclib_dir=args.doclib_dir,
                 shared_documents_dir=args.shared_documents_dir,

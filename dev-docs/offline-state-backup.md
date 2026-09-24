@@ -21,12 +21,13 @@ docker compose --file docker/compose.business.yaml --env-file /受控部署目�
 
 ## 恢复及版本回退
 
-恢复只写入**三个全新的、此前不存在的目标目录**，不覆盖现有挂载数据；目标目录的父目录须已存在。先执行 `verify`，并确认当前发布制品与备份携带的 `release.json` 身份匹配；之后仍须在停服状态运行：
+恢复只写入**三个全新的、此前不存在的目标目录**，不覆盖现有挂载数据；目标目录的父目录须已存在。先执行 `verify`，并找回与备份匹配的原发布清单。`restore` 会强制逐字节核对所选 `release.json` 的 SHA-256，在不匹配时写入任何新目录之前拒绝；之后仍须在停服状态运行：
 
 ```bash
 .venv/bin/python -m scripts.business_state_backup restore \
   --compose-file docker/compose.business.yaml --env-file /受控部署目录/business.env \
   --backup /受控备份目录/本次唯一备份名 \
+  --release-manifest /匹配的原发布目录/release.json \
   --business-dir /新业务数据目录 --doclib-dir /新Doclib数据目录 \
   --shared-documents-dir /新共享原件目录
 ```

@@ -5821,7 +5821,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已形成配套版本回退流程：恢复到新挂载目录并匹配原发布制品、模型与清单；只有 Mac 合成恢复，无目标麒麟机器上的镜像/模型回退演练，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md"
+      "notes": "已形成配套版本回退流程：恢复到新挂载目录，工具强制核对所选原 release.json 与备份散列；仍须现场匹配镜像和模型。只有 Mac 合成恢复，无目标麒麟机器上的镜像/模型回退演练，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md"
     },
     {
       "id": "QA-035",
