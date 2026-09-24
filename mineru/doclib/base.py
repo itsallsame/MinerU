@@ -38,6 +38,8 @@ from .types import (
     ListParsesResponse,
     ParseInfo,
     ParseRequest,
+    ParseReleaseRequest,
+    ParseReleaseResponse,
     ParseResponse,
     ParseBlockSearchResponse,
     ParseStructureResponse,
@@ -108,6 +110,11 @@ class DoclibInterface(ABC):
             EngineError: when the requested quality tier cannot be served or parsing cannot be queued.
             MineruError: for other server-side failures.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def release_parse_consumer(self, request: ParseReleaseRequest) -> ParseReleaseResponse:
+        """Release a work-intent key; only ``skipped`` proves queued compute was prevented."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -585,6 +592,11 @@ class AsyncDoclibInterface(ABC):
     @abstractmethod
     async def ensure_parse(self, request: ParseRequest) -> ParseResponse:
         """Async version of ``DoclibInterface.ensure_parse``."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def release_parse_consumer(self, request: ParseReleaseRequest) -> ParseReleaseResponse:
+        """Async version of ``DoclibInterface.release_parse_consumer``."""
         raise NotImplementedError()
 
     @abstractmethod

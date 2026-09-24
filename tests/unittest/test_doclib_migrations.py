@@ -18,7 +18,7 @@ def test_fresh_database_records_all_schema_migrations(tmp_path: Path) -> None:
         await db.initialize()
 
         rows = await db.fetchall("SELECT version FROM _migrations ORDER BY version")
-        assert rows == [{"version": 1}, {"version": 2}, {"version": 3}]
+        assert rows == [{"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}]
 
     asyncio.run(_run())
 
@@ -52,6 +52,53 @@ def test_v3_migration_protects_existing_active_batches(tmp_path: Path, monkeypat
         await db.initialize()
         assert await db.fetchall("SELECT parse_id FROM parse_consumers ORDER BY parse_id") == [
             {"parse_id": 1}, {"parse_id": 2}
+        ]
+
+    asyncio.run(_run())
+
+
+def test_v4_migration_preserves_existing_consumer_claims(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 3)
+        await db.initialize()
+        await db.execute(
+            "INSERT INTO docs (sha256, short_id, size_bytes, first_seen_at, updated_at) "
+            "VALUES (?, 'claimed', 1, 1, 1)",
+            ("b" * 64,),
+        )
+        parse_id = await db.execute_insert(
+            "INSERT INTO parses (sha256, tier, page_range, status, created_at, updated_at) "
+            "VALUES (?, 'standard', '1', 'pending', 1, 1)",
+            ("b" * 64,),
+        )
+        await db.execute(
+            "INSERT INTO parse_consumers (parse_id, consumer_key, protected, created_at) "
+            "VALUES (?, 'business:before-v4', 0, 1)",
+            (parse_id,),
+        )
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 4)
+        await db.initialize()
+        assert await db.fetchone(
+            "SELECT consumer_key, protected, released_at, release_outcome, release_status "
+            "FROM parse_consumers WHERE parse_id=?",
+            (parse_id,),
+        ) == {
+            "consumer_key": "business:before-v4",
+            "protected": 0,
+            "released_at": None,
+            "release_outcome": None,
+            "release_status": None,
+        }
+        await db.execute(
+            "INSERT INTO parse_intents (consumer_key, state, created_at) VALUES ('business:before-v4', 'active', 1)"
+        )
+        assert await db.fetchone(
+            "SELECT state, result_json FROM parse_intents WHERE consumer_key='business:before-v4'"
+        ) == {"state": "active", "result_json": None}
+        await db.initialize()
+        assert await db.fetchall("SELECT version FROM _migrations ORDER BY version") == [
+            {"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}
         ]
 
     asyncio.run(_run())

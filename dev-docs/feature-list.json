@@ -3807,7 +3807,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Doclib 当前无按批次取消公共契约，解析批次还可能跨业务文档复用；不能用前端隐藏或单改业务状态冒充停 GPU。目标语义和待实现测试见 dev-docs/2026-09-23-task-cancellation-design.md。保持未完成。"
+      "notes": "Doclib 已有逐批次释放契约，只有 skipped 可证明待处理计算被跳过；共享/运行中/保守保留均不能冒充停 GPU。业务 cancel_requested 恢复协议、业务 API、Web/Skill 入口及跨库/目标环境验收仍未完成，见 dev-docs/2026-09-23-task-cancellation-design.md。"
     },
     {
       "id": "FE-017",

@@ -2006,6 +2006,91 @@ def test_explicit_parse_ingests_without_queuing_default_flash_batch(
     asyncio.run(_run())
 
 
+def test_background_duplicate_content_protects_active_business_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _NoRulesConfig:
+        async def match_rules(self, path: str, rule_type: str) -> list[dict[str, Any]]:
+            return []
+
+    async def _metadata(path: str) -> dict[str, Any]:
+        return {
+            "page_count": 1, "title": None, "author": None, "subject": None,
+            "keywords": None, "is_image_based": 0,
+        }
+
+    monkeypatch.setattr(parse_svc_module, "extract_metadata", _metadata)
+
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=_NoRulesConfig(),
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        first = tmp_path / "business.pdf"
+        duplicate = tmp_path / "background.pdf"
+        first.write_bytes(b"%PDF-1.7\nsame")
+        duplicate.write_bytes(first.read_bytes())
+        response = await service.request_parse(str(first), tier="standard", consumer_key="business:one")
+        parse_id = response.wait_parse_ids[0]
+
+        await service.ingest_file(str(duplicate), trigger="background")
+        assert await db.fetchall("SELECT id FROM parses") == [{"id": parse_id}]
+        assert await db.fetchall("SELECT consumer_key, protected FROM parse_consumers ORDER BY consumer_key") == [
+            {"consumer_key": "business:one", "protected": 0},
+            {"consumer_key": "system:ingest", "protected": 1},
+        ]
+        assert await db.fetchone("SELECT sha256 FROM files WHERE path=?", (str(duplicate),)) == {"sha256": response.sha256}
+
+        # Re-discovery of the already tracked original path must not lose the system interest.
+        await service.ingest_file(str(first), trigger="background")
+        assert await db.fetchone("SELECT COUNT(*) AS count FROM parse_consumers") == {"count": 2}
+
+    asyncio.run(_run())
+
+
+def test_released_consumer_intent_cannot_requeue_or_reclaim_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _NoRulesConfig:
+        async def match_rules(self, path: str, rule_type: str) -> list[dict[str, Any]]:
+            return []
+
+    async def _metadata(path: str) -> dict[str, Any]:
+        return {
+            "page_count": 1, "title": None, "author": None, "subject": None,
+            "keywords": None, "is_image_based": 0,
+        }
+
+    monkeypatch.setattr(parse_svc_module, "extract_metadata", _metadata)
+
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=_NoRulesConfig(),
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        source = tmp_path / "intent.pdf"
+        source.write_bytes(b"%PDF-1.7\nintent")
+        initial = await service.request_parse(str(source), tier="standard", consumer_key="business:retired")
+        assert len(initial.wait_parse_ids) == 1
+        assert await db.fetchone(
+            "SELECT state FROM parse_intents WHERE consumer_key='business:retired'"
+        ) == {"state": "active"}
+        await db.execute(
+            "UPDATE parse_intents SET state='released', released_at=1 WHERE consumer_key='business:retired'"
+        )
+        with pytest.raises(InvalidRequestError) as exc_info:
+            await service.request_parse(str(source), tier="standard", consumer_key="business:retired", force=True)
+        assert exc_info.value.code == "consumer_released"
+        assert await db.fetchall("SELECT id FROM parses") == [{"id": initial.wait_parse_ids[0]}]
+        assert await db.fetchone("SELECT COUNT(*) AS count FROM parse_consumers") == {"count": 1}
+
+    asyncio.run(_run())
+
+
 @pytest.mark.parametrize("pre_ingested", [False, True])
 def test_concurrent_explicit_requests_reuse_one_pending_batch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pre_ingested: bool

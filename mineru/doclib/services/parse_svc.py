@@ -60,10 +60,13 @@ from ..types import (
     PARSE_STATUS_FAILED,
     PARSE_STATUS_PARSING,
     PARSE_STATUS_PENDING,
+    PARSE_STATUS_SKIPPED,
     PARSE_STATUS_SUPERSEDED,
     RULE_TYPE_PARSING_RULE,
     WATCH_STATUS_UNREACHABLE,
     FileInfo,
+    ParseReleaseItem,
+    ParseReleaseResponse,
     ParseResponse,
 )
 from ..utils.path_utils import normalize_doclib_path
@@ -74,6 +77,11 @@ logger = logging.getLogger("mineru.parse")
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _validate_consumer_key(consumer_key: str) -> None:
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:_-]{0,127}", consumer_key) is None or consumer_key.startswith("system:"):
+        raise InvalidRequestError("consumer_key_invalid", "Invalid parse consumer key.", "consumer_key")
 
 
 class ParseFailure(MineruError):
@@ -497,6 +505,8 @@ class ParseService:
             await self.db.fetchone("SELECT * FROM files WHERE path=? AND status=?", (path, FILE_STATUS_ACTIVE)),
         )
         if existing_path and existing_path["sha256"] == sha256:
+            if queue_initial_parse:
+                await self._protect_background_interest(sha256)
             return existing_path
 
         # check if same content (sha256) is already tracked by another path
@@ -504,39 +514,22 @@ class ParseService:
         if existing_sha:
             # same content, possibly a new or changed path — bind this file row
             # to the existing doc without duplicating docs/parses.
-            if existing_path:
-                await self.db.execute(
-                    "UPDATE files SET filename=?, ext=?, size_bytes=?, mtime_ms=?, "
-                    "sha256=?, watch_id=COALESCE(?, watch_id), locked_at=NULL, error_code=NULL, error_msg=NULL, updated_at=? "
-                    "WHERE id=?",
+            await self.db.execute_atomic(
+                [
                     (
-                        filename,
-                        ext,
-                        stat.size_bytes,
-                        stat.mtime_ms,
-                        sha256,
-                        watch_id,
-                        now,
-                        existing_path["id"],
-                    ),
-                )
-            else:
-                await self.db.execute(
-                    "INSERT INTO files (path, filename, ext, size_bytes, mtime_ms, "
-                    "sha256, watch_id, first_seen_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        path,
-                        filename,
-                        ext,
-                        stat.size_bytes,
-                        stat.mtime_ms,
-                        sha256,
-                        watch_id,
-                        now,
-                        now,
-                    ),
-                )
+                        "INSERT INTO files (path, filename, ext, size_bytes, mtime_ms, "
+                        "sha256, watch_id, first_seen_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(path) DO UPDATE SET filename=excluded.filename, ext=excluded.ext, "
+                        "size_bytes=excluded.size_bytes, mtime_ms=excluded.mtime_ms, sha256=excluded.sha256, "
+                        "watch_id=COALESCE(excluded.watch_id, files.watch_id), status='active', locked_at=NULL, "
+                        "error_code=NULL, error_msg=NULL, deleted_at=NULL, updated_at=excluded.updated_at",
+                        (path, filename, ext, stat.size_bytes, stat.mtime_ms, sha256, watch_id, now, now),
+                    )
+                ]
+            )
+            if queue_initial_parse:
+                await self._protect_background_interest(sha256)
             file_row = cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
             if file_row:
                 await self.fts.upsert_filename(file_row["id"], Path(path).stem, ext)
@@ -699,6 +692,55 @@ class ParseService:
 
         return cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
 
+    async def _protect_background_interest(self, sha256: str) -> None:
+        """Attach implicit ingest interest or requeue work skipped before discovery won the race."""
+
+        async def _register(conn: aiosqlite.Connection) -> Tier | None:
+            cursor = await conn.execute(
+                "SELECT id, tier FROM parses WHERE sha256=? AND status IN (?, ?)",
+                (sha256, PARSE_STATUS_PENDING, PARSE_STATUS_PARSING),
+            )
+            active = await cursor.fetchall()
+            now = _now_ms()
+            if active:
+                for batch in active:
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO parse_consumers (parse_id, consumer_key, protected, created_at) "
+                        "VALUES (?, 'system:ingest', 1, ?)",
+                        (batch["id"], now),
+                    )
+                return None
+
+            cursor = await conn.execute(
+                "SELECT tier, page_range, privacy FROM parses WHERE sha256=? AND status=? ORDER BY id DESC LIMIT 1",
+                (sha256, PARSE_STATUS_SKIPPED),
+            )
+            skipped = await cursor.fetchone()
+            if skipped is None:
+                return None
+            cursor = await conn.execute(
+                "SELECT 1 FROM parses WHERE sha256=? AND tier=? AND status=? LIMIT 1",
+                (sha256, skipped["tier"], PARSE_STATUS_DONE),
+            )
+            if await cursor.fetchone() is not None:
+                return None
+            cursor = await conn.execute(
+                "INSERT INTO parses (sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+                (sha256, skipped["tier"], skipped["page_range"], PARSE_STATUS_PENDING, skipped["privacy"], now, now),
+            )
+            if cursor.lastrowid is None:
+                raise RuntimeError("SQLite insert did not return a parse ID")
+            await conn.execute(
+                "INSERT INTO parse_consumers (parse_id, consumer_key, protected, created_at) VALUES (?, 'system:ingest', 1, ?)",
+                (cursor.lastrowid, now),
+            )
+            return cast(Tier, skipped["tier"])
+
+        created_tier = await self.db.write_transaction(_register)
+        if created_tier is not None:
+            await self._record_count("parse_task.created.count", dimensions={"tier": created_tier})
+
     # ── parse request ───────────────────────────────────────────
 
     async def request_parse(
@@ -712,10 +754,8 @@ class ParseService:
         consumer_key: str | None = None,
     ) -> ParseResponse:
         """Handle a parse request from CLI.  Returns info for status polling."""
-        if consumer_key is not None and (
-            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:_-]{0,127}", consumer_key) is None or consumer_key.startswith("system:")
-        ):
-            raise InvalidRequestError("consumer_key_invalid", "Invalid parse consumer key.", "consumer_key")
+        if consumer_key is not None:
+            _validate_consumer_key(consumer_key)
         page_range = normalize_page_range_input(page_range) or None
         # ensure the path is current before trusting files.sha256
         refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True, queue_initial_parse=False)
@@ -790,6 +830,21 @@ class ParseService:
         async def _queue(conn: aiosqlite.Connection) -> ParseResponse:
             # The done/active lookup, priority bump and insert must share the same
             # write transaction. Otherwise concurrent requests can both see a gap.
+            if consumer_key is not None:
+                cursor = await conn.execute(
+                    "SELECT state FROM parse_intents WHERE consumer_key=?",
+                    (consumer_key,),
+                )
+                intent = await cursor.fetchone()
+                if intent is not None and intent["state"] == "released":
+                    raise InvalidRequestError(
+                        "consumer_released", "This parse consumer intent has already been released.", "consumer_key"
+                    )
+                if intent is None:
+                    await conn.execute(
+                        "INSERT INTO parse_intents (consumer_key, state, created_at) VALUES (?, 'active', ?)",
+                        (consumer_key, _now_ms()),
+                    )
             remaining = set(needed_page_numbers)
             if not force:
                 cursor = await conn.execute(
@@ -883,6 +938,95 @@ class ParseService:
         if response.created_parse_ids:
             await self._record_count("parse_task.created.count", dimensions={"tier": requested_tier})
         return response
+
+    async def release_consumer(self, consumer_key: str) -> ParseReleaseResponse:
+        """Retire one work intent; skip only queued batches that are provably unshared."""
+        _validate_consumer_key(consumer_key)
+
+        async def _release(conn: aiosqlite.Connection) -> ParseReleaseResponse:
+            now = _now_ms()
+            await conn.execute(
+                "INSERT INTO parse_intents (consumer_key, state, created_at, released_at) "
+                "VALUES (?, 'released', ?, ?) "
+                "ON CONFLICT(consumer_key) DO UPDATE SET state='released', "
+                "released_at=COALESCE(parse_intents.released_at, excluded.released_at)",
+                (consumer_key, now, now),
+            )
+            cursor = await conn.execute("SELECT result_json FROM parse_intents WHERE consumer_key=?", (consumer_key,))
+            saved = await cursor.fetchone()
+            if saved is not None and saved["result_json"] is not None:
+                return ParseReleaseResponse.model_validate_json(saved["result_json"])
+            cursor = await conn.execute(
+                "SELECT c.parse_id, c.released_at, c.release_outcome, c.release_status, "
+                "p.sha256, p.status, p.locked_at "
+                "FROM parse_consumers c JOIN parses p ON p.id=c.parse_id "
+                "WHERE c.consumer_key=? ORDER BY c.parse_id",
+                (consumer_key,),
+            )
+            claims = await cursor.fetchall()
+            results: list[ParseReleaseItem] = []
+            for claim in claims:
+                if claim["released_at"] is not None:
+                    results.append(
+                        ParseReleaseItem(
+                            parse_id=claim["parse_id"],
+                            disposition=claim["release_outcome"],
+                            status_at_release=claim["release_status"],
+                        )
+                    )
+                    continue
+                await conn.execute(
+                    "UPDATE parse_consumers SET released_at=? WHERE parse_id=? AND consumer_key=? AND released_at IS NULL",
+                    (now, claim["parse_id"], consumer_key),
+                )
+                status = claim["status"]
+                if status == PARSE_STATUS_PENDING:
+                    cursor = await conn.execute(
+                        "SELECT COUNT(*) AS count FROM parse_consumers WHERE parse_id=? AND released_at IS NULL",
+                        (claim["parse_id"],),
+                    )
+                    others = (await cursor.fetchone())["count"]
+                    if others:
+                        disposition = "shared"
+                    else:
+                        cursor = await conn.execute(
+                            "SELECT COUNT(*) AS count, "
+                            "COALESCE(SUM(CASE WHEN watch_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS watched "
+                            "FROM files WHERE sha256=? AND status=?",
+                            (claim["sha256"], FILE_STATUS_ACTIVE),
+                        )
+                        sources = await cursor.fetchone()
+                        if sources["count"] != 1 or sources["watched"] or claim["locked_at"] is not None:
+                            disposition = "retained"
+                        else:
+                            cursor = await conn.execute(
+                                "UPDATE parses SET status=?, updated_at=? "
+                                "WHERE id=? AND status=? AND locked_at IS NULL RETURNING status",
+                                (PARSE_STATUS_SKIPPED, now, claim["parse_id"], PARSE_STATUS_PENDING),
+                            )
+                            skipped = await cursor.fetchone()
+                            disposition = "skipped" if skipped is not None else "retained"
+                            if skipped is not None:
+                                status = PARSE_STATUS_SKIPPED
+                elif status == PARSE_STATUS_PARSING:
+                    disposition = "running"
+                elif status == PARSE_STATUS_SKIPPED:
+                    disposition = "skipped"
+                else:
+                    disposition = "finished"
+                await conn.execute(
+                    "UPDATE parse_consumers SET release_outcome=?, release_status=? WHERE parse_id=? AND consumer_key=?",
+                    (disposition, status, claim["parse_id"], consumer_key),
+                )
+                results.append(ParseReleaseItem(parse_id=claim["parse_id"], disposition=disposition, status_at_release=status))
+            response = ParseReleaseResponse(consumer_key=consumer_key, results=results)
+            await conn.execute(
+                "UPDATE parse_intents SET result_json=? WHERE consumer_key=?",
+                (response.model_dump_json(), consumer_key),
+            )
+            return response
+
+        return await self.db.write_transaction(_release)
 
     # ── worker ──────────────────────────────────────────────────
 

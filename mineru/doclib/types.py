@@ -10,7 +10,7 @@ from ..parser.page_range import PAGE_RANGE_DESCRIPTION
 from ..types import Tier
 
 ParseSubmitStatus = Literal["pending", "done"]
-ParseStatus = Literal["pending", "done", "parsing", "failed", "superseded"]
+ParseStatus = Literal["pending", "done", "parsing", "failed", "superseded", "skipped"]
 FileStatus = Literal["active", "deleted", "unreachable"]
 ScanStatus = Literal["pending", "running", "done", "failed"]
 ScanKind = Literal["manual", "watch"]
@@ -31,6 +31,7 @@ PARSE_STATUS_DONE: ParseSubmitStatus = "done"
 PARSE_STATUS_PARSING: ParseStatus = "parsing"
 PARSE_STATUS_FAILED: ParseStatus = "failed"
 PARSE_STATUS_SUPERSEDED: ParseStatus = "superseded"
+PARSE_STATUS_SKIPPED: ParseStatus = "skipped"
 
 FILE_STATUS_ACTIVE: FileStatus = "active"
 FILE_STATUS_DELETED: FileStatus = "deleted"
@@ -119,6 +120,24 @@ class ParseResponse(DoclibModel):
     created_parse_ids: list[int] = Field(default_factory=list)
     reused_parse_ids: list[int] = Field(default_factory=list)
     tip: str | None = None
+
+
+ParseReleaseDisposition = Literal["skipped", "shared", "running", "finished", "retained"]
+
+
+class ParseReleaseRequest(DoclibModel):
+    consumer_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9:_-]*$")
+
+
+class ParseReleaseItem(DoclibModel):
+    parse_id: int
+    disposition: ParseReleaseDisposition
+    status_at_release: ParseStatus
+
+
+class ParseReleaseResponse(DoclibModel):
+    consumer_key: str
+    results: list[ParseReleaseItem] = Field(default_factory=list)
 
 
 class ParseCoverage(DoclibModel):

@@ -319,6 +319,18 @@ def test_parse_failure_requires_forced_retry(tmp_path: Path) -> None:
     assert client.ensure_parse.call_args.args[0].force is True
 
 
+def test_unexpected_skipped_batch_fails_business_task_without_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Skipped</h1>"), filename="report.html")
+    client.get_parse.return_value = _parse_info(submitted.document.sha256, status="skipped")
+
+    failed = workflow.refresh(submitted.task.id)
+    assert failed.status == "failed" and failed.error_code == "doclib_parse_failed"
+    assert store.list_revisions(submitted.document.id) == ()
+
+
 def test_invalid_tier_or_database_failure_does_not_leave_upload(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     workflow, _store, shared = _workflow(tmp_path, client, initialize_db=False)

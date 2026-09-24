@@ -54,6 +54,8 @@ from .types import (
     ListParsesResponse,
     ParseInfo,
     ParseRequest,
+    ParseReleaseRequest,
+    ParseReleaseResponse,
     ParseResponse,
     ParseBlockSearchResponse,
     ParseStructureResponse,
@@ -133,6 +135,10 @@ class DoclibClient(DoclibInterface):
     def ensure_parse(self, request: ParseRequest) -> ParseResponse:
         request = request.model_copy(update={"page_range": normalize_page_range_input(request.page_range) or None})
         return self._request_model(ParseResponse, body=request)
+
+    @route("POST", "/parses/release", tags=("parse",))
+    def release_parse_consumer(self, request: ParseReleaseRequest) -> ParseReleaseResponse:
+        return self._request_model(ParseReleaseResponse, body=request)
 
     @route("GET", "/parses", tags=("parse",))
     def list_parses(

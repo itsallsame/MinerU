@@ -27,7 +27,7 @@ from mineru.business.api import create_app
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.business.services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter, FieldExtraction
 from mineru.business.store import BusinessStore
-from mineru.doclib import DoclibClient, ParseRequest, ScanRequest
+from mineru.doclib import DoclibClient, ParseReleaseRequest, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
 from mineru.doclib.services.parse_svc import parse_batch_json_path
 from mineru.doclib.types import ForgetPathRequest
@@ -125,6 +125,24 @@ def test_public_doclib_parse_registers_business_consumer(
         ).fetchall()
     assert ("business:contract", 0) in claims
     assert set(claims) <= {("business:contract", 0), ("system:ingest", 1)}
+
+
+def test_public_doclib_release_is_idempotent_and_rejects_late_requeue(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    client, root, _home = live_doclib
+    source = root / "release.html"
+    source.write_text("<h1>Public release</h1>", encoding="utf-8")
+    submitted = client.ensure_parse(
+        ParseRequest(path=str(source), tier="flash", consumer_key="business:public-release")
+    )
+    released = client.release_parse_consumer(ParseReleaseRequest(consumer_key="business:public-release"))
+    assert [item.parse_id for item in released.results] == submitted.wait_parse_ids
+    assert released.results[0].disposition in {"skipped", "shared", "running", "finished", "retained"}
+    assert client.release_parse_consumer(ParseReleaseRequest(consumer_key="business:public-release")) == released
+    with pytest.raises(MineruError) as error:
+        client.ensure_parse(ParseRequest(path=str(source), tier="flash", consumer_key="business:public-release"))
+    assert error.value.code == "consumer_released"
 
 
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

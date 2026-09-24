@@ -135,6 +135,8 @@ from .types import (
     ParseCoverage,
     ParseInfo,
     ParseRequest,
+    ParseReleaseRequest,
+    ParseReleaseResponse,
     ParseResponse,
     ParseBlockSummary,
     ParseBlockMatch,
@@ -391,6 +393,10 @@ class DoclibServer(AsyncDoclibInterface):
             await _record_telemetry_count(self.state, "parse.finished.count", dimensions=dims)
             await _record_telemetry_duration(self.state, "parse.duration_bucket.count", start_ms, dimensions=dims)
             raise
+
+    @route("POST", "/parses/release", tags=("parse",))
+    async def release_parse_consumer(self, request: ParseReleaseRequest) -> ParseReleaseResponse:
+        return await self.state.parse_svc.release_consumer(request.consumer_key)
 
     @route("GET", "/parses", tags=("parse",))
     async def list_parses(

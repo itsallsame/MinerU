@@ -133,7 +133,7 @@ class DocumentWorkflow:
             parses = [self._doclib.get_parse(parse_id) for parse_id in task.parse_ids]
         except MineruError:
             return task  # A transient worker outage must not erase a submitted task.
-        if any(parse.status in ("failed", "superseded") for parse in parses):
+        if any(parse.status in ("failed", "superseded", "skipped") for parse in parses):
             return self._store.mark_task_failed(task.id, error_code="doclib_parse_failed")
         if not all(parse.status == "done" for parse in parses):
             return task

@@ -70,6 +70,7 @@ def test_doclib_interface_declares_expected_methods() -> None:
         "get_server_status",
         "shutdown_server",
         "ensure_parse",
+        "release_parse_consumer",
         "list_parses",
         "get_parse",
         "invalidate",
