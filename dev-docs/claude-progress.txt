@@ -1128,3 +1128,11 @@ Changes: Require distinct business document IDs and distinct source SHA-256 acro
 Verification: Evaluator tests 10 passed; full Mac business suite 345 passed/2 skipped/2 dependency warnings; Ruff lint and diff checks passed. All cases are synthetic, not four-class real acceptance.
 Evidence: dev-docs/evidence/2026-09-24-sample-suite-deduplication.md
 Next: Obtain real de-identified annotated samples for P6; run the same read-only evaluator on Mac and isolated Kylin/NVIDIA after the model and images are available. Keep Goal active.
+
+=== 2026-09-24 Session 126 (sample report revision provenance) ===
+Status: In progress; four-class real annotations and target Kylin/NVIDIA gates remain open
+Discovery: The read-only evaluator checked revision ID/document association but not source short hash, and its redacted report hid actual parse tier and producer version inside the service. A mixed-version suite could therefore look homogeneous if the operator supplied a single environment string.
+Changes: Validate the historical revision short hash against source SHA-256 and require a valid tier/non-empty producer version. Record the server's tier and producer version per case plus distinct sets in the summary; document that these are not image or model attestations. No user/role/permission, model or database change.
+Verification: Evaluator tests 11 passed, including real FastAPI response and mixed-version synthetic cases; final Mac business suite 346 passed/2 skipped/2 dependency warnings. Ruff lint and diff checks passed. This is not four-class real-sample accuracy or Kylin/GPU proof.
+Evidence: dev-docs/evidence/2026-09-24-sample-report-provenance.md
+Next: Obtain annotated real samples and target machine; archive sample report with the selected release, artifact and runtime reports. Keep Goal active.

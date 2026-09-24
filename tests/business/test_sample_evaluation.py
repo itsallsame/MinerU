@@ -56,7 +56,10 @@ def _get(path: str) -> Any:
     category = module[-1].replace("doc-", "").replace("rev-", "").replace("run-", "")
     if path.startswith("/documents/") and path.endswith("/revisions"):
         category = module[-2].replace("doc-", "")
-        return [{"id": f"rev-{category}", "document_id": f"doc-{category}"}]
+        source = f"Synthetic {category} source".encode()
+        return [{"id": f"rev-{category}", "document_id": f"doc-{category}",
+                 "short_id": hashlib.sha256(source).hexdigest()[:12], "tier": "flash",
+                 "producer_version": "4.0.6"}]
     if path.startswith("/documents/"):
         source = f"Synthetic {category} source".encode()
         return {"id": f"doc-{category}", "sha256": hashlib.sha256(source).hexdigest(), "template_code": category}
@@ -93,11 +96,31 @@ def test_four_class_suite_reports_exact_metrics_without_raw_annotations(tmp_path
     assert report["aggregate"]["evidence_hits"] == 4
     assert report["aggregate"]["matched_headings"] == 1
     assert report["aggregate"]["field_recall"] == 1.0
+    assert report["tiers"] == ["flash"] and report["producer_versions"] == ["4.0.6"]
+    assert report["cases"][0]["tier"] == "flash"
     assert report["by_class"]["paper"]["candidate_precision"] == 1.0
     assert report["by_tag"]["seal_watermark"]["expected_fields"] == 1
     assert "Gold " not in json.dumps(report)
     assert "Synthetic " not in json.dumps(report)
     assert "not human-confirmed" in report["note"]
+
+
+def test_suite_report_exposes_mixed_service_revision_versions(tmp_path: Path) -> None:
+    module = _module()
+    cases = module.load_suite(_suite(tmp_path))
+
+    def mixed(path: str) -> Any:
+        payload = _get(path)
+        if path == "/documents/doc-paper/revisions":
+            payload[0]["tier"] = "advanced"
+            payload[0]["producer_version"] = "4.0.7"
+        return payload
+
+    report = module.evaluate_suite(cases, mixed, "Mac synthetic contract")
+    assert report["tiers"] == ["advanced", "flash"]
+    assert report["producer_versions"] == ["4.0.6", "4.0.7"]
+    paper = next(case for case in report["cases"] if case["category"] == "paper")
+    assert paper["tier"] == "advanced" and paper["producer_version"] == "4.0.7"
 
 
 def test_suite_rejects_missing_class_and_tampered_source(tmp_path: Path) -> None:
@@ -160,6 +183,15 @@ def test_evaluation_rejects_wrong_business_identity_and_public_origin(tmp_path: 
 
     with pytest.raises(module.EvaluationError, match="identity or extraction state"):
         module.evaluate_case(case, wrong)
+
+    def wrong_revision(path: str) -> Any:
+        payload = _get(path)
+        if path.endswith("/revisions"):
+            payload[0]["short_id"] = "0" * 12
+        return payload
+
+    with pytest.raises(module.EvaluationError, match="identity or extraction state"):
+        module.evaluate_case(case, wrong_revision)
     with pytest.raises(module.EvaluationError, match="private or loopback"):
         module.BusinessReader("http://8.8.8.8:8088")
 
@@ -262,6 +294,7 @@ def test_evaluator_reads_real_business_api_contract(tmp_path: Path) -> None:
     }
     result = module.evaluate_case(case, get)
     assert result["matched_fields"] == 1 and result["evidence_hits"] == 1
+    assert result["tier"] == "flash" and result["producer_version"] == "4.0.6"
     assert "Synthetic notice" not in json.dumps(result)
 
 

@@ -18,6 +18,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 CLASSES = frozenset({"official_document", "paper", "research_report", "newspaper"})
 TAGS = frozenset({"handwritten", "cross_page_table", "seal_watermark"})
+TIERS = frozenset({"flash", "basic", "standard", "advanced"})
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
@@ -211,13 +212,14 @@ def evaluate_case(case: dict[str, Any], get: Callable[[str], Any]) -> dict[str, 
     revisions = get(f"/documents/{quote(document_id, safe='')}/revisions")
     extraction = get(f"/extractions/{quote(run_id, safe='')}")
     evidence = get(f"/revisions/{quote(revision_id, safe='')}/evidence")
+    revision = next((item for item in revisions if isinstance(item, dict) and item.get("id") == revision_id
+                     and item.get("document_id") == document_id), None) if isinstance(revisions, list) else None
     if (
         not isinstance(document, dict) or document.get("id") != document_id
         or document.get("sha256") != case["sha256"] or document.get("template_code") != case["category"]
-        or not isinstance(revisions, list) or not any(
-            isinstance(revision, dict) and revision.get("id") == revision_id
-            and revision.get("document_id") == document_id for revision in revisions
-        )
+        or revision is None or revision.get("short_id") != case["sha256"][:12]
+        or not isinstance(revision.get("tier"), str) or revision["tier"] not in TIERS
+        or not isinstance(revision.get("producer_version"), str) or not revision["producer_version"].strip()
         or not isinstance(extraction, dict) or not isinstance(extraction.get("run"), dict)
         or extraction["run"].get("id") != run_id or extraction["run"].get("revision_id") != revision_id
         or extraction["run"].get("template_code") != case["category"]
@@ -270,6 +272,7 @@ def evaluate_case(case: dict[str, Any], get: Callable[[str], Any]) -> dict[str, 
     report: dict[str, Any] = {
         "id": case_id, "category": case["category"], "tags": case.get("tags", []), "document_id": document_id,
         "revision_id": revision_id, "run_id": run_id,
+        "tier": revision["tier"], "producer_version": revision["producer_version"],
         "expected_fields": len(fields), "matched_fields": len(matched_fields),
         "candidate_fields": len(candidates), "matched_candidates": len(used),
         "evidence_hits": len(evidence_owner),
@@ -310,6 +313,8 @@ def evaluate_suite(cases: list[dict[str, Any]], get: Callable[[str], Any], envir
               if any(tag in report["tags"] for report in reports)}
     return {"schema": 1, "environment": environment, "case_count": len(reports),
             "classes": sorted({report["category"] for report in reports}),
+            "tiers": sorted({report["tier"] for report in reports}),
+            "producer_versions": sorted({report["producer_version"] for report in reports}),
             "cases": reports, "aggregate": aggregate, "by_class": by_class, "by_tag": by_tag,
             "note": "Exact-match machine candidate metrics; not human-confirmed accuracy or production acceptance."}
 
