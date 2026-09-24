@@ -723,3 +723,10 @@ Changes: Changed model-manifest generation to immutable, atomic create-only publ
 Verification: Offline configuration 10 passed; full Mac business suite 182 passed/1 opt-in skipped; Ruff lint and diff check passed. No Kylin/NVIDIA/physical-air-gap claim.
 Evidence: dev-docs/evidence/2026-09-24-model-manifest-no-clobber.md
 Next: Build/import real linux/amd64 offline artifacts, verify model loading and four-class annotated samples on isolated target, then exercise rollback. Keep goal active.
+
+=== 2026-09-24 Session 71 (Open upload ingress body limit) ===
+Status: In progress; 70/241 passed; P1/P6 target gates remain incomplete
+Changes: Added ASGI request-body cap before multipart spooling for the open document-submit route, covering declared, absent and falsely short Content-Length. Exact file limit remains in the immutable upload store; no auth/user/permission layer or extra container added. Updated offline deployment boundary.
+Verification: New upload ingress tests 4 passed; full Mac business suite 186 passed/1 opt-in skipped; Ruff lint, new-file format and diff check passed. No target Kylin/NVIDIA or real-network acceptance claim.
+Evidence: dev-docs/evidence/2026-09-24-upload-ingress-limit.md
+Next: Validate ingress and Compose on isolated target, obtain four-class annotated samples, and continue remaining business Web/Skill acceptance. Keep goal active.

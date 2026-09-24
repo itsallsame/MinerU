@@ -64,6 +64,7 @@ from ..services import (
     StructureBlock,
 )
 from ..store import BusinessStore, BusinessStoreError
+from .body_limit import UploadBodyLimit
 
 
 class FieldDecisionRequest(BaseModel):
@@ -609,6 +610,8 @@ def create_app(
                 extraction_worker.stop()
 
     app = FastAPI(title="MinerU Business Documents", version="0.1.0", lifespan=lifespan)
+    if uploads is not None:
+        app.add_middleware(UploadBodyLimit, max_upload_bytes=uploads.max_bytes)
 
     @app.get("/api/business/quality-stats", response_model=QualityStatsView)
     def get_quality_stats() -> QualityStatsView:
