@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,40 @@ def build_release_record(
     }
 
 
+def _validate_output_path(
+    output: Path, *, wheelhouse: Path, model_manifest: Path, web_dist: Path,
+    previous_release: Path | None,
+) -> None:
+    if output.exists() or output.is_symlink():
+        raise ValueError("Release manifest output already exists; keep prior releases immutable")
+    target = output.resolve()
+    if target.is_relative_to(wheelhouse.resolve()) or target.is_relative_to(web_dist.resolve()):
+        raise ValueError("Release manifest output must be outside selected release artifacts")
+    protected_files = {model_manifest.resolve()}
+    if previous_release is not None:
+        protected_files.add(previous_release.resolve())
+    if target in protected_files:
+        raise ValueError("Release manifest output must not replace a model or previous release manifest")
+
+
+def _write_new_release(output: Path, record: dict[str, Any]) -> None:
+    """Publish once; a concurrent release writer must not overwrite an existing record."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=output.parent, prefix=f".{output.name}.", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(record, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--worker-image", required=True)
@@ -176,8 +211,10 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     try:
-        if args.output.resolve().is_relative_to(args.wheelhouse.resolve()):
-            raise ValueError("Release manifest output must be outside the wheelhouse")
+        _validate_output_path(
+            args.output, wheelhouse=args.wheelhouse, model_manifest=args.model_manifest,
+            web_dist=args.web_dist, previous_release=args.previous_release,
+        )
         if _command("git", "status", "--porcelain"):
             raise ValueError("Release source tree must be clean")
         revision = _command("git", "rev-parse", "HEAD")
@@ -191,10 +228,7 @@ def main() -> int:
             web_dist=args.web_dist,
             previous_release=args.previous_release,
         )
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        temporary = args.output.with_suffix(args.output.suffix + ".tmp")
-        temporary.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.replace(temporary, args.output)
+        _write_new_release(args.output, record)
         print(f"Release manifest written to {args.output}")
     except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"Release manifest error: {exc}", file=sys.stderr)

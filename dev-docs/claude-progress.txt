@@ -709,3 +709,10 @@ Changes: Extended opt-in live Playwright Web/API/Doclib scenario with a labeled 
 Verification: Live opt-in 1 passed; Web 11 Node tests and 8-asset offline build passed; full business 176 passed/1 opt-in skipped; upstream unittest 2798 passed/4 skipped; Ruff lint/format passed. Mac with public/synthetic sources only.
 Evidence: dev-docs/evidence/2026-09-24-live-web-review-flow.md
 Next: Four-class annotated business samples, target Kylin/NVIDIA air-gap acceptance and remaining P4/P1 gaps. Keep goal active.
+
+=== 2026-09-24 Session 69 (Offline release record no-clobber) ===
+Status: In progress; 70/241 passed; P1 target-machine gates remain incomplete
+Changes: Protected offline release-record creation against overwriting an existing release, model manifest or Web/wheelhouse artifacts; added atomic create-only publication and deployment instructions for unique versioned output paths. No user/permission layer changed.
+Verification: Targeted release tests 17 passed; full Mac business suite 179 passed/1 opt-in skipped after local socket permission; Ruff lint passed. Initial restricted full run failed only on Doclib socket binding. No real linux/amd64 image, model or Kylin/NVIDIA acceptance claim.
+Evidence: dev-docs/evidence/2026-09-24-release-manifest-no-clobber.md
+Next: Obtain/build target linux/amd64 offline images and wheelhouse; verify real model artifacts and four-class annotated samples on isolated Kylin/NVIDIA, including rollback. Keep goal active.

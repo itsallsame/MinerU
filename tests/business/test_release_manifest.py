@@ -212,3 +212,56 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
     assert record["worker_image_id"] == IMAGE_ID
     assert record["business_image_id"] == BUSINESS_ID
     assert record["business_web"]["manifest_sha256"] == web_sha256
+
+
+def test_release_output_cannot_clobber_existing_artifacts(tmp_path: Path) -> None:
+    wheelhouse, model_manifest, web_dist, _ = _artifacts(tmp_path)
+    previous_release = tmp_path / "previous-release.json"
+    previous_release.write_bytes(b"previous release")
+    output = tmp_path / "release.json"
+    output.write_bytes(b"current release")
+
+    for target in (output, model_manifest, previous_release):
+        original = target.read_bytes()
+        with pytest.raises(ValueError, match="already exists"):
+            release_manifest._validate_output_path(
+                target, wheelhouse=wheelhouse, model_manifest=model_manifest,
+                web_dist=web_dist, previous_release=previous_release,
+            )
+        assert target.read_bytes() == original
+
+    for target in (wheelhouse / "new-release.json", web_dist / "new-release.json"):
+        with pytest.raises(ValueError, match="outside selected release artifacts"):
+            release_manifest._validate_output_path(
+                target, wheelhouse=wheelhouse, model_manifest=model_manifest,
+                web_dist=web_dist, previous_release=previous_release,
+            )
+        assert not target.exists()
+
+
+def test_release_output_cannot_follow_symlink_to_prior_release(tmp_path: Path) -> None:
+    wheelhouse, model_manifest, web_dist, _ = _artifacts(tmp_path)
+    previous_release = tmp_path / "previous-release.json"
+    previous_release.write_bytes(b"previous release")
+    output = tmp_path / "release.json"
+    output.symlink_to(previous_release)
+
+    with pytest.raises(ValueError, match="already exists"):
+        release_manifest._validate_output_path(
+            output, wheelhouse=wheelhouse, model_manifest=model_manifest,
+            web_dist=web_dist, previous_release=previous_release,
+        )
+    assert previous_release.read_bytes() == b"previous release"
+
+
+def test_release_writer_creates_once_without_overwriting(tmp_path: Path) -> None:
+    output = tmp_path / "nested" / "release.json"
+    record = {"schema": 3, "source_revision": REVISION}
+    release_manifest._write_new_release(output, record)
+    original = output.read_bytes()
+    assert json.loads(original) == record
+
+    with pytest.raises(FileExistsError):
+        release_manifest._write_new_release(output, {"schema": 999})
+    assert output.read_bytes() == original
+    assert not list(output.parent.glob(f".{output.name}.*"))
