@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -59,6 +61,57 @@ def test_candidate_requires_explicit_decision_before_confirmation(tmp_path: Path
     assert not hasattr(decision, "user_id")
     with pytest.raises(BusinessStoreError, match="No review changes"):
         store.confirm_result(run_id, source="web")
+
+
+@pytest.mark.parametrize("corrupted_column", ["fields_json", "fields_sha256"])
+def test_corrupted_confirmed_result_cannot_be_read_or_versioned(
+    tmp_path: Path, corrupted_column: str,
+) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
+    result = store.confirm_result(run_id, source="web")
+    client = TestClient(create_app(workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()))
+    replacement = '[{"value":"伪造成果"}]' if corrupted_column == "fields_json" else "0" * 64
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database, database:
+        database.execute(f"UPDATE confirmed_results SET {corrupted_column}=? WHERE id=?", (replacement, result.id))
+    with pytest.raises(BusinessStoreError, match="Confirmed result checksum mismatch"):
+        store.get_confirmed_result(result.id)
+    with pytest.raises(BusinessStoreError, match="Confirmed result checksum mismatch"):
+        store.list_confirmed_results(run_id)
+    detail = client.get(f"/api/business/results/{result.id}")
+    listed = client.get(f"/api/business/extractions/{run_id}/results")
+    assert detail.status_code == listed.status_code == 409
+    assert "伪造成果" not in detail.text and "伪造成果" not in listed.text
+    store.decide_field(
+        run_id, field_code="title", value="年度通知（修订）", evidence_id=evidence_id,
+        source="api", reason="复核更正",
+    )
+    with pytest.raises(BusinessStoreError, match="Confirmed result checksum mismatch"):
+        store.confirm_result(run_id, source="api")
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database:
+        assert database.execute("SELECT COUNT(*) FROM confirmed_results WHERE run_id=?", (run_id,)).fetchone()[0] == 1
+
+
+def test_older_corrupted_result_blocks_new_version_without_changing_history(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
+    first = store.confirm_result(run_id, source="web")
+    store.decide_field(
+        run_id, field_code="title", value="年度通知（二版）", evidence_id=evidence_id,
+        source="api", reason="复核更正",
+    )
+    second = store.confirm_result(run_id, source="api")
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database, database:
+        database.execute("UPDATE confirmed_results SET fields_sha256=? WHERE id=?", ("0" * 64, first.id))
+    store.decide_field(
+        run_id, field_code="title", value="年度通知（三版）", evidence_id=evidence_id,
+        source="api", reason="再次复核",
+    )
+    with pytest.raises(BusinessStoreError, match="Confirmed result checksum mismatch"):
+        store.confirm_result(run_id, source="api")
+    assert store.get_confirmed_result(second.id) == second
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database:
+        assert database.execute("SELECT COUNT(*) FROM confirmed_results WHERE run_id=?", (run_id,)).fetchone()[0] == 2
 
 
 def test_quality_stats_count_workflow_records_not_accuracy(tmp_path: Path) -> None:

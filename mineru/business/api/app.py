@@ -807,11 +807,17 @@ def create_app(
     def list_confirmed_results(run_id: str) -> list[ConfirmedResultView]:
         if store.get_extraction(run_id) is None:
             raise HTTPException(status_code=404, detail="Extraction not found")
-        return [ConfirmedResultView.from_record(item) for item in store.list_confirmed_results(run_id)]
+        try:
+            return [ConfirmedResultView.from_record(item) for item in store.list_confirmed_results(run_id)]
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/api/business/results/{result_id}", response_model=ConfirmedResultView)
     def get_confirmed_result(result_id: str) -> ConfirmedResultView:
-        result = store.get_confirmed_result(result_id)
+        try:
+            result = store.get_confirmed_result(result_id)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         if result is None:
             raise HTTPException(status_code=404, detail="Result not found")
         return ConfirmedResultView.from_record(result)

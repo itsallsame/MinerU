@@ -3130,7 +3130,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "成果版本采用追加式记录，不覆盖旧版；现对每版字段 JSON 的 SHA-256 在详情、列表及再次确认时核对，任一旧版内容/哈希不一致则 API 409 或拒绝生成新版本，避免损坏内容静默成为成果。Mac 篡改与版本历史回归通过；没有签名式防管理员篡改，也未完成四类真实样本和麒麟/NVIDIA 现场验收，不标完成。见 dev-docs/evidence/2026-09-24-confirmed-result-integrity.md。"
     },
     {
       "id": "BE-058",

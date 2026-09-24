@@ -1104,3 +1104,11 @@ Changes: Validate snippet checksum on evidence reads, candidate attachment, revi
 Verification: Focused evidence/extraction/review 52 passed; final Mac business 339 passed/2 skipped/2 dependency warnings. Ruff lint, JSON and diff checks passed. Real four-class samples and isolated Kylin/NVIDIA remain untested.
 Evidence: dev-docs/evidence/2026-09-24-evidence-integrity-gate.md
 Next: Continue P3 quality/review work and obtain four-class annotated samples plus target Kylin/NVIDIA access. Keep Goal active.
+
+=== 2026-09-24 Session 123 (confirmed result history integrity) ===
+Status: In progress; BE-057 and P3/P6 real-sample/target gates remain open
+Discovery: Confirmed-result fields JSON had a stored SHA-256, but detail/list reads parsed it without verification; next confirmation compared only the latest saved digest. Separately corrupted historical content could be presented as a valid immutable result.
+Changes: Verify result JSON checksum on every detail/list read and all prior versions before confirming a new one. Corruption yields safe 409 without fields, and no new version is created; existing explicit review and frozen-evidence gates remain. Updated stale design text to current schema 13. No auth/user/role/permission or model change.
+Verification: Focused result tests 12 passed; final Mac business 342 passed/2 skipped/2 dependency warnings. Ruff lint, JSON and diff checks passed. This detects mismatched saved bytes, not administrator-resistant tampering; real four-class samples and isolated Kylin/NVIDIA remain open.
+Evidence: dev-docs/evidence/2026-09-24-confirmed-result-integrity.md
+Next: Continue P3/P4 quality and release work, and obtain annotated four-class samples plus target machine access. Keep Goal active.

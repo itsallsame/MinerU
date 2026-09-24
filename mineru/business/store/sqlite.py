@@ -67,6 +67,13 @@ def _verify_evidence_checksum(snippet: str, expected_sha256: str) -> None:
         raise BusinessStoreError("Frozen evidence checksum mismatch")
 
 
+def _verify_result_checksum(fields_json: str, expected_sha256: str) -> None:
+    if not isinstance(fields_json, str) or not isinstance(expected_sha256, str) or (
+        hashlib.sha256(fields_json.encode("utf-8")).hexdigest() != expected_sha256
+    ):
+        raise BusinessStoreError("Confirmed result checksum mismatch")
+
+
 class BusinessStore:
     """Single-node business DB. Connections and transactions are per operation."""
 
@@ -786,7 +793,12 @@ class BusinessStore:
     @staticmethod
     def _result_from_row(row: sqlite3.Row) -> ConfirmedResult:
         payload = dict(row)
-        payload["fields"] = tuple(ConfirmedField(**field) for field in json.loads(payload.pop("fields_json")))
+        fields_json = payload.pop("fields_json")
+        _verify_result_checksum(fields_json, payload["fields_sha256"])
+        try:
+            payload["fields"] = tuple(ConfirmedField(**field) for field in json.loads(fields_json))
+        except (TypeError, ValueError) as exc:
+            raise BusinessStoreError("Confirmed result payload is invalid") from exc
         return ConfirmedResult(**payload)
 
     def confirm_result(self, run_id: str, *, source: str) -> ConfirmedResult:
@@ -831,10 +843,14 @@ class BusinessStore:
             fields_json = json.dumps([vars(field) for field in fields], ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":"))
             fields_sha256 = hashlib.sha256(fields_json.encode("utf-8")).hexdigest()
-            previous = database.execute(
-                "SELECT version, fields_sha256 FROM confirmed_results WHERE run_id=? ORDER BY version DESC LIMIT 1",
+            history = database.execute(
+                "SELECT version, fields_json, fields_sha256 FROM confirmed_results "
+                "WHERE run_id=? ORDER BY version DESC",
                 (run_id,),
-            ).fetchone()
+            ).fetchall()
+            for historical in history:
+                _verify_result_checksum(historical["fields_json"], historical["fields_sha256"])
+            previous = history[0] if history else None
             if previous is not None and previous["fields_sha256"] == fields_sha256:
                 raise BusinessStoreError("No review changes since the last confirmation")
             now = _now_ms()
