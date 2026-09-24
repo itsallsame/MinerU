@@ -46,6 +46,10 @@ def _deployment(tmp_path: Path) -> dict[str, object]:
                     "TRANSFORMERS_OFFLINE=1",
                     "HF_DATASETS_OFFLINE=1",
                     "MINERU_BUSINESS_DOCLIB_URL=http://doclib-worker:15980",
+                    "MINERU_BUSINESS_DB_PATH=/var/lib/mineru-business/business.sqlite3",
+                    "MINERU_BUSINESS_UPLOAD_ROOT=/srv/mineru-inbox",
+                    "MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist",
+                    "MINERU_BUSINESS_REQUIRE_WEB=1",
                 ]
             },
         }
@@ -69,8 +73,12 @@ def _deployment(tmp_path: Path) -> dict[str, object]:
             "Config": {
                 "Env": [
                     "MINERU_MODEL_SOURCE=local",
+                    "MINERU_HOME=/var/lib/mineru",
+                    "MINERU_MODEL_BASE_DIR=/opt/mineru-models",
+                    "MINERU_MODEL_MANIFEST=/etc/mineru/model-manifest.json",
                     "MINERU_MODEL_SMALL_BACKEND=torch",
                     "MINERU_MODEL_VLM_ENGINE=vllm",
+                    "MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0",
                     "HF_HUB_OFFLINE=1",
                     "TRANSFORMERS_OFFLINE=1",
                     "HF_DATASETS_OFFLINE=1",
@@ -214,6 +222,35 @@ def test_runtime_cli_rejects_stale_artifact_report_before_docker(tmp_path: Path,
         ),
         (lambda x: x["worker"]["Config"]["Env"].append("HF_DATASETS_OFFLINE=0"), "local offline models"),
         (lambda x: x["worker"]["Config"]["Env"].append("MINERU_MODEL_VLM_SERVER_URL=http://remote"), "local offline"),
+        (
+            lambda x: x["worker"]["Config"]["Env"].append("MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=3600"),
+            "history retention",
+        ),
+        (lambda x: x["worker"]["Config"]["Env"].append("MINERU_HOME=/tmp"), "persistent paths"),
+        (
+            lambda x: x["worker"]["Config"]["Env"].append("MINERU_MODEL_BASE_DIR=/var/lib/mineru/models"),
+            "persistent paths",
+        ),
+        (
+            lambda x: x["worker"]["Config"]["Env"].append("MINERU_MODEL_MANIFEST=/tmp/manifest.json"),
+            "persistent paths",
+        ),
+        (
+            lambda x: x["business"]["Config"]["Env"].append("MINERU_BUSINESS_DB_PATH=/tmp/business.sqlite3"),
+            "persistence paths",
+        ),
+        (
+            lambda x: x["business"]["Config"]["Env"].append("MINERU_BUSINESS_UPLOAD_ROOT=/tmp"),
+            "persistence paths",
+        ),
+        (
+            lambda x: x["business"]["Config"]["Env"].append("MINERU_BUSINESS_WEB_ROOT=/tmp/web"),
+            "required Web root",
+        ),
+        (
+            lambda x: x["business"]["Config"]["Env"].append("MINERU_BUSINESS_REQUIRE_WEB=0"),
+            "required Web root",
+        ),
         (lambda x: x["doclib_status"]["tcp"].update(port=15981), "Doclib is unavailable"),
         (lambda x: x["doclib_status"].update(parse_server=None), "Doclib is unavailable"),
         (

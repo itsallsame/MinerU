@@ -495,7 +495,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Compose 已挂载持久 Doclib 目录；运行态预检新增 MINERU_HOME 与实际挂载一致、历史批次压缩关闭的拒绝规则，Mac 模拟容器测试通过。尚未在麒麟实测权限、重启与长期批次保留，不标完成。证据：dev-docs/evidence/2026-09-24-runtime-persistence-retention.md"
     },
     {
       "id": "INF-010",
@@ -517,7 +517,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Compose 已挂载业务 SQLite 与共享原件目录；运行态预检新增业务数据库、上传及 Web 根目录环境变量校验，Mac 模拟容器测试通过。尚未在麒麟实测重启持久化与目录权限，不标完成。证据：dev-docs/evidence/2026-09-24-runtime-persistence-retention.md"
     },
     {
       "id": "INF-011",

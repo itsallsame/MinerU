@@ -828,3 +828,10 @@ Changes: Connected Linux preparation now refuses an existing wheelhouse, stages 
 Verification: Shell syntax, 4 mocked-Linux control-flow tests, full Mac business suite 201 passed/1 skipped, Ruff and diff checks passed. No real package download, amd64 base-image build or Kylin/NVIDIA check.
 Evidence: dev-docs/evidence/2026-09-24-wheelhouse-fresh-publish.md
 Next: Produce actual Linux wheelhouse against the selected NVIDIA base image, then execute target offline build/import, model and four-class sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 86 (P1 runtime persistence and history retention) ===
+Status: In progress; 78/241 passed; P1 target-machine gates remain incomplete
+Changes: Runtime preflight now rejects effective Doclib compaction, model/manifest/data path drift and business SQLite/upload/Web path drift despite otherwise correct mounts. Compose contract regression added. No user/auth/permission layer.
+Verification: Five negative cases exposed the old gap before fix; final runtime suite 39 passed, Compose/runtime targeted 51 passed/1 skipped under restricted Docker access, full Mac business suite 210 passed/1 skipped with Docker access, Ruff and diff checks passed. No real Kylin/GPU or long-term evidence-retention claim.
+Evidence: dev-docs/evidence/2026-09-24-runtime-persistence-retention.md
+Next: Validate these environment/mount contracts and model loading on isolated Kylin; continue P4 and annotated-sample acceptance. Keep goal active.

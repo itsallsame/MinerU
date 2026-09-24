@@ -194,6 +194,15 @@ def check_runtime(
         "MINERU_MODEL_VLM_SERVER_URL"
     ):
         raise ValueError("Worker is not configured for local offline models")
+    required_worker_paths = {
+        "MINERU_HOME": "/var/lib/mineru",
+        "MINERU_MODEL_BASE_DIR": "/opt/mineru-models",
+        "MINERU_MODEL_MANIFEST": "/etc/mineru/model-manifest.json",
+    }
+    if any(worker_env.get(key) != value for key, value in required_worker_paths.items()):
+        raise ValueError("Worker persistent paths differ from the verified mounts")
+    if worker_env.get("MINERU_DOCLIB_COMPACTION_INTERVAL_SEC") != "0":
+        raise ValueError("Worker history retention differs from the versioned-evidence deployment")
     if worker_env.get("MINERU_EXPECTED_MODEL_MANIFEST_SHA256") != release.get("model", {}).get("manifest_sha256"):
         raise ValueError("Worker model manifest binding differs from selected release")
     if (
@@ -203,6 +212,14 @@ def check_runtime(
         or business_env.get("MINERU_BUSINESS_DOCLIB_URL") != "http://doclib-worker:15980"
     ):
         raise ValueError("Business API offline or internal Doclib configuration differs")
+    required_business_paths = {
+        "MINERU_BUSINESS_DB_PATH": "/var/lib/mineru-business/business.sqlite3",
+        "MINERU_BUSINESS_UPLOAD_ROOT": "/srv/mineru-inbox",
+        "MINERU_BUSINESS_WEB_ROOT": "/opt/mineru/business-web/dist",
+        "MINERU_BUSINESS_REQUIRE_WEB": "1",
+    }
+    if any(business_env.get(key) != value for key, value in required_business_paths.items()):
+        raise ValueError("Business API persistence paths or required Web root differ from the verified mounts")
     if (
         not isinstance(capabilities, dict)
         or not capabilities.get("parseable_extensions")

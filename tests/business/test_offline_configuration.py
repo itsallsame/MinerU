@@ -234,6 +234,27 @@ def test_business_worker_retains_parse_history_for_evidence() -> None:
     assert "MINERU_EXPECTED_MODEL_MANIFEST_SHA256" in (ROOT / "docker" / "worker" / "entrypoint.sh").read_text()
 
 
+def test_business_compose_persistent_paths_match_runtime_preflight_contract() -> None:
+    services = yaml.safe_load((ROOT / "docker" / "compose.business.yaml").read_text())["services"]
+    assert {key: services["doclib-worker"]["environment"][key] for key in (
+        "MINERU_HOME", "MINERU_MODEL_BASE_DIR", "MINERU_MODEL_MANIFEST",
+    )} == {
+        "MINERU_HOME": "/var/lib/mineru",
+        "MINERU_MODEL_BASE_DIR": "/opt/mineru-models",
+        "MINERU_MODEL_MANIFEST": "/etc/mineru/model-manifest.json",
+    }
+    assert services["doclib-worker"]["environment"]["MINERU_DOCLIB_COMPACTION_INTERVAL_SEC"] == "0"
+    assert {key: services["business-api"]["environment"][key] for key in (
+        "MINERU_BUSINESS_DB_PATH", "MINERU_BUSINESS_UPLOAD_ROOT",
+        "MINERU_BUSINESS_WEB_ROOT", "MINERU_BUSINESS_REQUIRE_WEB",
+    )} == {
+        "MINERU_BUSINESS_DB_PATH": "/var/lib/mineru-business/business.sqlite3",
+        "MINERU_BUSINESS_UPLOAD_ROOT": "/srv/mineru-inbox",
+        "MINERU_BUSINESS_WEB_ROOT": "/opt/mineru/business-web/dist",
+        "MINERU_BUSINESS_REQUIRE_WEB": "1",
+    }
+
+
 def test_compose_bind_mounts_never_create_missing_host_paths(tmp_path: Path) -> None:
     compose_file = ROOT / "docker" / "compose.business.yaml"
     source = yaml.safe_load(compose_file.read_text())
