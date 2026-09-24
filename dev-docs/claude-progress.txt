@@ -1025,3 +1025,11 @@ Verification: Focused release/verification/backup/model preparation tests 97 pas
 Limits: No genuine Linux amd64 images, model weights, isolated Kylin/NVIDIA runtime or four-class labeled samples. Source lock and hashes are not signatures or model compatibility proof; keep Goal active.
 Evidence: dev-docs/evidence/2026-09-24-model-source-release-binding.md
 Next: Obtain approved model commits and target-compatible base/wheelhouse; on isolated Kylin execute full artifact, runtime, GPU and sample gates. Continue Mac product gaps without an identity layer.
+
+=== 2026-09-24 Session 113 (FE-047 task retry unknown outcome) ===
+Status: In progress; FE-047 and P4 remain open, target Kylin/sample gates remain open
+Discovery: Web called a retry POST result "failed" after 5xx/disconnect, even when the backend might have accepted and persisted that task generation.
+Changes: On ambiguous retry responses the Web reads the current task by ID before refreshing the list; if that read also fails, the action becomes a read-only "check task status" button instead of issuing another POST. Stale selection errors are discarded. Open-system boundary unchanged: no user/login/role/permission management.
+Verification: Web Node 12 passed, eight offline assets built, 24 synthetic Chromium regressions passed including accepted-but-lost response and failed status probe. JSON and diff checks passed. No real network fault or target Kylin browser claim.
+Evidence: dev-docs/evidence/2026-09-24-task-retry-unknown-outcome.md
+Next: Continue P3/P4 product gaps; obtain target Kylin/NVIDIA access and four-class labeled samples for P6. Keep Goal active.

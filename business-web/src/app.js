@@ -646,17 +646,43 @@ function renderDetail() {
   if (task && (task.status === "uploaded" || (task.status === "failed" && taskFailure(task.error_code).retryable))) {
     const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
     retry.type = "button";
+    let checkOnly = false;
     retry.addEventListener("click", async () => {
       retry.disabled = true;
       const selectionRequest = state.selectionRequest;
       try {
+        if (checkOnly) {
+          const latest = await businessApi.task(task.id);
+          if (selectionRequest === state.selectionRequest) {
+            await refreshDocuments({ acceptedWriteMessage: `已核对任务当前状态：${taskLabel(latest.status)}` });
+          }
+          return;
+        }
         await businessApi.retry(task.id);
         if (selectionRequest === state.selectionRequest) clearError();
         const acceptedWriteMessage = task.status === "uploaded" ? "任务已提交" : "任务已重新提交";
         await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
           ? acceptedWriteMessage : "" });
       } catch (error) {
-        if (selectionRequest === state.selectionRequest) showError(`重试失败：${error.message}`);
+        if (selectionRequest !== state.selectionRequest) return;
+        if (!checkOnly && isUnknownUploadError(error)) {
+          try {
+            const latest = await businessApi.task(task.id);
+            if (selectionRequest === state.selectionRequest) {
+              await refreshDocuments({ acceptedWriteMessage: `重试响应未确认；已核对任务当前状态：${taskLabel(latest.status)}` });
+            }
+          } catch (probeError) {
+            if (selectionRequest !== state.selectionRequest) return;
+            checkOnly = true;
+            retry.textContent = "核对任务状态";
+            showError(`重试结果未确认，任务状态也暂不可读：${probeError.message}。请先核对状态，不要重复提交。`);
+          }
+        } else if (checkOnly) {
+          showError(`任务状态暂不可读：${error.message}。请稍后再次核对，不要重复提交。`);
+        } else {
+          showError(`重试请求未受理：${error.message}`);
+        }
+      } finally {
         retry.disabled = false;
       }
     });
