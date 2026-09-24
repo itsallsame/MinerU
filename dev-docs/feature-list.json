@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 73,
+  "completed_features": 74,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5015,9 +5015,9 @@
         "实现：Skill端到端回归",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "当前 P5 代码的 Mac opt-in 真 Web/API/Doclib/Skill 链路 1 通过：PDF 上传→解析→历史读取→提取→未确认与空成果边界；定向契约 8 通过。目标麒麟、真实四类样本及 VLM 未验收。证据：dev-docs/evidence/2026-09-24-skill-end-to-end.md"
     },
     {
       "id": "SKL-022",
