@@ -4467,7 +4467,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "文档列表、复核写入与模板入口的关键键盘焦点已用 Playwright 验证；补修 skip link 使 #main 真正获得焦点、有可见轮廓且下一次 Tab 进入主区域。完整键盘遍历和真实屏幕阅读器检查仍待完成，不标通过。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md、dev-docs/evidence/2026-09-23-template-keyboard-status.md、dev-docs/evidence/2026-09-24-skip-link-focus.md"
+      "notes": "文档列表、复核写入、模板入口和 skip link 的关键焦点已用 Playwright 验证；新增键盘上传批次反馈焦点、Tab 到首个重试、未知结果再次发生时替换按钮焦点及受理结果焦点/轮廓回归。完整键盘遍历、真实屏幕阅读器和麒麟目标浏览器仍待验收，不标通过。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md、dev-docs/evidence/2026-09-23-template-keyboard-status.md、dev-docs/evidence/2026-09-24-skip-link-focus.md、dev-docs/evidence/2026-09-24-upload-keyboard-focus.md"
     },
     {
       "id": "FE-047",

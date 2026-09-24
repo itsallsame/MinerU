@@ -891,3 +891,10 @@ Changes: Added read-only upload-request command to fork-owned Skill using the sa
 Verification: Skill targeted 11 passed; full Mac business 226 passed/1 skipped; Ruff and skill structure validation passed. Real ASGI upload→lookup→task change covered; no isolated Kylin/NVIDIA or production-network failure claim.
 Evidence: dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md
 Next: Continue P4/P6 and prepare target offline artifacts; run the Web/API/Skill recovery path on isolated Kylin when available. Keep goal active.
+
+=== 2026-09-24 Session 95 (FE-046 upload keyboard focus) ===
+Status: In progress; 78/241 passed; FE-046 remains incomplete pending broader accessibility/target validation
+Changes: Restored visible keyboard focus to batch upload feedback after the submit button disables, to a replacement same-key retry button after another uncertain outcome, and to the final outcome item after acceptance. Focus moves only when the replaced control had focus. No user/permission layer changed.
+Verification: New Chromium assertions failed before fixes and exposed an intermediate disabled-button timing bug; final Web 11 Node tests, 8-asset offline build and 22 Chromium regressions passed. Full page keyboard/screen-reader and target Kylin browser checks not claimed.
+Evidence: dev-docs/evidence/2026-09-24-upload-keyboard-focus.md
+Next: Continue FE-046/FE-047 and P6 real-sample gates; obtain Linux amd64/NVIDIA target artifacts and run isolated deployment acceptance. Keep goal active.

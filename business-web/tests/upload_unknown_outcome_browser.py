@@ -33,7 +33,7 @@ def main(base_url: str) -> None:
                 route.fulfill(status=202, content_type="application/json", body="{broken")
             elif upload_calls == 3:
                 route.fulfill(status=202, content_type="application/json", body="{}")
-            elif upload_calls == 4:
+            elif upload_calls in (4, 5):
                 route.fulfill(status=503, content_type="application/json", body='{"detail":"worker unavailable"}')
             else:
                 route.fulfill(status=202, content_type="application/json", body='{"task":{"status":"submitted"}}')
@@ -56,9 +56,12 @@ def main(base_url: str) -> None:
                 {"name": "missing-task.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-third"},
                 {"name": "server-error.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-fourth"},
             ])
-            page.get_by_role("button", name="开始上传与解析").click()
+            page.get_by_role("button", name="开始上传与解析").focus()
+            page.keyboard.press("Enter")
             page.wait_for_function("document.querySelectorAll('#upload-feedback .feedback-item').length === 4"
                                    " && !document.querySelector('#files').disabled")
+            assert page.evaluate("document.activeElement?.id === 'upload-feedback'"), "batch feedback lost keyboard focus"
+            assert page.evaluate("getComputedStyle(document.activeElement).outlineStyle !== 'none'")
             feedback = page.locator("#upload-feedback").inner_text()
             assert "lost-response.pdf · 上传结果未确认" in feedback
             assert "invalid-response.pdf · 上传结果未确认" in feedback
@@ -68,12 +71,23 @@ def main(base_url: str) -> None:
             assert upload_calls == 4, "The UI must not automatically repeat an uncertain upload"
             assert all(len(key) == 32 for key in request_keys)
             assert len(set(request_keys)) == 4
-            page.locator("#upload-feedback .feedback-item").first.get_by_role(
-                "button", name="使用同一请求键重试",
-            ).click()
-            page.get_by_text("lost-response.pdf · 已受理 · 解析中").wait_for()
+            first = page.locator("#upload-feedback .feedback-item").first
+            page.keyboard.press("Tab")
+            assert first.get_by_role("button", name="使用同一请求键重试").evaluate(
+                "node => document.activeElement === node"
+            ), "Tab from batch outcome did not reach the first retry"
+            page.keyboard.press("Enter")
+            first.get_by_role("button", name="使用同一请求键重试").wait_for()
+            assert first.get_by_role("button", name="使用同一请求键重试").evaluate(
+                "node => document.activeElement === node"
+            ), "uncertain retry did not restore focus to its replacement button"
             assert upload_calls == 5
-            assert request_keys[4] == request_keys[0]
+            page.keyboard.press("Enter")
+            page.get_by_text("lost-response.pdf · 已受理 · 解析中").wait_for()
+            assert first.evaluate("node => document.activeElement === node"), "accepted retry lost its outcome focus"
+            assert first.evaluate("node => getComputedStyle(node).outlineStyle !== 'none'")
+            assert upload_calls == 6
+            assert request_keys[4:] == [request_keys[0], request_keys[0]]
             assert not errors, errors
             print("Playwright unknown upload outcome passed: no false rejection or automatic retransmission")
         finally:

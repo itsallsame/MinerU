@@ -285,6 +285,8 @@ function showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved
   retry.disabled = state.uploading;
   retry.addEventListener("click", async () => {
     if (state.uploading) return;
+    const retryHadFocus = document.activeElement === retry;
+    let retryStillUnknown = false;
     state.uploading = true;
     updateFileSelection();
     retry.disabled = true;
@@ -293,17 +295,28 @@ function showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved
       const result = await businessApi.upload(file, { tier, templateCode, requestKey });
       forgetUpload(requestKey);
       showAcceptedUpload(node, file, result);
+      if (retryHadFocus) {
+        node.tabIndex = -1;
+        node.focus({ preventScroll: true });
+      }
       await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
     } catch (error) {
-      if (isUnknownUploadError(error)) showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved);
-      else {
+      if (isUnknownUploadError(error)) {
+        showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved);
+        retryStillUnknown = true;
+      } else {
         node.textContent = `${file.name} · ${error.message}`;
         node.className = "feedback-item error";
+        if (retryHadFocus) {
+          node.tabIndex = -1;
+          node.focus({ preventScroll: true });
+        }
       }
     } finally {
       state.uploading = false;
       updateFileSelection();
       byId("upload-feedback").querySelectorAll("[data-upload-retry]").forEach((button) => { button.disabled = false; });
+      if (retryHadFocus && retryStillUnknown) node.querySelector("[data-upload-retry]")?.focus({ preventScroll: true });
     }
   });
   node.append(" ", retry);
@@ -919,6 +932,7 @@ async function submitFiles(event) {
   const selectedTier = byId("upload-tier").value;
   const templateCode = byId("upload-template").value;
   const listRequest = state.listRequest;
+  const submitHadFocus = document.activeElement === byId("upload-submit");
   state.uploading = true;
   updateFileSelection();
   byId("upload-feedback").replaceChildren();
@@ -958,6 +972,9 @@ async function submitFiles(event) {
   if (accepted) {
     if (state.listRequest === listRequest) state.page = 0;
     await refreshDocuments();
+  }
+  if (submitHadFocus && document.activeElement === document.body) {
+    byId("upload-feedback").focus({ preventScroll: true });
   }
 }
 
