@@ -38,8 +38,9 @@ def test_full_and_incremental_bundle_import_without_model_directory(tmp_path: Pa
     assert full_record["source_revision"] == previous
     assert offline_source_bundle.verify_bundle(bundle_dir=full) == full_record
     initial_target = tmp_path / "initial-target"
-    subprocess.run(["git", "clone", "-q", str(full / "source.bundle"), str(initial_target)], check=True)
+    subprocess.run(["git", "clone", "-q", str(full / "source.git"), str(initial_target)], check=True)
     assert _git(initial_target, "rev-parse", "HEAD") == previous
+    assert _git(initial_target, "rev-parse", "--is-shallow-repository") == "true"
     assert offline_source_bundle.verify_bundle(bundle_dir=full, target_repo=initial_target) == full_record
     subprocess.run(
         [
@@ -112,14 +113,53 @@ def test_bundle_refuses_dirty_checkout_existing_destination_and_tampering(tmp_pa
     record["source_revision"] = "a" * 40
     manifest.write_text(json.dumps(record), encoding="utf-8")
     marker.write_text(offline_source_bundle._sha256(manifest) + "\n", encoding="ascii")
-    with pytest.raises(ValueError, match="refs differ"):
+    with pytest.raises(ValueError, match="unexpected Git history or refs"):
         offline_source_bundle.verify_bundle(bundle_dir=output)
     manifest.write_text(original_manifest, encoding="utf-8")
     marker.write_text(offline_source_bundle._sha256(manifest) + "\n", encoding="ascii")
-    bundle = output / "source.bundle"
-    bundle.write_bytes(bundle.read_bytes() + b"tampered")
+    snapshot_file = output / "source.git" / "config"
+    snapshot_file.write_bytes(snapshot_file.read_bytes() + b"tampered")
     with pytest.raises(ValueError, match="checksum mismatch"):
         offline_source_bundle.verify_bundle(bundle_dir=output)
+
+
+def test_first_snapshot_excludes_deleted_historical_model_weights(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    historical_weight = repo / "old-model.onnx"
+    historical_weight.write_bytes(b"historical model bytes")
+    _git(repo, "add", "old-model.onnx")
+    _git(repo, "commit", "-qm", "old model")
+    weight_object = _git(repo, "rev-parse", "HEAD:old-model.onnx")
+    historical_weight.unlink()
+    _git(repo, "add", "-u")
+    _git(repo, "commit", "-qm", "remove model")
+    output = tmp_path / "source-only-snapshot"
+    record = offline_source_bundle.create_bundle(repo=repo, output=output)
+    assert record["format"] == "shallow-snapshot"
+    snapshot = output / "source.git"
+    assert offline_source_bundle.verify_bundle(bundle_dir=output) == record
+    missing = subprocess.run(["git", "-C", str(snapshot), "cat-file", "-e", weight_object], capture_output=True)
+    assert missing.returncode != 0
+
+    historical_weight.write_bytes(b"current model bytes")
+    _git(repo, "add", "old-model.onnx")
+    _git(repo, "commit", "-qm", "restore model")
+    with pytest.raises(ValueError, match="model-weight objects"):
+        offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "refused-snapshot")
+
+
+def test_incremental_bundle_rejects_even_transient_model_weight_commit(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    previous = _git(repo, "rev-parse", "HEAD")
+    weight = repo / "temporary-model.safetensors"
+    weight.write_bytes(b"never send this")
+    _git(repo, "add", weight.name)
+    _git(repo, "commit", "-qm", "add model by mistake")
+    weight.unlink()
+    _git(repo, "add", "-u")
+    _git(repo, "commit", "-qm", "remove model")
+    with pytest.raises(ValueError, match="model-weight objects"):
+        offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "unsafe-delta", previous=previous)
 
 
 def test_incremental_verifier_requires_exact_clean_target_baseline(tmp_path: Path) -> None:

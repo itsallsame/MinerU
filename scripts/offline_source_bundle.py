@@ -1,4 +1,4 @@
-"""Package a clean master commit for verified, model-free offline source transfer."""
+"""Package a clean master commit as a shallow first checkout or incremental Git bundle."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 DEPENDENCY_INPUTS = ("pyproject.toml", "docker/worker/build-requirements.in")
-PACKAGE_FILES = {"source.bundle", "manifest.json", "COMPLETE"}
+WEIGHT_SUFFIXES = {".safetensors", ".onnx", ".pt", ".pth", ".gguf", ".ckpt", ".bin"}
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -40,6 +40,33 @@ def _bundle_heads(bundle: Path) -> set[tuple[str, str]]:
 
 def _real_file(path: Path) -> bool:
     return path.is_file() and not path.is_symlink() and path.stat().st_nlink == 1
+
+
+def _source_files(repo: Path, *revisions: str) -> list[str]:
+    command = ["git", "-C", str(repo), "rev-list", "--objects", *revisions]
+    result = subprocess.run(command, capture_output=True, check=True)
+    return [line.split(b" ", 1)[1].decode("utf-8", "surrogateescape") for line in result.stdout.splitlines() if b" " in line]
+
+
+def _reject_weights(paths: list[str]) -> None:
+    offenders = [path for path in paths if Path(path).suffix.lower() in WEIGHT_SUFFIXES]
+    if offenders:
+        raise ValueError(f"Source package would include model-weight objects: {offenders[:3]}")
+
+
+def _tree_hashes(root: Path) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise ValueError(f"Source snapshot contains a symlink: {path}")
+        if path.is_dir():
+            continue
+        if not _real_file(path):
+            raise ValueError(f"Source snapshot contains a non-regular file: {path}")
+        files[path.relative_to(root).as_posix()] = _sha256(path)
+    if not files:
+        raise ValueError("Source snapshot is empty")
+    return files
 
 
 def _write_sync(path: Path, payload: str) -> None:
@@ -94,19 +121,43 @@ def create_bundle(*, repo: Path, output: Path, previous: str | None = None, reus
         if changed.returncode != 0:
             raise ValueError("Dependency inputs changed; prepare and verify a new Linux wheelhouse")
     output.mkdir(mode=0o700)
-    bundle = output / "source.bundle"
-    _git(repo, "bundle", "create", str(bundle), "HEAD", "master", *([f"^{previous}"] if previous else []))
-    _git(repo, "bundle", "verify", str(bundle))
-    if _bundle_heads(bundle) != {(revision, "HEAD"), (revision, "refs/heads/master")}:
-        raise ValueError("Offline source bundle refs differ from master HEAD")
-    with bundle.open("rb") as stream:
-        os.fsync(stream.fileno())
+    if previous is None:
+        # Git bundles of full fork history would include deleted historical model
+        # weights. A depth-one bare clone keeps the exact upstream commit ID while
+        # transferring only the current tree and a shallow boundary.
+        current_paths = _git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+        _reject_weights(current_paths)
+        snapshot = output / "source.git"
+        subprocess.run(
+            ["git", "clone", "--quiet", "--bare", "--depth=1", "--branch=master", repo.as_uri(), str(snapshot)],
+            check=True,
+        )
+        _git(snapshot, "remote", "remove", "origin")
+        if _git(snapshot, "rev-parse", "HEAD") != revision or _git(snapshot, "rev-parse", "--is-shallow-repository") != "true":
+            raise ValueError("Shallow source snapshot differs from the selected master commit")
+        _git(snapshot, "fsck", "--no-reflogs")
+        artifact = "source.git"
+        hashes = _tree_hashes(snapshot)
+        format_name = "shallow-snapshot"
+    else:
+        _reject_weights(_source_files(repo, revision, f"^{previous}"))
+        bundle = output / "source.bundle"
+        _git(repo, "bundle", "create", str(bundle), "HEAD", "master", f"^{previous}")
+        _git(repo, "bundle", "verify", str(bundle))
+        if _bundle_heads(bundle) != {(revision, "HEAD"), (revision, "refs/heads/master")}:
+            raise ValueError("Offline source bundle refs differ from master HEAD")
+        with bundle.open("rb") as stream:
+            os.fsync(stream.fileno())
+        artifact = "source.bundle"
+        hashes = {artifact: _sha256(bundle)}
+        format_name = "incremental-bundle"
     record = {
-        "schema": 1,
+        "schema": 2,
+        "format": format_name,
         "source_revision": revision,
         "previous_revision": previous,
         "reuse_wheelhouse_inputs_unchanged": reuse_wheelhouse,
-        "bundle_sha256": _sha256(bundle),
+        "files_sha256": hashes,
     }
     manifest = output / "manifest.json"
     _write_sync(manifest, json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -118,39 +169,64 @@ def create_bundle(*, repo: Path, output: Path, previous: str | None = None, reus
 def verify_bundle(*, bundle_dir: Path, target_repo: Path | None = None) -> dict:
     if bundle_dir.is_symlink() or not bundle_dir.is_dir():
         raise ValueError("Offline source bundle directory is missing")
-    if {path.name for path in bundle_dir.iterdir()} != PACKAGE_FILES:
-        raise ValueError("Offline source bundle has missing or extra files")
-    bundle, manifest, marker = (bundle_dir / name for name in ("source.bundle", "manifest.json", "COMPLETE"))
-    if not all(_real_file(path) for path in (bundle, manifest, marker)):
-        raise ValueError("Offline source bundle files must be regular, non-linked files")
+    manifest, marker = (bundle_dir / name for name in ("manifest.json", "COMPLETE"))
+    if not all(_real_file(path) for path in (manifest, marker)):
+        raise ValueError("Offline source manifest and marker must be regular, non-linked files")
     if marker.read_text(encoding="ascii") != _sha256(manifest) + "\n":
         raise ValueError("Offline source completion marker differs from its manifest")
     record = json.loads(manifest.read_text(encoding="utf-8"))
     if not isinstance(record, dict) or set(record) != {
         "schema",
+        "format",
         "source_revision",
         "previous_revision",
         "reuse_wheelhouse_inputs_unchanged",
-        "bundle_sha256",
+        "files_sha256",
     }:
         raise ValueError("Unsupported offline source manifest")
     previous = record["previous_revision"]
     if (
-        record["schema"] != 1
+        record["schema"] != 2
+        or record["format"] not in {"shallow-snapshot", "incremental-bundle"}
         or not isinstance(record["source_revision"], str)
         or not COMMIT_RE.fullmatch(record["source_revision"])
         or (previous is not None and (not isinstance(previous, str) or not COMMIT_RE.fullmatch(previous)))
         or not isinstance(record["reuse_wheelhouse_inputs_unchanged"], bool)
         or (record["reuse_wheelhouse_inputs_unchanged"] and previous is None)
-        or not isinstance(record["bundle_sha256"], str)
-        or not SHA256_RE.fullmatch(record["bundle_sha256"])
+        or not isinstance(record["files_sha256"], dict)
+        or not record["files_sha256"]
+        or not all(
+            isinstance(key, str) and isinstance(value, str) and SHA256_RE.fullmatch(value)
+            for key, value in record["files_sha256"].items()
+        )
+        or (record["format"] == "shallow-snapshot" and previous is not None)
+        or (record["format"] == "incremental-bundle" and previous is None)
     ):
         raise ValueError("Unsupported offline source manifest")
-    if _sha256(bundle) != record["bundle_sha256"]:
-        raise ValueError("Offline source bundle checksum mismatch")
     revision = record["source_revision"]
-    if _bundle_heads(bundle) != {(revision, "HEAD"), (revision, "refs/heads/master")}:
-        raise ValueError("Offline source bundle refs differ from selected source revision")
+    if record["format"] == "shallow-snapshot":
+        snapshot = bundle_dir / "source.git"
+        if {path.name for path in bundle_dir.iterdir()} != {"source.git", "manifest.json", "COMPLETE"}:
+            raise ValueError("Offline source package has missing or extra files")
+        if snapshot.is_symlink() or not snapshot.is_dir() or _tree_hashes(snapshot) != record["files_sha256"]:
+            raise ValueError("Offline source snapshot checksum mismatch")
+        if (
+            _git(snapshot, "rev-parse", "HEAD") != revision
+            or _git(snapshot, "symbolic-ref", "HEAD") != "refs/heads/master"
+            or _git(snapshot, "rev-parse", "--is-shallow-repository") != "true"
+            or _git(snapshot, "rev-list", "--count", "HEAD") != "1"
+        ):
+            raise ValueError("Offline source snapshot has unexpected Git history or refs")
+        _reject_weights(_git(snapshot, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+        _git(snapshot, "fsck", "--no-reflogs")
+    else:
+        bundle = bundle_dir / "source.bundle"
+        if {path.name for path in bundle_dir.iterdir()} != {"source.bundle", "manifest.json", "COMPLETE"}:
+            raise ValueError("Offline source package has missing or extra files")
+        if not _real_file(bundle) or record["files_sha256"] != {"source.bundle": _sha256(bundle)}:
+            raise ValueError("Offline source bundle checksum mismatch")
+        if _bundle_heads(bundle) != {(revision, "HEAD"), (revision, "refs/heads/master")}:
+            raise ValueError("Offline source bundle refs differ from selected source revision")
     if target_repo is not None:
         if target_repo.is_symlink() or not target_repo.is_dir():
             raise ValueError("Target checkout must be a real directory")
@@ -158,7 +234,10 @@ def verify_bundle(*, bundle_dir: Path, target_repo: Path | None = None) -> dict:
             raise ValueError("Target checkout must be on clean master before importing a bundle")
         if previous is not None and _git(target_repo, "rev-parse", "HEAD") != previous:
             raise ValueError("Target checkout is not at the recorded previous release commit")
-        _git(target_repo, "bundle", "verify", str(bundle.resolve()))
+        if previous is not None:
+            _git(target_repo, "bundle", "verify", str(bundle.resolve()))
+        elif _git(target_repo, "rev-parse", "HEAD") != revision:
+            raise ValueError("Target checkout differs from the initial source snapshot")
     return record
 
 
