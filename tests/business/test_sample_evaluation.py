@@ -51,6 +51,37 @@ def _suite(root: Path) -> Path:
     return path
 
 
+def _release_chain(root: Path) -> tuple[Path, Path, Path]:
+    release = root / "release.json"
+    release.write_text(json.dumps({
+        "schema": 4, "platform": "linux/amd64", "source_revision": "a" * 40,
+        "worker_image_id": "sha256:" + "b" * 64,
+        "business_image_id": "sha256:" + "c" * 64,
+        "base_image_id": "sha256:" + "d" * 64,
+        "model": {"manifest_sha256": "e" * 64},
+    }))
+    artifact = root / "artifact.json"
+    artifact.write_text(json.dumps({
+        "schema": 1, "result": "artifact_integrity_passed",
+        "release_manifest_sha256": hashlib.sha256(release.read_bytes()).hexdigest(),
+        "source_revision": "a" * 40, "platform": "linux/amd64",
+        "worker_image_id": "sha256:" + "b" * 64,
+        "business_image_id": "sha256:" + "c" * 64,
+        "base_image_id": "sha256:" + "d" * 64,
+        "model_manifest_sha256": "e" * 64,
+        "model_files_verified": 2, "wheelhouse_files_verified": 2, "web_assets_verified": 1,
+    }))
+    runtime = root / "runtime.json"
+    runtime.write_text(json.dumps({
+        "schema": 1, "result": "runtime_preflight_passed",
+        "artifact_report_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "source_revision": "a" * 40,
+        "worker_image_id": "sha256:" + "b" * 64,
+        "business_image_id": "sha256:" + "c" * 64,
+    }))
+    return release, artifact, runtime
+
+
 def _get(path: str) -> Any:
     module = path.split("/")
     category = module[-1].replace("doc-", "").replace("rev-", "").replace("run-", "")
@@ -309,10 +340,11 @@ def test_evaluation_report_never_overwrites_prior_or_concurrent_result(
     monkeypatch.setattr(module, "BusinessReader", lambda _url: SimpleNamespace(get=_get))
     monkeypatch.setattr(sys, "argv", [
         "evaluate_business_samples.py", "--suite", str(suite), "--base-url", "http://127.0.0.1:8088",
-        "--environment", "Mac synthetic contract", "--output", str(output),
+        "--environment", "Mac synthetic contract", "--allow-unbound", "--output", str(output),
     ])
     assert module.main() == 0
     first = output.read_bytes()
+    assert json.loads(first)["release_binding"] is None
     assert module.main() == 1
     assert output.read_bytes() == first
     assert not list(output.parent.glob(".metrics.json.*"))
@@ -327,3 +359,47 @@ def test_evaluation_report_never_overwrites_prior_or_concurrent_result(
     assert module.main() == 1
     assert output.read_bytes() == b"another evaluator"
     assert not list(output.parent.glob(".metrics.json.*"))
+
+
+def test_sample_report_binds_consistent_release_artifact_and_runtime_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    sample_dir = tmp_path / "samples"
+    sample_dir.mkdir()
+    suite = _suite(sample_dir)
+    release, artifact, runtime = _release_chain(tmp_path)
+    output = tmp_path / "reports" / "metrics.json"
+    monkeypatch.setattr(module, "BusinessReader", lambda _url: SimpleNamespace(get=_get))
+    args = [
+        "evaluate_business_samples.py", "--suite", str(suite), "--base-url", "http://127.0.0.1:8088",
+        "--environment", "Synthetic offline release", "--output", str(output),
+        "--release", str(release), "--artifact-report", str(artifact), "--runtime-report", str(runtime),
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    assert module.main() == 0
+    binding = json.loads(output.read_text())["release_binding"]
+    assert binding["release_manifest_sha256"] == hashlib.sha256(release.read_bytes()).hexdigest()
+    assert binding["artifact_report_sha256"] == hashlib.sha256(artifact.read_bytes()).hexdigest()
+    assert binding["runtime_report_sha256"] == hashlib.sha256(runtime.read_bytes()).hexdigest()
+    assert binding["source_revision"] == "a" * 40 and binding["model_manifest_sha256"] == "e" * 64
+
+    output.unlink()
+    good_runtime_bytes = runtime.read_bytes()
+    bad = json.loads(runtime.read_text())
+    bad["artifact_report_sha256"] = "0" * 64
+    runtime.write_text(json.dumps(bad))
+    assert module.main() == 1
+    assert not output.exists()
+    runtime.write_bytes(good_runtime_bytes)
+    release_record = json.loads(release.read_text())
+    release_record["source_revision"] = "f" * 40
+    release.write_text(json.dumps(release_record))
+    assert module.main() == 1
+    assert not output.exists()
+    monkeypatch.setattr(sys, "argv", args[:-2])
+    assert module.main() == 1
+    assert not output.exists()
+    monkeypatch.setattr(sys, "argv", args[:args.index("--release")])
+    assert module.main() == 1
+    assert not output.exists()

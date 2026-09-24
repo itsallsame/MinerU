@@ -16,6 +16,11 @@ from typing import Any, Callable
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.verify_business_runtime import check_artifact_report
+
 CLASSES = frozenset({"official_document", "paper", "research_report", "newspaper"})
 TAGS = frozenset({"handwritten", "cross_page_table", "seal_watermark"})
 TIERS = frozenset({"flash", "basic", "standard", "advanced"})
@@ -39,6 +44,49 @@ def _source_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def load_release_binding(release_path: Path, artifact_path: Path, runtime_path: Path) -> dict[str, str]:
+    """Associate a sample report with one selected, internally consistent offline release chain."""
+    paths = (release_path, artifact_path, runtime_path)
+    if any(path.is_symlink() or not path.is_file() for path in paths):
+        raise EvaluationError("Release, artifact and runtime reports must be existing real files")
+    try:
+        release_bytes, artifact_bytes, runtime_bytes = (path.read_bytes() for path in paths)
+        release, artifact, runtime = (json.loads(raw) for raw in (release_bytes, artifact_bytes, runtime_bytes))
+        check_artifact_report(artifact, release, release_bytes)
+    except (OSError, ValueError, TypeError) as exc:
+        raise EvaluationError("Offline release artifact chain is invalid") from exc
+    if (
+        release.get("schema") != 4 or release.get("platform") != "linux/amd64"
+        or not isinstance(release.get("source_revision"), str)
+        or re.fullmatch(r"[0-9a-f]{40}", release["source_revision"]) is None
+        or not isinstance(release["model"].get("manifest_sha256"), str)
+        or SHA256_RE.fullmatch(release["model"]["manifest_sha256"]) is None
+        or any(
+            not isinstance(release.get(key), str) or re.fullmatch(r"sha256:[0-9a-f]{64}", release[key]) is None
+            for key in ("worker_image_id", "business_image_id")
+        )
+    ):
+        raise EvaluationError("Offline release identity is invalid")
+    if (
+        not isinstance(runtime, dict) or runtime.get("schema") != 1
+        or runtime.get("result") != "runtime_preflight_passed"
+        or runtime.get("artifact_report_sha256") != hashlib.sha256(artifact_bytes).hexdigest()
+        or runtime.get("source_revision") != release.get("source_revision")
+        or runtime.get("worker_image_id") != release.get("worker_image_id")
+        or runtime.get("business_image_id") != release.get("business_image_id")
+    ):
+        raise EvaluationError("Offline runtime report differs from the selected release artifacts")
+    return {
+        "release_manifest_sha256": hashlib.sha256(release_bytes).hexdigest(),
+        "artifact_report_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+        "runtime_report_sha256": hashlib.sha256(runtime_bytes).hexdigest(),
+        "source_revision": release["source_revision"],
+        "model_manifest_sha256": release["model"]["manifest_sha256"],
+        "worker_image_id": release["worker_image_id"],
+        "business_image_id": release["business_image_id"],
+    }
 
 
 def load_suite(path: Path) -> list[dict[str, Any]]:
@@ -350,6 +398,12 @@ def main() -> int:
     )
     parser.add_argument("--base-url", required=True, help="Approved isolated business Web/API origin")
     parser.add_argument("--environment", required=True, help="Actual run environment, e.g. Mac or Kylin GPU identity")
+    parser.add_argument("--release", type=Path, help="Selected offline release manifest")
+    parser.add_argument("--artifact-report", type=Path, help="Artifact verification of that release")
+    parser.add_argument("--runtime-report", type=Path, help="Runtime preflight linked to those artifacts")
+    parser.add_argument(
+        "--allow-unbound", action="store_true", help="Allow a development report without release artifacts",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Redacted metric report path outside the sample tree")
     args = parser.parse_args()
     try:
@@ -358,8 +412,15 @@ def main() -> int:
             raise EvaluationError("Report must be outside the sample directory")
         if args.output.exists() or args.output.is_symlink():
             raise EvaluationError("Evaluation report already exists; choose a new output path")
+        binding_paths = (args.release, args.artifact_report, args.runtime_report)
+        if any(path is not None for path in binding_paths) and any(path is None for path in binding_paths):
+            raise EvaluationError("Supply release, artifact and runtime reports together")
+        if args.allow_unbound == all(path is not None for path in binding_paths):
+            raise EvaluationError("Use either all three release reports or --allow-unbound")
+        release_binding = load_release_binding(*binding_paths) if all(binding_paths) else None
         report = evaluate_suite(cases, BusinessReader(args.base_url).get,
                                 _required_string(args.environment, "environment"))
+        report["release_binding"] = release_binding
         _write_new_report(args.output, report)
     except (EvaluationError, OSError) as exc:
         print(f"Sample evaluation failed: {exc}", file=sys.stderr)

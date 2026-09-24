@@ -1152,3 +1152,11 @@ Changes: Added `retry TASK_ID --confirm-write` to the own Skill. One explicit PO
 Verification: Skill contract 14 passed; full Mac business 350 passed/2 skipped/2 dependency warnings. Skill quick_validate, Ruff lint, feature-list JSON and diff checks passed. Actual Kylin/GPU and real network failure remain untested.
 Evidence: dev-docs/evidence/2026-09-24-skill-task-retry.md
 Next: Obtain real samples and target hardware; validate Skill retry through actual isolated business API failure/recovery and ensure Web/Skill state parity. Keep Goal active.
+
+=== 2026-09-24 Session 129 (sample report offline release binding) ===
+Status: In progress; QA-035 and four-class real-sample/Kylin/NVIDIA gates remain open
+Discovery: The read-only sample evaluator relied on an operator-supplied environment string; scores had no machine-verifiable association with the chosen release, artifact verification or runtime preflight reports.
+Changes: Added an optional-but-explicit pair of modes: production input requires release.json plus linked artifact and runtime reports, checks source/platform/image/model identities and writes their SHA-256 chain into the redacted sample report; Mac development requires --allow-unbound and reports null binding. Partial inputs or inconsistent chains fail before report creation. Fixed direct-script import and documented the boundary. No auth/user/role/permission, model or schema change.
+Verification: Sample-evaluator tests 12 passed; direct and module CLI help both ran; full Mac business suite 351 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This proves only synthetic file consistency, not live deployment identity or physical isolation.
+Evidence: dev-docs/evidence/2026-09-24-sample-release-chain.md
+Next: Obtain real de-identified four-class annotations and target Kylin/NVIDIA access; run fresh target artifact/runtime checks then the bound sample evaluator in one stable deployment window. Keep Goal active.
