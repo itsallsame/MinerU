@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 68,
+  "completed_features": 69,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5175,9 +5175,9 @@
         "实现：Skill端到端回归",
         "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Mac 自有 Skill 真实链路回归：公开 PDF 经 Skill CLI→同源开放业务 API→真实本地 Doclib 完成上传/解析/历史读取/字段提取；机器候选未自动确认。opt-in 实测 1 通过；完整业务 176 通过/1 跳过、上游单测 2798 通过/4 跳过（后两项在最终扩展提取断言前，同轮执行）；Skill 契约 6 通过。麒麟/NVIDIA/真实标注样本未验收。证据：dev-docs/evidence/2026-09-24-live-skill-business-flow.md"
     },
     {
       "id": "QA-007",

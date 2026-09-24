@@ -695,3 +695,10 @@ Changes: Added an OpenAPI contract regression for required public business route
 Verification: Full business suite 176 passed/1 opt-in skipped; targeted API tests 5 passed after final top-level security assertion; Ruff check passed. Same-turn upstream unit run before the new business test was 2798 passed/4 skipped. Mac only.
 Evidence: dev-docs/evidence/2026-09-24-business-api-contract-regression.md
 Next: Continue P6 integration and failure/recovery gates; real four-class annotated samples and Kylin/NVIDIA air-gap acceptance remain outstanding. Keep goal active.
+
+=== 2026-09-24 Session 67 (QA-006 live Skill flow) ===
+Status: In progress; QA-006 verified complete on Mac (69/241 passed); P6 remains incomplete
+Changes: Extended opt-in live Web/API/Doclib test to invoke the fork's own Skill CLI for public PDF upload, task completion, historical read, extraction and unconfirmed-vs-confirmed result boundary. Documented that locators must use revision.short_id, never an inferred SHA prefix. No production API/model changes.
+Verification: Final opt-in live test 1 passed; Skill contract 6 passed; Ruff check/format passed. Same-turn full business 176 passed/1 opt-in skipped and upstream unittest 2798 passed/4 skipped were run before the final opt-in extraction assertions. Initial live read failed due test-generated wrong locator; corrected test passed.
+Evidence: dev-docs/evidence/2026-09-24-live-skill-business-flow.md
+Next: P6 Web critical-flow acceptance, real annotated four-class sources and target Kylin/NVIDIA offline gates remain. Keep goal active.

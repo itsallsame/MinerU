@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import socket
 import subprocess
@@ -25,6 +26,7 @@ from mineru.doclib.endpoint import read_endpoint_file
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / "demo" / "pdfs" / "demo1.pdf"
 WEB_ROOT = ROOT / "business-web" / "dist"
+SKILL_SCRIPT = ROOT / "skills" / "business-documents" / "scripts" / "business_documents.py"
 
 
 def _wait_for_doclib(process: subprocess.Popen[bytes], home: Path, log_path: Path) -> str:
@@ -69,6 +71,64 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=10)
+
+
+def _skill(origin: str, *args: str) -> object:
+    result = subprocess.run(
+        [sys.executable, str(SKILL_SCRIPT), "--base-url", origin, *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"Skill {args[0]} failed: {result.stderr.strip()}"
+    return json.loads(result.stdout)
+
+
+def _verify_live_skill(origin: str) -> None:
+    uploaded = _skill(origin, "upload", str(SAMPLE), "--tier", "flash", "--template", "paper")
+    assert isinstance(uploaded, dict)
+    document = uploaded["document"]
+    assert document["sha256"] == hashlib.sha256(SAMPLE.read_bytes()).hexdigest()
+    assert document["template_code"] == "paper"
+    task_id = uploaded["task"]["id"]
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        task = _skill(origin, "task", task_id)
+        assert isinstance(task, dict)
+        if task["status"] in ("done", "failed"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("Skill-uploaded PDF did not reach a terminal task status")
+    assert task["status"] == "done", task
+    overview = _skill(origin, "overview", document["id"])
+    assert isinstance(overview, dict)
+    revision = overview["revision"]
+    assert revision["tier"] == "flash"
+    assert overview["draft"] is None
+    assert overview["confirmed_for_latest_run"] is None
+    locator = f"doc:{revision['short_id']}/tier:{revision['tier']}/page:1"
+    read = _skill(origin, "read", revision["id"], locator)
+    assert isinstance(read, dict)
+    assert read["state"] == "historical_parse_unconfirmed"
+    assert read["content"].strip()
+    started = _skill(origin, "extract", revision["id"])
+    assert isinstance(started, dict)
+    run_id = started["id"]
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        extraction = _skill(origin, "extraction", run_id)
+        assert isinstance(extraction, dict)
+        if extraction["run"]["status"] in ("done", "failed"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("Skill extraction did not reach a terminal status")
+    assert extraction["state"] == "machine_unconfirmed"
+    assert extraction["run"]["status"] == "done", extraction
+    results = _skill(origin, "results", run_id)
+    assert isinstance(results, dict)
+    assert results == {"state": "confirmed", "items": []}
 
 
 @pytest.mark.skipif(os.getenv("MINERU_RUN_LIVE_BROWSER") != "1", reason="Opt in to local Chromium and socket integration")
@@ -164,6 +224,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                     check=True,
                     timeout=150,
                 )
+                _verify_live_skill(origin)
             finally:
                 _stop(api)
         finally:
