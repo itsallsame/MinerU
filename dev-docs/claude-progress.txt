@@ -928,3 +928,10 @@ Changes: Added imported-base inspection requiring linux/amd64, exact immutable i
 Verification: New helper and preparation tests 12 passed; full Mac business suite 240 passed/1 skipped after replacing an obsolete static assertion. Following the immutable-ID probe tightening, targeted offline/configuration tests 24 passed/1 skipped, Ruff, shell syntax, JSON and diff checks passed; a one-shot read-only/no-network probe of the existing arm64 image by immutable ID succeeded. No real amd64 base or wheelhouse built; Kylin GPU compatibility not claimed.
 Evidence: dev-docs/evidence/2026-09-24-base-image-constraints.md
 Next: Obtain a target-compatible immutable amd64 NVIDIA/vLLM base image on a Linux preparation host with enough space, generate and test its real wheelhouse, then run isolated Kylin build/runtime/real-sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 100 (P1 wheelhouse platform preflight) ===
+Status: In progress; 78/241 passed; INF-019 target artifact gate remains incomplete
+Changes: Before publishing the staged Linux wheelhouse, preparation now runs pip dry-run with no index, no network, read-only mounts/root and the exact immutable base image ID. It verifies each lock entry has a selectable compatible local wheel and correct hash; failed checks leave only an unpublished stage. No user/permission layer or model-in-image change.
+Verification: New failure regression and shell/configuration targeted tests 18 passed/1 skipped; full Mac business suite 241 passed/1 skipped; Ruff, shell syntax and diff checks passed. A no-network/read-only empty-requirements command worked on the existing arm64 image, but no real amd64 wheelhouse or Kylin install was tested.
+Evidence: dev-docs/evidence/2026-09-24-wheelhouse-platform-preflight.md
+Next: Obtain actual compatible amd64 NVIDIA base, prepare/download wheels on Linux, run this preflight and offline builds, then target GPU/model/four-class sample/rollback acceptance. Keep goal active.

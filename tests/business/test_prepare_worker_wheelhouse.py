@@ -18,6 +18,7 @@ def _run_preparation(
     fail_uv: bool = False,
     fail_pip: bool = False,
     fail_base: bool = False,
+    fail_wheel_compat: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mineru'\n")
     build_requirements = tmp_path / "docker" / "worker" / "build-requirements.in"
@@ -54,6 +55,10 @@ while [ "$#" -gt 0 ]; do
 done
 printf wheel > "$destination/demo-1.0-py3-none-any.whl"
 """,
+        "docker": """#!/bin/sh
+if [ "${TEST_FAIL_WHEEL_COMPAT:-}" = 1 ]; then exit 6; fi
+exit 0
+""",
     }
     for name, source in scripts.items():
         executable = mock_bin / name
@@ -72,6 +77,7 @@ printf wheel > "$destination/demo-1.0-py3-none-any.whl"
             "MINERU_BASE_IMAGE": "vllm:local",
             "MINERU_BASE_IMAGE_ID": "sha256:" + "a" * 64,
             "TEST_FAIL_BASE": "1" if fail_base else "0",
+            "TEST_FAIL_WHEEL_COMPAT": "1" if fail_wheel_compat else "0",
             "TEST_FAIL_UV": "1" if fail_uv else "0",
             "TEST_FAIL_PIP": "1" if fail_pip else "0",
         },
@@ -117,3 +123,13 @@ def test_base_mismatch_stops_before_wheelhouse_stage(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert not (tmp_path / "wheelhouse").exists()
     assert not list(tmp_path.glob(".wheelhouse-stage.*"))
+
+
+def test_incompatible_wheels_remain_unpublished(tmp_path: Path) -> None:
+    result = _run_preparation(tmp_path, fail_wheel_compat=True)
+    assert result.returncode != 0
+    assert not (tmp_path / "wheelhouse").exists()
+    stages = list(tmp_path.glob(".wheelhouse-stage.*"))
+    assert len(stages) == 1
+    assert (stages[0] / "requirements.lock").is_file()
+    assert (stages[0] / "demo-1.0-py3-none-any.whl").is_file()

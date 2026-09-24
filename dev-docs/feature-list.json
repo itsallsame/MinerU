@@ -715,7 +715,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "联网准备脚本拒绝复用旧 wheelhouse，暂存锁与 wheel 后才发布；新增对已导入基础镜像的 amd64、不可变 ID、准备机 Python ABI 和实际安装 Torch/Torchvision/vLLM 版本的离线核对，约束文件不再只凭人工填写。Mac 模拟流程已通过；尚无与麒麟目标基础镜像匹配的真实 Linux wheelhouse，也未在物理隔离目标机安装验证，不标完成。证据：dev-docs/evidence/2026-09-24-wheelhouse-fresh-publish.md、dev-docs/evidence/2026-09-24-base-image-constraints.md"
+      "notes": "联网准备脚本拒绝复用旧 wheelhouse，暂存锁与 wheel 后才发布；对已导入基础镜像核对 amd64、不可变 ID、准备机 Python ABI 与 Torch/Torchvision/vLLM 版本，下载后还以同一镜像断网只读运行 pip dry-run，失败不发布。Mac 模拟流程已通过；尚无与麒麟目标基础镜像匹配的真实 Linux wheelhouse，也未在物理隔离目标机安装验证，不标完成。证据：dev-docs/evidence/2026-09-24-wheelhouse-fresh-publish.md、dev-docs/evidence/2026-09-24-base-image-constraints.md、dev-docs/evidence/2026-09-24-wheelhouse-platform-preflight.md"
     },
     {
       "id": "INF-020",
