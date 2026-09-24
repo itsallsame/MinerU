@@ -1104,6 +1104,20 @@ class BusinessStore:
             row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         return self._task_from_row(row) if row is not None else None
 
+    def list_recoverable_task_ids(self, *, after_id: str = "", limit: int = 100) -> tuple[str, ...]:
+        """Bounded keyset scan for work that must progress without an open browser."""
+        if not 1 <= limit <= 1000:
+            raise BusinessStoreError("Recovery scan limit must be between 1 and 1000")
+        with closing(self._connect()) as database:
+            rows = database.execute(
+                "SELECT id FROM tasks WHERE id>? AND ("
+                "status IN ('uploaded', 'submitting', 'submitted', 'cancel_requested') OR "
+                "(status='failed' AND error_code='doclib_submission_failed')) "
+                "ORDER BY id LIMIT ?",
+                (after_id, limit),
+            ).fetchall()
+        return tuple(row["id"] for row in rows)
+
     def begin_task_submission(self, task_id: str) -> IngestTask:
         """Persist intent before calling Doclib; a stranded submitting task can be retried."""
         with closing(self._connect()) as database, database:

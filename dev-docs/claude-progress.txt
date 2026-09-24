@@ -994,3 +994,11 @@ Changes: Business schema 10 persists submission_attempt and force flag; ambiguou
 Verification: Full Mac business 264 passed/1 skipped after authorized local socket run; official unit 2832 passed/4 skipped; real Doclib SDK targeted 2 passed; Ruff, JSON and diff checks passed. Initial sandboxed business run failed only at Unix/TCP socket bind and was rerun with local test permission. Target isolated Kylin/NVIDIA, real sample quality and rollback remain unverified.
 Evidence: dev-docs/evidence/2026-09-24-submission-attempt-idempotency.md
 Next: Complete target-compatible amd64 NVIDIA base/wheelhouse and Kylin offline fault, GPU, four-class sample and rollback acceptance before marking BE-028/BE-029 or goal complete.
+
+=== 2026-09-24 Session 109 (automatic document task restart recovery) ===
+Status: In progress; BE-027 remains false pending target Kylin container/fault/rollback acceptance
+Discovery: Persisted document tasks only resumed when someone called the individual task GET. After an API restart, uploaded, submitting and cancel_requested rows could remain stranded without browser polling.
+Changes: Added a bounded, keyset-scanning DocumentTaskWorker to the business API lifecycle with its own Doclib client. It replays uploaded/submitting/ambiguous submission and cancellation intents, polls submitted work, and leaves confirmed parse failures for explicit retry. Missing source transitions to source_unavailable with generation CAS; worker startup failure cleans up the other worker. No user/auth/role/permission management or model-in-business-image change.
+Verification: Final Mac business 274 passed/1 skipped; targeted worker/lifecycle 15 passed; real public Doclib restart recovery 1 passed. Ruff, new-file format, JSON and diff checks passed. No isolated Kylin/NVIDIA or model-quality claim.
+Evidence: dev-docs/evidence/2026-09-24-document-task-recovery-worker.md
+Next: Target-compatible amd64 base/wheelhouse, isolated Kylin recovery/fault/rollback and four-class real-sample acceptance; keep goal active.

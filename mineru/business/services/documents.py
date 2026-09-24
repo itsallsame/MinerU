@@ -101,7 +101,15 @@ class DocumentWorkflow:
         document = self._store.get_document(task.document_id)
         if document is None:
             raise DocumentWorkflowError("Task source document not found")
-        source_path = self._uploads.source_path(document.storage_key)
+        task = self._store.begin_task_submission(task.id)
+        if task.status != "submitting":
+            return task
+        try:
+            source_path = self._uploads.source_path(document.storage_key)
+        except (UploadError, OSError):
+            return self._store.mark_task_failed(
+                task.id, error_code="source_unavailable", expected_submission_attempt=task.submission_attempt
+            )
         return self._submit_existing(task, source_path=source_path, expected_sha256=document.sha256)
 
     def _submit_existing(self, task: IngestTask, *, source_path: Path, expected_sha256: str) -> IngestTask:
@@ -165,7 +173,9 @@ class DocumentWorkflow:
             try:
                 source_path = self._uploads.source_path(document.storage_key)
             except (UploadError, OSError):
-                return self._store.mark_task_failed(task.id, error_code="source_unavailable")
+                return self._store.mark_task_failed(
+                    task.id, error_code="source_unavailable", expected_submission_attempt=task.submission_attempt
+                )
             task = self._submit_existing(task, source_path=source_path, expected_sha256=document.sha256)
         if task.status != "submitted":
             return task

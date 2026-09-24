@@ -55,6 +55,35 @@ def test_server_bootstrap_initializes_open_api_without_contacting_doclib(tmp_pat
     assert "model" not in app.openapi()["info"]["title"].lower()
 
 
+def test_api_lifespan_starts_and_stops_document_recovery_worker() -> None:
+    document_worker = Mock()
+    extraction_worker = Mock()
+    app = create_app(
+        workflow=Mock(), store=Mock(), evidence_reader=Mock(), evidence_writer=Mock(),
+        document_task_worker=document_worker, extraction_worker=extraction_worker,
+    )
+    with TestClient(app) as client:
+        assert client.get("/openapi.json").status_code == 200
+        document_worker.start.assert_called_once_with()
+        extraction_worker.start.assert_called_once_with()
+    document_worker.stop.assert_called_once_with()
+    extraction_worker.stop.assert_called_once_with()
+
+
+def test_document_recovery_worker_stops_if_other_worker_cannot_start() -> None:
+    document_worker = Mock()
+    extraction_worker = Mock()
+    extraction_worker.start.side_effect = RuntimeError("startup failed")
+    app = create_app(
+        workflow=Mock(), store=Mock(), evidence_reader=Mock(), evidence_writer=Mock(),
+        document_task_worker=document_worker, extraction_worker=extraction_worker,
+    )
+    with pytest.raises(RuntimeError, match="startup failed"), TestClient(app):
+        pass
+    document_worker.stop.assert_called_once_with()
+    extraction_worker.stop.assert_not_called()
+
+
 def test_business_image_and_compose_keep_models_out_of_api() -> None:
     root = Path(__file__).resolve().parents[2]
     dockerfile = (root / "docker/business-api/Dockerfile").read_text()

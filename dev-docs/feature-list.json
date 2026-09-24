@@ -2380,7 +2380,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "业务 API 已接入后台文档任务恢复扫描：uploaded/submitting/提交响应未知、submitted、cancel_requested 无需浏览器逐项 GET 即可推进；独立 Doclib 客户端与提交世代支持本地崩溃重放。Mac Mock 和真实 Doclib 联调已测；目标麒麟容器重启、磁盘/模型故障和回退尚未验收，保持未通过。见 dev-docs/evidence/2026-09-24-document-task-recovery-worker.md。"
     },
     {
       "id": "BE-028",

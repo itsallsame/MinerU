@@ -48,6 +48,7 @@ from ..services import (
     DiscoveryError,
     DocumentWorkflow,
     DocumentWorkflowError,
+    DocumentTaskWorker,
     EvidenceCaptureError,
     EvidenceInspection,
     EvidenceReader,
@@ -597,19 +598,28 @@ def create_app(
     *, workflow: DocumentWorkflow, store: BusinessStore, evidence_reader: EvidenceReader,
     evidence_writer: EvidenceWriter, field_extraction: FieldExtraction | None = None,
     extraction_worker: ExtractionWorker | None = None, discovery: BusinessDiscovery | None = None,
+    document_task_worker: DocumentTaskWorker | None = None,
     uploads: ImmutableUploadStore | None = None,
     web_root: Path | None = None,
 ) -> FastAPI:
     """Build the shared open API; network placement is a deployment boundary."""
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        if extraction_worker is not None:
-            extraction_worker.start()
+        document_started = False
+        extraction_started = False
         try:
+            if document_task_worker is not None:
+                document_task_worker.start()
+                document_started = True
+            if extraction_worker is not None:
+                extraction_worker.start()
+                extraction_started = True
             yield
         finally:
-            if extraction_worker is not None:
+            if extraction_started and extraction_worker is not None:
                 extraction_worker.stop()
+            if document_started and document_task_worker is not None:
+                document_task_worker.stop()
 
     app = FastAPI(title="MinerU Business Documents", version="0.1.0", lifespan=lifespan)
     if uploads is not None:

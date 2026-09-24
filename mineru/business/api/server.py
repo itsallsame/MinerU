@@ -12,7 +12,10 @@ from fastapi import FastAPI
 from ...doclib import DoclibClient
 from ...version import __version__
 from ..documents import DoclibGateway, ImmutableUploadStore
-from ..services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter, ExtractionWorker, FieldExtraction
+from ..services import (
+    BusinessDiscovery, DocumentTaskWorker, DocumentWorkflow, EvidenceReader, EvidenceWriter,
+    ExtractionWorker, FieldExtraction,
+)
 from ..store import BusinessStore
 from .app import create_app
 
@@ -81,6 +84,14 @@ def build_app(config: ServerConfig) -> FastAPI:
     extraction_doclib = DoclibClient(base_url=config.doclib_url)
     extraction_writer = EvidenceWriter(store=store, doclib=extraction_doclib)
     extraction = FieldExtraction(store=store, doclib=extraction_doclib, evidence_writer=extraction_writer)
+    recovery_doclib = DoclibClient(base_url=config.doclib_url, timeout=10)
+    recovery_workflow = DocumentWorkflow(
+        uploads=uploads,
+        store=store,
+        gateway=DoclibGateway(recovery_doclib, shared_root=config.upload_root),
+        doclib=recovery_doclib,
+        producer_version=__version__,
+    )
     return create_app(
         workflow=workflow,
         store=store,
@@ -88,6 +99,7 @@ def build_app(config: ServerConfig) -> FastAPI:
         evidence_writer=evidence_writer,
         field_extraction=extraction,
         extraction_worker=ExtractionWorker(extraction),
+        document_task_worker=DocumentTaskWorker(recovery_workflow, store),
         discovery=BusinessDiscovery(store=store, doclib=doclib),
         uploads=uploads,
         web_root=web_root if (web_root / "index.html").is_file() else None,

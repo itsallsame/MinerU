@@ -1,6 +1,7 @@
 """Business workflows over Doclib and the business store."""
 
 from .documents import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
+from .document_task_worker import DocumentTaskWorker
 from .discovery import (
     BusinessDiscovery, BusinessSearchHit, BusinessSearchPage, DiscoveryError, HistoricalRead,
     RevisionSearchHit, RevisionSearchPage, RevisionBlockHit, RevisionBlockSearchPage,
@@ -15,6 +16,7 @@ __all__ = [
     "DocumentSubmission",
     "DocumentWorkflow",
     "DocumentWorkflowError",
+    "DocumentTaskWorker",
     "BusinessDiscovery",
     "BusinessSearchHit",
     "BusinessSearchPage",

@@ -25,7 +25,9 @@ from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import BusinessDiscovery, DocumentWorkflow, EvidenceReader, EvidenceWriter, FieldExtraction
+from mineru.business.services import (
+    BusinessDiscovery, DocumentTaskWorker, DocumentWorkflow, EvidenceReader, EvidenceWriter, FieldExtraction,
+)
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibClient, ParseReleaseRequest, ParseRequest, ScanRequest
 from mineru.doclib.endpoint import read_endpoint_file
@@ -199,6 +201,37 @@ def test_real_doclib_business_cancel_route_persists_release_facts(
     assert store.list_revisions(submitted.json()["document"]["id"]) == ()
     task = store.get_task(task_id)
     assert task is not None and task.cancel_results_json is not None
+
+
+def test_restarted_document_worker_recovers_uploaded_task_with_real_doclib(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "recovery-uploads"
+    upload_root.mkdir()
+    uploads = ImmutableUploadStore(upload_root, max_bytes=1024)
+    database_path = root / "recovery-business.sqlite3"
+    initial_store = BusinessStore(database_path)
+    initial_store.initialize()
+    stored = uploads.store(io.BytesIO(b"<h1>Crash window</h1>"), filename="recovery.html")
+    document, task = initial_store.create_document_with_task(
+        stored, original_name="recovery.html", requested_tier=None,
+    )
+
+    restarted_store = BusinessStore(database_path)
+    restarted_workflow = DocumentWorkflow(
+        uploads=uploads, store=restarted_store, gateway=DoclibGateway(doclib, shared_root=upload_root),
+        doclib=doclib, producer_version="4.0.6",
+    )
+    worker = DocumentTaskWorker(restarted_workflow, restarted_store)
+    assert worker.run_once() is True
+    submitted = restarted_store.get_task(task.id)
+    assert submitted is not None and submitted.status == "submitted"
+    _wait_for_parse(doclib, list(submitted.parse_ids))
+    assert worker.run_once() is False  # End of the current keyset pass.
+    assert worker.run_once() is True
+    assert restarted_store.get_task(task.id).status == "done"
+    assert len(restarted_store.list_revisions(document.id)) == 1
 
 
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
