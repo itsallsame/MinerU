@@ -949,3 +949,11 @@ Changes: Block-candidate search can now be restarted while a continuation reques
 Verification: Web Node 11 passed; eight offline assets built; 22 offline Chromium regressions passed, including delayed old continuation after a new scan; diff check passed. Browser APIs in this regression are simulated, not real Doclib or target Kylin.
 Evidence: dev-docs/evidence/2026-09-24-search-rescan-race.md
 Next: Continue P4 recovery and keyboard audit, obtain FE-033 scope choice and target Kylin/NVIDIA/four-class sample inputs; keep FE-047 and goal active.
+
+=== 2026-09-24 Session 103 (FE-016 prerequisite: atomic task completion) ===
+Status: In progress; FE-016 remains false because Doclib has no shared-consumer cancellation contract
+Discovery: Doclib deduplicates pending/parsing batches by source/tier/page coverage but stores no request-owner references. Business refresh previously inserted a completed revision and then marked the task done in separate transactions, leaving a race for later cancellation.
+Changes: Business task completion and revision insertion/reuse now occur in one SQLite write transaction with task-status, parse-ID and tier checks; terminal tasks cannot acquire a new revision. Removed standalone mark-task-done storage method. Documented Doclib consumer-reference requirement before any UI/API may claim underlying work stopped. No user/permission layer.
+Verification: 26 targeted business tests and full business suite 246 passed/1 skipped; Ruff lint and diff checks passed. Tests cover invalid batch rollback, competing terminal status, and parallel refresh. No real target GPU or Doclib cancellation test was claimed.
+Evidence: dev-docs/evidence/2026-09-24-atomic-task-completion.md
+Next: Design/implement Doclib request-consumer leases and atomic queued-only cancellation, then expose truthful business and Web/Skill semantics; continue target Kylin/NVIDIA and real-sample gates. Keep goal active.

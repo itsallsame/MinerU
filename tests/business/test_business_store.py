@@ -104,6 +104,60 @@ def test_completed_revision_and_frozen_evidence_survive_reparse_and_restart(tmp_
     assert reopened.list_evidence(second.id) == ()
 
 
+def test_task_completion_and_revision_are_one_atomic_transition(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Atomic</h1>"), filename="atomic.html")
+    document, task = business.create_document_with_task(upload, original_name="atomic.html", requested_tier=None)
+    business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
+    parse = _done_parse(upload.sha256, parse_id=17)
+
+    wrong_batch = _done_parse(upload.sha256, parse_id=18)
+    with pytest.raises(BusinessStoreError, match="does not belong to the submitted task"):
+        business.complete_task_with_revision(task.id, parse=wrong_batch, producer_version="4.0.6")
+    with pytest.raises(BusinessStoreError, match="tier does not match"):
+        business.complete_task_with_revision(
+            task.id, parse=_done_parse(upload.sha256, parse_id=17, tier="basic"), producer_version="4.0.6"
+        )
+    assert business.get_task(task.id).status == "submitted"
+    assert business.list_revisions(document.id) == ()
+
+    completed = business.complete_task_with_revision(task.id, parse=parse, producer_version="4.0.6")
+    assert completed.status == "done"
+    assert len(business.list_revisions(document.id)) == 1
+    assert business.complete_task_with_revision(task.id, parse=parse, producer_version="4.0.6") == completed
+    assert len(business.list_revisions(document.id)) == 1
+
+
+def test_terminal_task_cannot_acquire_a_new_completed_revision(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Stopped</h1>"), filename="stopped.html")
+    document, task = business.create_document_with_task(upload, original_name="stopped.html", requested_tier=None)
+    business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
+    failed = business.mark_task_failed(task.id, error_code="doclib_parse_failed")
+
+    observed = business.complete_task_with_revision(
+        task.id, parse=_done_parse(upload.sha256, parse_id=17), producer_version="4.0.6"
+    )
+
+    assert observed == failed
+    assert business.list_revisions(document.id) == ()
+
+
+def test_revision_conflict_rolls_back_task_completion(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Conflict</h1>"), filename="conflict.html")
+    document, task = business.create_document_with_task(upload, original_name="conflict.html", requested_tier=None)
+    business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
+    parse = _done_parse(upload.sha256, parse_id=17)
+    business.add_completed_revision(document.id, parse=parse, producer_version="other-version")
+
+    with pytest.raises(BusinessStoreError, match="conflicting provenance"):
+        business.complete_task_with_revision(task.id, parse=parse, producer_version="4.0.6")
+
+    assert business.get_task(task.id).status == "submitted"
+    assert len(business.list_revisions(document.id)) == 1
+
+
 def test_multi_batch_revision_persists_page_to_parse_mapping_and_rejects_overlap(tmp_path: Path) -> None:
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"%PDF-1.7\nlong"), filename="report.pdf")

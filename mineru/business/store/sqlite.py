@@ -1125,18 +1125,6 @@ class BusinessStore:
         assert task is not None
         return task
 
-    def mark_task_done(self, task_id: str) -> IngestTask:
-        with closing(self._connect()) as database, database:
-            cursor = database.execute(
-                "UPDATE tasks SET status='done', updated_at_ms=? WHERE id=? AND status='submitted'",
-                (_now_ms(), task_id),
-            )
-            if cursor.rowcount != 1:
-                raise BusinessStoreError("Task cannot complete from its current state")
-        task = self.get_task(task_id)
-        assert task is not None
-        return task
-
     @staticmethod
     def _task_from_row(row: sqlite3.Row) -> IngestTask:
         payload = dict(row)
@@ -1151,6 +1139,50 @@ class BusinessStore:
         producer_version: str,
         model_ref: str | None = None,
     ) -> ParseRevision:
+        """Record an independently produced, completed parse revision."""
+        first, parse_batches, page_range = self._completed_batches(parse, producer_version)
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            return self._insert_completed_revision(
+                database, document_id, first, parse_batches, page_range, producer_version, model_ref
+            )
+
+    def complete_task_with_revision(
+        self,
+        task_id: str,
+        *,
+        parse: ParseInfo | tuple[ParseInfo, ...],
+        producer_version: str,
+    ) -> IngestTask:
+        """Commit a submitted task and its revision together, or observe a concurrent terminal transition."""
+        first, parse_batches, page_range = self._completed_batches(parse, producer_version)
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            task_row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if task_row is None:
+                raise BusinessStoreError("Task not found")
+            if task_row["status"] != "submitted":
+                return self._task_from_row(task_row)
+            if first.tier != task_row["actual_tier"]:
+                raise BusinessStoreError("Completed parse tier does not match the submitted task")
+            expected_ids = set(json.loads(task_row["parse_ids_json"]))
+            if not {batch.parse_id for batch in parse_batches} <= expected_ids:
+                raise BusinessStoreError("Completed parse does not belong to the submitted task")
+            self._insert_completed_revision(
+                database, task_row["document_id"], first, parse_batches, page_range, producer_version, None
+            )
+            database.execute(
+                "UPDATE tasks SET status='done', updated_at_ms=? WHERE id=? AND status='submitted'",
+                (_now_ms(), task_id),
+            )
+            completed = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            assert completed is not None
+            return self._task_from_row(completed)
+
+    @staticmethod
+    def _completed_batches(
+        parse: ParseInfo | tuple[ParseInfo, ...], producer_version: str
+    ) -> tuple[ParseInfo, tuple[ParseBatch, ...], str]:
         parses = (parse,) if isinstance(parse, ParseInfo) else parse
         if not parses or any(item.status != "done" for item in parses):
             raise BusinessStoreError("Only completed Doclib parses can become evidence revisions")
@@ -1170,58 +1202,68 @@ class BusinessStore:
         batches.sort(key=lambda batch: min(parse_page_range_set(batch.page_range)))
         parse_batches = tuple(batches)
         page_range = format_page_range(pages)
-        with closing(self._connect()) as database, database:
-            database.execute("BEGIN IMMEDIATE")
-            document = database.execute("SELECT sha256 FROM documents WHERE id=?", (document_id,)).fetchone()
-            if document is None:
-                raise BusinessStoreError("Business document not found")
-            if first.sha256 != document["sha256"]:
-                raise BusinessStoreError("Doclib parse source does not match the business document")
-            existing = database.execute(
-                "SELECT * FROM revisions WHERE document_id=? AND doclib_parse_id=?", (document_id, first.id)
-            ).fetchone()
-            if existing is not None:
-                revision = self._revision_from_row(existing)
-                if (
-                    revision.sha256 != first.sha256
-                    or revision.short_id != first.short_id
-                    or revision.tier != first.tier
-                    or revision.parse_batches != parse_batches
-                    or revision.page_range != page_range
-                    or revision.producer_version != producer_version
-                    or revision.model_ref != model_ref
-                ):
-                    raise BusinessStoreError("Existing parse revision has conflicting provenance")
-                return revision
-            revision = ParseRevision(
-                id=uuid.uuid4().hex,
-                document_id=document_id,
-                doclib_parse_id=first.id,
-                parse_batches=parse_batches,
-                page_range=page_range,
-                sha256=first.sha256,
-                short_id=first.short_id,
-                tier=first.tier,
-                producer_version=producer_version,
-                model_ref=model_ref,
-                created_at_ms=_now_ms(),
-            )
-            database.execute(
-                "INSERT INTO revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    revision.id,
-                    revision.document_id,
-                    revision.doclib_parse_id,
-                    json.dumps([vars(batch) for batch in revision.parse_batches]),
-                    revision.page_range,
-                    revision.sha256,
-                    revision.short_id,
-                    revision.tier,
-                    revision.producer_version,
-                    revision.model_ref,
-                    revision.created_at_ms,
-                ),
-            )
+        return first, parse_batches, page_range
+
+    def _insert_completed_revision(
+        self,
+        database: sqlite3.Connection,
+        document_id: str,
+        first: ParseInfo,
+        parse_batches: tuple[ParseBatch, ...],
+        page_range: str,
+        producer_version: str,
+        model_ref: str | None,
+    ) -> ParseRevision:
+        document = database.execute("SELECT sha256 FROM documents WHERE id=?", (document_id,)).fetchone()
+        if document is None:
+            raise BusinessStoreError("Business document not found")
+        if first.sha256 != document["sha256"]:
+            raise BusinessStoreError("Doclib parse source does not match the business document")
+        existing = database.execute(
+            "SELECT * FROM revisions WHERE document_id=? AND doclib_parse_id=?", (document_id, first.id)
+        ).fetchone()
+        if existing is not None:
+            revision = self._revision_from_row(existing)
+            if (
+                revision.sha256 != first.sha256
+                or revision.short_id != first.short_id
+                or revision.tier != first.tier
+                or revision.parse_batches != parse_batches
+                or revision.page_range != page_range
+                or revision.producer_version != producer_version
+                or revision.model_ref != model_ref
+            ):
+                raise BusinessStoreError("Existing parse revision has conflicting provenance")
+            return revision
+        revision = ParseRevision(
+            id=uuid.uuid4().hex,
+            document_id=document_id,
+            doclib_parse_id=first.id,
+            parse_batches=parse_batches,
+            page_range=page_range,
+            sha256=first.sha256,
+            short_id=first.short_id,
+            tier=first.tier,
+            producer_version=producer_version,
+            model_ref=model_ref,
+            created_at_ms=_now_ms(),
+        )
+        database.execute(
+            "INSERT INTO revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                revision.id,
+                revision.document_id,
+                revision.doclib_parse_id,
+                json.dumps([vars(batch) for batch in revision.parse_batches]),
+                revision.page_range,
+                revision.sha256,
+                revision.short_id,
+                revision.tier,
+                revision.producer_version,
+                revision.model_ref,
+                revision.created_at_ms,
+            ),
+        )
         return revision
 
     def get_revision(self, revision_id: str) -> ParseRevision | None:

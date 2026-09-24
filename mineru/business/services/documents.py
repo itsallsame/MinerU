@@ -147,12 +147,11 @@ class DocumentWorkflow:
             if not isinstance(doc.page_count, int) or doc.page_count < 1 or covered_pages != set(range(1, doc.page_count + 1)):
                 return self._store.mark_task_failed(task.id, error_code="parse_coverage_incomplete")
         try:
-            self._store.add_completed_revision(
-                task.document_id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version
+            return self._store.complete_task_with_revision(
+                task.id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version
             )
         except BusinessStoreError:
             return self._store.mark_task_failed(task.id, error_code="parse_batch_invalid")
-        return self._store.mark_task_done(task.id)
 
 
 __all__ = ["DocumentSubmission", "DocumentWorkflow", "DocumentWorkflowError"]

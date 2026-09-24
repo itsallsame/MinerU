@@ -94,6 +94,43 @@ def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> 
     assert store.get_document(submitted.document.id) == submitted.document
 
 
+def test_refresh_does_not_create_revision_after_concurrent_terminal_transition(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Race</h1>"), filename="race.html")
+
+    def finish_after_failure(_parse_id: int) -> ParseInfo:
+        store.mark_task_failed(submitted.task.id, error_code="concurrent_failure")
+        return _parse_info(submitted.document.sha256)
+
+    client.get_parse.side_effect = finish_after_failure
+
+    assert workflow.refresh(submitted.task.id).status == "failed"
+    assert store.list_revisions(submitted.document.id) == ()
+
+
+def test_parallel_refreshes_commit_only_one_completed_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Parallel finish</h1>"), filename="parallel.html")
+    barrier = Barrier(2)
+
+    def completed_parse(_parse_id: int) -> ParseInfo:
+        barrier.wait(timeout=5)
+        return _parse_info(submitted.document.sha256)
+
+    client.get_parse.side_effect = completed_parse
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(workflow.refresh, submitted.task.id)
+        second = pool.submit(workflow.refresh, submitted.task.id)
+        statuses = {first.result(timeout=10).status, second.result(timeout=10).status}
+
+    assert statuses == {"done"}
+    assert len(store.list_revisions(submitted.document.id)) == 1
+
+
 def test_request_key_replays_one_upload_without_suppressing_intentional_duplicate(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
