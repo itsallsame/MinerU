@@ -377,6 +377,59 @@ def test_skill_cancel_requires_explicit_write_ack_and_uses_only_business_api() -
     assert connection.calls == [("POST", "/api/business/tasks/task-1/cancel")]
 
 
+def test_skill_retry_requires_explicit_write_ack_and_uses_only_business_api() -> None:
+    script = _script()
+    connection = _Connection({
+        ("POST", "/api/business/tasks/task-1/retry"): _Response({"id": "task-1", "status": "submitted"}),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    with pytest.raises(script.BusinessAPIError, match="explicit user approval"):
+        script.run(script.parser().parse_args(["retry", "task-1"]), client)
+    assert connection.calls == []
+    result = script.run(script.parser().parse_args(["retry", "task-1", "--confirm-write"]), client)
+    assert result == {"id": "task-1", "status": "submitted"}
+    assert connection.calls == [("POST", "/api/business/tasks/task-1/retry")]
+
+
+def test_skill_retry_unknown_post_result_only_reads_task_without_resubmitting() -> None:
+    script = _script()
+    connection = _Connection({
+        ("POST", "/api/business/tasks/task-1/retry"): _Response({"detail": "unavailable"}, status=503),
+        ("GET", "/api/business/tasks/task-1"): _Response({"id": "task-1", "status": "submitted"}),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    result = script.run(script.parser().parse_args(["retry", "task-1", "--confirm-write"]), client)
+    assert result == {"state": "retry_outcome_unconfirmed", "task": {"id": "task-1", "status": "submitted"}}
+    assert connection.calls == [
+        ("POST", "/api/business/tasks/task-1/retry"), ("GET", "/api/business/tasks/task-1"),
+    ]
+    connection.responses[("POST", "/api/business/tasks/task-1/retry")] = _Response({"unexpected": True})
+    malformed = script.run(script.parser().parse_args(["retry", "task-1", "--confirm-write"]), client)
+    assert malformed["state"] == "retry_outcome_unconfirmed"
+    assert connection.calls[-2:] == [
+        ("POST", "/api/business/tasks/task-1/retry"), ("GET", "/api/business/tasks/task-1"),
+    ]
+    connection.responses[("POST", "/api/business/tasks/task-1/retry")] = _Response(
+        {"detail": "unavailable"}, status=503,
+    )
+    connection.responses[("GET", "/api/business/tasks/task-1")] = _Response({"detail": "offline"}, status=503)
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown"):
+        script.run(script.parser().parse_args(["retry", "task-1", "--confirm-write"]), client)
+    assert connection.calls.count(("POST", "/api/business/tasks/task-1/retry")) == 3
+    assert connection.calls.count(("GET", "/api/business/tasks/task-1")) == 3
+
+    connection.responses[("POST", "/api/business/tasks/task-1/retry")] = _Response(
+        {"detail": "Task cannot be retried"}, status=409,
+    )
+    prior_get_count = connection.calls.count(("GET", "/api/business/tasks/task-1"))
+    with pytest.raises(script.BusinessAPIError, match="Task cannot be retried") as conflict:
+        script.run(script.parser().parse_args(["retry", "task-1", "--confirm-write"]), client)
+    assert conflict.value.status == 409
+    assert connection.calls.count(("GET", "/api/business/tasks/task-1")) == prior_get_count
+
+
 def test_skill_evidence_link_uses_the_same_validated_business_web_origin() -> None:
     script = _script()
     evidence = {

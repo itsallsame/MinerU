@@ -232,6 +232,9 @@ def parser() -> argparse.ArgumentParser:
     cancel = commands.add_parser("cancel")
     cancel.add_argument("task_id")
     cancel.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested task cancellation")
+    retry = commands.add_parser("retry")
+    retry.add_argument("task_id")
+    retry.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested task retry")
     return main
 
 
@@ -294,6 +297,31 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
         if not args.confirm_write:
             raise BusinessAPIError("Cancellation requires --confirm-write after explicit user approval")
         return client.request("POST", f"/tasks/{quote(args.task_id, safe='')}/cancel")
+    if command == "retry":
+        if not args.confirm_write:
+            raise BusinessAPIError("Task retry requires --confirm-write after explicit user approval")
+        path = f"/tasks/{quote(args.task_id, safe='')}"
+        try:
+            result = client.request("POST", f"{path}/retry")
+            if not isinstance(result, dict) or result.get("id") != args.task_id or not isinstance(result.get("status"), str):
+                raise BusinessAPIError("Task retry response is incomplete; outcome unknown", status=200)
+            return result
+        except BusinessAPIError as exc:
+            if exc.status is not None and exc.status != 408 and exc.status < 500 and not (200 <= exc.status < 300):
+                raise
+            try:
+                current = client.request("GET", path)
+            except BusinessAPIError as lookup_error:
+                raise BusinessAPIError(
+                    "Task retry outcome unknown; check this task before deciding whether to retry again",
+                    status=exc.status,
+                ) from lookup_error
+            if (
+                not isinstance(current, dict) or current.get("id") != args.task_id
+                or not isinstance(current.get("status"), str)
+            ):
+                raise BusinessAPIError("Task retry outcome unknown; task lookup returned a different identity") from exc
+            return {"state": "retry_outcome_unconfirmed", "task": current}
     if command == "revisions":
         return client.request("GET", f"/documents/{quote(args.document_id, safe='')}/revisions")
     if command == "extract":

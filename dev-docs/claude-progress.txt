@@ -1144,3 +1144,11 @@ Changes: Before create/restore, scan all running Docker containers and reject wr
 Verification: Backup tests 11 passed; final Mac business suite 348 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This is a mocked Docker-inspect contract, not an actual Kylin backup/restore or proof against host processes and post-check races.
 Evidence: dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md
 Next: On the target isolated machine, run a controlled backup/restore and rollback with real data and artifacts; keep a maintenance-window fence against non-Docker host writers and new containers. Keep Goal active.
+
+=== 2026-09-24 Session 128 (own Skill task retry parity) ===
+Status: In progress; P5 Mac capability extended, P6 real-sample/target gates remain open
+Discovery: The business Web/API supported explicit retry of failed document tasks, but the own Skill only queried and cancelled tasks. An Agent using the shared business API could not invoke that business workflow without bypassing the Skill entry.
+Changes: Added `retry TASK_ID --confirm-write` to the own Skill. One explicit POST only; connection/408/5xx/malformed success yields a read-only task lookup and `retry_outcome_unconfirmed`, never automatic re-POST. Definite 409 remains an error. Updated Skill instructions, architecture/phase text and P5 notes; corrected stale design text claiming structure/block search absent. No official Skill, Doclib direct call, auth/user/role/permission, model or schema change.
+Verification: Skill contract 14 passed; full Mac business 350 passed/2 skipped/2 dependency warnings. Skill quick_validate, Ruff lint, feature-list JSON and diff checks passed. Actual Kylin/GPU and real network failure remain untested.
+Evidence: dev-docs/evidence/2026-09-24-skill-task-retry.md
+Next: Obtain real samples and target hardware; validate Skill retry through actual isolated business API failure/recovery and ensure Web/Skill state parity. Keep Goal active.
