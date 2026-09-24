@@ -965,3 +965,11 @@ Changes: The explicit request's synchronous ingestion now registers source/doc m
 Verification: Doclib cache semantics 211 passed; full Mac business 246 passed/1 skipped; full official unit 2806 passed/4 skipped. Ruff source lint/format and diff checks passed. No claim that concurrent background ingestion is covered by this separation or that cancellation is implemented.
 Evidence: dev-docs/evidence/2026-09-24-explicit-parse-queue-separation.md
 Next: Implement atomic Doclib request-consumer claims and queued-only release, then business cancellation and truthful Web/Skill states. Obtain real isolated Kylin/NVIDIA artifacts and four-class labeled samples for target acceptance. Keep goal active.
+
+=== 2026-09-24 Session 105 (FE-016 prerequisite: Doclib consumer registration) ===
+Status: In progress; FE-016 remains false; no cancel API or queue stop claim
+Changes: Added Doclib schema v3 parse_consumers, protected legacy/background/anonymous claims, and business task intent keys on the public parse request. Done/active lookup, reuse, creation and registration now share one BEGIN IMMEDIATE transaction. Fixed concurrent first-time files.path insert collision and retained watch association when another caller wins insertion. No user/auth/permission management added.
+Discovery: Real local Doclib can let background ingest win the race, so a business request may legitimately share a batch with protected system:ingest. A second-path same-SHA background early return remains unaudited for future release semantics and is documented as a gate.
+Verification: Final official unit 2814 passed/4 skipped; full Mac business 247 passed/1 skipped; Doclib cache/migration 225 passed; real public SDK/Unix-socket consumer registration passed. Core Ruff lint/format and diff checks passed. Existing large test file's 13 unrelated Ruff issues not bulk-changed. No target Kylin/GPU or labeled-sample acceptance claimed.
+Evidence: dev-docs/evidence/2026-09-24-doclib-consumer-registration.md
+Next: Define durable intent tombstone/replay semantics, audit second-path background consumption, then implement queued-only release and business cancel_requested recovery before exposing truthful Web/Skill cancellation. Obtain target amd64/NVIDIA artifacts and four-class real samples. Keep goal active.

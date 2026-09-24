@@ -14,7 +14,7 @@ from ...config import SQLiteConfig
 from ...errors import ServerBusyError
 from ..config_defaults import CONFIG_DEFAULTS
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 _T = TypeVar("_T")
@@ -235,6 +235,15 @@ class DatabaseManager:
             for sql, params in statements:
                 await conn.execute(sql, params)
             return len(statements)
+
+        return await self._with_connection(_operation, write=True)
+
+    async def write_transaction(self, operation: Callable[[aiosqlite.Connection], Awaitable[_T]]) -> _T:
+        """Run a read/modify/write operation under one cross-process SQLite write lock."""
+
+        async def _operation(conn: aiosqlite.Connection) -> _T:
+            await conn.execute("BEGIN IMMEDIATE")
+            return await operation(conn)
 
         return await self._with_connection(_operation, write=True)
 

@@ -18,7 +18,41 @@ def test_fresh_database_records_all_schema_migrations(tmp_path: Path) -> None:
         await db.initialize()
 
         rows = await db.fetchall("SELECT version FROM _migrations ORDER BY version")
-        assert rows == [{"version": 1}, {"version": 2}]
+        assert rows == [{"version": 1}, {"version": 2}, {"version": 3}]
+
+    asyncio.run(_run())
+
+
+def test_v3_migration_protects_existing_active_batches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 2)
+        await db.initialize()
+        await db.execute(
+            "INSERT INTO docs (sha256, short_id, size_bytes, first_seen_at, updated_at) "
+            "VALUES (?, 'old-doc', 1, 1, 1)",
+            ("a" * 64,),
+        )
+        for status in ("pending", "parsing", "done"):
+            await db.execute(
+                "INSERT INTO parses (sha256, tier, page_range, status, created_at, updated_at) "
+                "VALUES (?, 'flash', '1', ?, 1, 1)",
+                ("a" * 64, status),
+            )
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 3)
+        await db.initialize()
+        claims = await db.fetchall(
+            "SELECT p.status, c.consumer_key, c.protected FROM parse_consumers c "
+            "JOIN parses p ON p.id=c.parse_id ORDER BY p.id"
+        )
+        assert claims == [
+            {"status": "pending", "consumer_key": "system:legacy", "protected": 1},
+            {"status": "parsing", "consumer_key": "system:legacy", "protected": 1},
+        ]
+        await db.initialize()
+        assert await db.fetchall("SELECT parse_id FROM parse_consumers ORDER BY parse_id") == [
+            {"parse_id": 1}, {"parse_id": 2}
+        ]
 
     asyncio.run(_run())
 

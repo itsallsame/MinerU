@@ -33,7 +33,7 @@ def test_gateway_submits_shared_html_as_local_flash(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.return_value = _response(source)
 
-    submitted = DoclibGateway(client, shared_root=root).submit(source)
+    submitted = DoclibGateway(client, shared_root=root).submit(source, consumer_key="business:task-1")
 
     assert submitted.sha256 == hashlib.sha256(source.read_bytes()).hexdigest()
     assert submitted.parse_ids == (42,)
@@ -41,6 +41,7 @@ def test_gateway_submits_shared_html_as_local_flash(tmp_path: Path) -> None:
     assert request.path == str(source)
     assert request.tier == "flash"
     assert request.remote is False
+    assert request.consumer_key == "business:task-1"
 
 
 def test_gateway_keeps_reused_parse_ids(tmp_path: Path) -> None:

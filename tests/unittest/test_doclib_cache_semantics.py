@@ -270,6 +270,16 @@ class _OrderRecordingDB:
             self.events.append("insert_parse")
         return await self.db.execute(sql, params)
 
+    async def execute_atomic(self, statements: list[tuple[str, tuple]]) -> int:
+        for sql, _params in statements:
+            if sql.startswith("UPDATE files SET sha256=?"):
+                self.events.append("update_file_sha")
+            elif sql.startswith("INSERT INTO parses"):
+                self.events.append("insert_parse")
+            elif sql.startswith("INSERT INTO parse_consumers"):
+                self.events.append("insert_consumer")
+        return await self.db.execute_atomic(statements)
+
 
 def _write_batch(
     data_dir: Path,
@@ -1545,6 +1555,7 @@ def test_ingest_binds_file_sha_before_creating_parse_task(tmp_path: Path, monkey
 
         assert row is not None
         assert recording_db.events.index("update_file_sha") < recording_db.events.index("insert_parse")
+        assert recording_db.events.index("insert_parse") < recording_db.events.index("insert_consumer")
         assert dangling_parses == []
 
     asyncio.run(_run())
@@ -1974,16 +1985,147 @@ def test_explicit_parse_ingests_without_queuing_default_flash_batch(
         )
         explicit = tmp_path / "explicit.pdf"
         explicit.write_bytes(b"%PDF-1.7\nexplicit")
-        response = await service.request_parse(str(explicit), tier="standard")
+        response = await service.request_parse(str(explicit), tier="standard", consumer_key="business:explicit")
         rows = await db.fetchall("SELECT id, tier, status FROM parses ORDER BY id")
         assert response.created_parse_ids == [rows[0]["id"]]
         assert rows == [{"id": rows[0]["id"], "tier": "standard", "status": "pending"}]
+        assert await db.fetchall("SELECT consumer_key, protected FROM parse_consumers ORDER BY parse_id") == [
+            {"consumer_key": "business:explicit", "protected": 0}
+        ]
 
         discovered = tmp_path / "discovered.pdf"
         discovered.write_bytes(b"%PDF-1.7\nbackground")
         await service.ingest_file(str(discovered), trigger="background")
         rows = await db.fetchall("SELECT tier FROM parses ORDER BY id")
         assert rows == [{"tier": "standard"}, {"tier": "flash"}]
+        assert await db.fetchall("SELECT consumer_key, protected FROM parse_consumers ORDER BY parse_id") == [
+            {"consumer_key": "business:explicit", "protected": 0},
+            {"consumer_key": "system:ingest", "protected": 1},
+        ]
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize("pre_ingested", [False, True])
+def test_concurrent_explicit_requests_reuse_one_pending_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pre_ingested: bool
+) -> None:
+    """Separate DB connections must not both create the same uncovered batch."""
+
+    class _NoRulesConfig:
+        async def match_rules(self, path: str, rule_type: str) -> list[dict[str, Any]]:
+            return []
+
+    async def _metadata(path: str) -> dict[str, Any]:
+        return {
+            "page_count": 1, "title": None, "author": None, "subject": None,
+            "keywords": None, "is_image_based": 0,
+        }
+
+    monkeypatch.setattr(parse_svc_module, "extract_metadata", _metadata)
+
+    async def _run() -> None:
+        db_path = str(tmp_path / "doclib.db")
+        first_db = DatabaseManager(db_path)
+        second_db = DatabaseManager(db_path)
+        await first_db.initialize()
+        first = ParseService(
+            db=first_db, fts=FTSManager(first_db), config_svc=_NoRulesConfig(),
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        second = ParseService(
+            db=second_db, fts=FTSManager(second_db), config_svc=_NoRulesConfig(),
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        source = tmp_path / "shared.pdf"
+        source.write_bytes(b"%PDF-1.7\nshared")
+        if pre_ingested:
+            await first.ingest_file(str(source), queue_initial_parse=False)
+        responses = await asyncio.gather(
+            first.request_parse(str(source), tier="standard", consumer_key="business:first"),
+            second.request_parse(str(source), tier="standard", consumer_key="business:second"),
+        )
+        rows = await first_db.fetchall("SELECT id, tier, page_range, status FROM parses")
+        assert len(rows) == 1
+        assert rows[0]["tier"] == "standard"
+        assert rows[0]["status"] == "pending"
+        assert [len(response.created_parse_ids) for response in responses] in ([1, 0], [0, 1])
+        assert all(response.wait_parse_ids == [rows[0]["id"]] for response in responses)
+        assert await first_db.fetchall("SELECT consumer_key, protected FROM parse_consumers ORDER BY consumer_key") == [
+            {"consumer_key": "business:first", "protected": 0},
+            {"consumer_key": "business:second", "protected": 0},
+        ]
+        retried = await first.request_parse(str(source), tier="standard", consumer_key="business:first")
+        assert retried.reused_parse_ids == [rows[0]["id"]]
+        assert await first_db.fetchone("SELECT COUNT(*) AS count FROM parse_consumers") == {"count": 2}
+
+        anonymous = await first.request_parse(str(source), tier="standard")
+        assert anonymous.reused_parse_ids == [rows[0]["id"]]
+        assert await first_db.fetchall("SELECT consumer_key, protected FROM parse_consumers ORDER BY consumer_key") == [
+            {"consumer_key": "business:first", "protected": 0},
+            {"consumer_key": "business:second", "protected": 0},
+            {"consumer_key": "system:request", "protected": 1},
+        ]
+
+    asyncio.run(_run())
+
+
+def test_refresh_ignored_insert_preserves_concurrent_watch_association(tmp_path: Path) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        source = tmp_path / "watched.pdf"
+        source.write_bytes(b"%PDF-1.7\n")
+        now = 100
+        await db.execute(
+            "INSERT INTO watches (id, path, created_at, updated_at) VALUES (7, ?, ?, ?)",
+            (str(tmp_path), now, now),
+        )
+        real_fetchone = db.fetchone
+        first_lookup = True
+
+        async def racing_fetchone(sql: str, params: tuple | None = None) -> dict | None:
+            nonlocal first_lookup
+            if first_lookup and sql == "SELECT * FROM files WHERE path=?":
+                first_lookup = False
+                stat = source.stat()
+                await db.execute(
+                    "INSERT INTO files (path, filename, ext, size_bytes, mtime_ms, first_seen_at, updated_at) "
+                    "VALUES (?, 'watched.pdf', 'pdf', ?, ?, ?, ?)",
+                    (str(source), stat.st_size, int(stat.st_mtime * 1000), now, now),
+                )
+                return None
+            return await real_fetchone(sql, params)
+
+        db.fetchone = racing_fetchone  # type: ignore[method-assign]
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=None,
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        refreshed = await service.refresh_file(str(source), watch_id=7)
+        assert refreshed.status == "known"
+        row = await real_fetchone("SELECT watch_id FROM files WHERE path=?", (str(source),))
+        assert row == {"watch_id": 7}
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize("consumer_key", ["", "system:forged", "bad key", "a" * 129])
+def test_explicit_parse_rejects_invalid_consumer_key_before_ingest(
+    tmp_path: Path, consumer_key: str
+) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=None,
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        source = tmp_path / "input.pdf"
+        source.write_bytes(b"%PDF-1.7\n")
+        with pytest.raises(InvalidRequestError, match="Invalid parse consumer key"):
+            await service.request_parse(str(source), tier="standard", consumer_key=consumer_key)
+        assert await db.fetchone("SELECT COUNT(*) AS count FROM files") == {"count": 0}
 
     asyncio.run(_run())
 
@@ -2194,62 +2336,55 @@ def test_request_parse_raises_ingest_failed_when_file_row_has_no_sha(tmp_path: P
 
 
 def test_force_request_reuses_active_and_creates_only_uncovered_parse(tmp_path: Path) -> None:
-    sha256 = "e" * 64
     source = tmp_path / "doc.pdf"
     source.write_bytes(b"%PDF-1.4\n")
-    stat = source.stat()
-    path = str(source)
-    parses = [
-        {
-            "id": 10,
-            "sha256": sha256,
-            "tier": "standard",
-            "page_range": "1-5",
-            "status": "done",
-            "priority": 0,
-            "done_at": 1000,
-            "created_at": 900,
-        },
-        {
-            "id": 11,
-            "sha256": sha256,
-            "tier": "standard",
-            "page_range": "6-8",
-            "status": "pending",
-            "priority": 0,
-            "done_at": None,
-            "created_at": 1100,
-        },
-    ]
-    db = _FakeDB(
-        parses=parses,
-        file_row={
-            "path": path,
-            "filename": "doc.pdf",
-            "sha256": sha256,
-            "status": "active",
-            "ext": "pdf",
-            "mtime_ms": int(stat.st_mtime * 1000),
-            "size_bytes": stat.st_size,
-            "first_seen_at": 100,
-            "updated_at": 100,
-        },
-        doc_row={"sha256": sha256, "short_id": "eeeeeee", "page_count": 10},
-    )
-    service = ParseService(db=db, fts=_FakeFTS(), config_svc=None, data_dir=str(tmp_path), parse_lock_timeout_sec=1800)
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
 
-    result = asyncio.run(service.request_parse(path, tier="standard", page_range="1-10", force=True))
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        await db.execute(
+            "INSERT INTO docs (sha256, short_id, size_bytes, page_count, first_seen_at, updated_at) "
+            "VALUES (?, ?, ?, 10, 100, 100)",
+            (sha256, "eeeeeee", source.stat().st_size),
+        )
+        await db.execute(
+            "INSERT INTO files (path, filename, ext, size_bytes, mtime_ms, sha256, first_seen_at, updated_at) "
+            "VALUES (?, 'doc.pdf', 'pdf', ?, ?, ?, 100, 100)",
+            (str(source), source.stat().st_size, int(source.stat().st_mtime * 1000), sha256),
+        )
+        for parse_id, page_range, status in ((10, "1-5", "done"), (11, "6-8", "pending")):
+            await db.execute(
+                "INSERT INTO parses (id, sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
+                "VALUES (?, ?, 'standard', ?, ?, 'local', 0, 100, 100)",
+                (parse_id, sha256, page_range, status),
+            )
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=None, data_dir=str(tmp_path), parse_lock_timeout_sec=1800
+        )
+        result = await service.request_parse(
+            str(source), tier="standard", page_range="1-10", force=True, consumer_key="business:split"
+        )
+        assert isinstance(result, ParseResponse)
+        assert result.wait_parse_ids == [11, 12]
+        assert result.reused_parse_ids == [11]
+        assert result.created_parse_ids == [12]
+        assert result.page_range == "1-10"
+        assert result.short_id == "eeeeeee"
+        assert result.status == "pending"
+        assert result.cache_hit is False
+        reused = await db.fetchone("SELECT priority FROM parses WHERE id=11")
+        created = await db.fetchone("SELECT page_range FROM parses WHERE id=12")
+        assert reused == {"priority": 1}
+        assert created == {"page_range": "1-5,9-10"}
+        assert await db.fetchall(
+            "SELECT parse_id, consumer_key FROM parse_consumers ORDER BY parse_id"
+        ) == [
+            {"parse_id": 11, "consumer_key": "business:split"},
+            {"parse_id": 12, "consumer_key": "business:split"},
+        ]
 
-    assert isinstance(result, ParseResponse)
-    assert result.wait_parse_ids == [11, 12]
-    assert result.reused_parse_ids == [11]
-    assert result.created_parse_ids == [12]
-    assert result.page_range == "1-10"
-    assert result.short_id == "eeeeeee"
-    assert result.status == "pending"
-    assert result.cache_hit is False
-    assert db.updated_priorities == [11]
-    assert parses[-1]["page_range"] == "1-5,9-10"
+    asyncio.run(_run())
 
 
 def test_non_pdf_requests_use_one_full_document_batch(

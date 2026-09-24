@@ -6,11 +6,13 @@ import os
 import io
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
 from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -105,6 +107,24 @@ def _wait_for_parse(client: DoclibClient, parse_ids: list[int]) -> None:
             raise AssertionError(f"Doclib parse failed: {[(state.error_code, state.error_msg) for state in failures]}")
         time.sleep(0.1)
     raise AssertionError("Doclib parse timed out")
+
+
+def test_public_doclib_parse_registers_business_consumer(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    client, root, home = live_doclib
+    source = root / "consumer.html"
+    source.write_text("<h1>Consumer registration</h1>", encoding="utf-8")
+
+    result = client.ensure_parse(ParseRequest(path=str(source), tier="flash", consumer_key="business:contract"))
+    assert len(result.wait_parse_ids) == 1
+    with closing(sqlite3.connect(home / "doclib.db")) as database:
+        claims = database.execute(
+            "SELECT consumer_key, protected FROM parse_consumers WHERE parse_id=?",
+            (result.wait_parse_ids[0],),
+        ).fetchall()
+    assert ("business:contract", 0) in claims
+    assert set(claims) <= {("business:contract", 0), ("system:ingest", 1)}
 
 
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

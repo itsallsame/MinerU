@@ -6,12 +6,15 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
+
+import aiosqlite
 
 from ...errors import InvalidRequestError, MineruError
 from ...filetypes import (
@@ -357,8 +360,8 @@ class ParseService:
             row = cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE id=?", (existing["id"],)))
             return FileRefreshResult(file=_file_info(row), status="changed")
 
-        file_id = await self.db.execute_insert(
-            "INSERT INTO files (path, filename, ext, size_bytes, mtime_ms, "
+        inserted = await self.db.execute(
+            "INSERT OR IGNORE INTO files (path, filename, ext, size_bytes, mtime_ms, "
             "watch_id, first_seen_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
@@ -372,8 +375,14 @@ class ParseService:
                 now,
             ),
         )
-        row = cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE id=?", (file_id,)))
-        return FileRefreshResult(file=_file_info(row), status="new")
+        row = cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
+        if not inserted.rowcount and watch_id is not None and row is not None and row["watch_id"] is None:
+            await self.db.execute(
+                "UPDATE files SET watch_id=?, updated_at=? WHERE id=? AND watch_id IS NULL",
+                (watch_id, now, row["id"]),
+            )
+            row = cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
+        return FileRefreshResult(file=_file_info(row), status="new" if inserted.rowcount else "known")
 
     async def _refresh_missing_file(self, path: str, existing: FileRow | None) -> FileRefreshResult:
         if existing is None:
@@ -668,14 +677,23 @@ class ParseService:
 
         # insert parse batch
         parse_page_range = expand_page_range(initial_page_range, page_count or 1)
-        await self.db.execute(
-            "UPDATE files SET sha256=?, locked_at=NULL, updated_at=? WHERE path=?",
-            (sha256, now, path),
-        )
-        await self.db.execute(
-            "INSERT INTO parses (sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
-            (sha256, tier, parse_page_range, PARSE_STATUS_PENDING, privacy, now, now),
+        await self.db.execute_atomic(
+            [
+                (
+                    "UPDATE files SET sha256=?, locked_at=NULL, updated_at=? WHERE path=?",
+                    (sha256, now, path),
+                ),
+                (
+                    "INSERT INTO parses (sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+                    (sha256, tier, parse_page_range, PARSE_STATUS_PENDING, privacy, now, now),
+                ),
+                (
+                    "INSERT INTO parse_consumers (parse_id, consumer_key, protected, created_at) "
+                    "VALUES (last_insert_rowid(), 'system:ingest', 1, ?)",
+                    (now,),
+                ),
+            ]
         )
         await self._record_count("parse_task.created.count", dimensions={"tier": tier})
 
@@ -691,8 +709,13 @@ class ParseService:
         page_range: str | None = None,
         force: bool = False,
         remote: bool = False,
+        consumer_key: str | None = None,
     ) -> ParseResponse:
         """Handle a parse request from CLI.  Returns info for status polling."""
+        if consumer_key is not None and (
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9:_-]{0,127}", consumer_key) is None or consumer_key.startswith("system:")
+        ):
+            raise InvalidRequestError("consumer_key_invalid", "Invalid parse consumer key.", "consumer_key")
         page_range = normalize_page_range_input(page_range) or None
         # ensure the path is current before trusting files.sha256
         refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True, queue_initial_parse=False)
@@ -764,92 +787,102 @@ class ParseService:
         request_page_range = expand_page_range(requested_page_range_input, page_count or 1)
         needed_page_numbers = parse_page_range_set(request_page_range)
 
-        # ── step 1: remove page numbers covered by valid done batches ──
-        if not force:
-            done_batches = cast(
-                list[ParseRow],
-                await self.db.fetchall(
+        async def _queue(conn: aiosqlite.Connection) -> ParseResponse:
+            # The done/active lookup, priority bump and insert must share the same
+            # write transaction. Otherwise concurrent requests can both see a gap.
+            remaining = set(needed_page_numbers)
+            if not force:
+                cursor = await conn.execute(
                     "SELECT * FROM parses WHERE sha256=? AND tier=? AND status=? ORDER BY done_at DESC",
                     (sha256, requested_tier, PARSE_STATUS_DONE),
-                ),
-            )
-            valid_done_batches = [
-                batch for batch in done_batches if _json_batch_is_readable(self.data_dir, sha256, requested_tier, batch)
-            ]
-            if supports_page_range:
-                for batch in valid_done_batches:
-                    needed_page_numbers -= parse_page_range_set(batch["page_range"])
-                if not needed_page_numbers:
+                )
+                done_batches = [dict(row) for row in await cursor.fetchall()]
+                valid_done_batches = [
+                    batch for batch in done_batches if _json_batch_is_readable(self.data_dir, sha256, requested_tier, batch)
+                ]
+                if supports_page_range:
+                    for batch in valid_done_batches:
+                        remaining -= parse_page_range_set(batch["page_range"])
+                    if not remaining:
+                        return _done_response(sha256, short_id, requested_tier, request_page_range)
+                elif any(remaining <= parse_page_range_set(batch["page_range"]) for batch in valid_done_batches):
                     return _done_response(sha256, short_id, requested_tier, request_page_range)
-            elif any(needed_page_numbers <= parse_page_range_set(batch["page_range"]) for batch in valid_done_batches):
-                return _done_response(sha256, short_id, requested_tier, request_page_range)
 
-        # ── step 2: remove page numbers covered by pending/parsing batches ──
-        reused_parse_ids: list[int] = []
-        active_batches = cast(
-            list[ParseRow],
-            await self.db.fetchall(
+            cursor = await conn.execute(
                 "SELECT * FROM parses WHERE sha256=? AND tier=? AND status IN (?, ?)",
                 (sha256, requested_tier, PARSE_STATUS_PENDING, PARSE_STATUS_PARSING),
-            ),
-        )
-        if active_batches:
-            if supports_page_range:
-                active_covered_page_numbers: set[int] = set()
-                for batch in active_batches:
-                    covered_page_numbers = parse_page_range_set(batch["page_range"])
-                    if needed_page_numbers & covered_page_numbers:
-                        reused_parse_ids.append(batch["id"])
-                    active_covered_page_numbers |= covered_page_numbers
-                needed_page_numbers -= active_covered_page_numbers
-            else:
-                reused_parse_ids = [batch["id"] for batch in active_batches]
-                needed_page_numbers.clear()
+            )
+            active_batches = [dict(row) for row in await cursor.fetchall()]
+            reused_parse_ids: list[int] = []
+            if active_batches:
+                if supports_page_range:
+                    active_covered_page_numbers: set[int] = set()
+                    for batch in active_batches:
+                        covered_page_numbers = parse_page_range_set(batch["page_range"])
+                        if remaining & covered_page_numbers:
+                            reused_parse_ids.append(batch["id"])
+                        active_covered_page_numbers |= covered_page_numbers
+                    remaining -= active_covered_page_numbers
+                else:
+                    reused_parse_ids = [batch["id"] for batch in active_batches]
+                    remaining.clear()
 
-            # bump priority for reused in-progress batches
-            now = _now_ms()
-            for batch in active_batches:
-                if batch["id"] in reused_parse_ids and batch["priority"] < 1:
-                    await self.db.execute(
-                        "UPDATE parses SET priority=1, updated_at=? WHERE id=?",
-                        (now, batch["id"]),
+                now = _now_ms()
+                for batch in active_batches:
+                    if batch["id"] in reused_parse_ids and batch["priority"] < 1:
+                        await conn.execute("UPDATE parses SET priority=1, updated_at=? WHERE id=?", (now, batch["id"]))
+
+                for parse_id in reused_parse_ids:
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO parse_consumers "
+                        "(parse_id, consumer_key, protected, created_at) VALUES (?, ?, ?, ?)",
+                        (parse_id, consumer_key or "system:request", 0 if consumer_key else 1, now),
                     )
 
-            if not needed_page_numbers:
-                return ParseResponse(
-                    sha256=sha256,
-                    short_id=short_id,
-                    tier=requested_tier,
-                    page_range=request_page_range,
-                    status=PARSE_STATUS_PENDING,
-                    cache_hit=False,
-                    wait_parse_ids=reused_parse_ids,
-                    created_parse_ids=[],
-                    reused_parse_ids=reused_parse_ids,
-                    tip="Pages already queued. Priority bumped.",
-                )
+                if not remaining:
+                    return ParseResponse(
+                        sha256=sha256,
+                        short_id=short_id,
+                        tier=requested_tier,
+                        page_range=request_page_range,
+                        status=PARSE_STATUS_PENDING,
+                        cache_hit=False,
+                        wait_parse_ids=reused_parse_ids,
+                        created_parse_ids=[],
+                        reused_parse_ids=reused_parse_ids,
+                        tip="Pages already queued. Priority bumped.",
+                    )
 
-        # ── step 3: enqueue remaining uncovered page numbers ──
-        uncovered_page_range = _page_numbers_to_range_str(needed_page_numbers) if supports_page_range else request_page_range
-        now = _now_ms()
-        parse_id = await self.db.execute_insert(
-            "INSERT INTO parses (sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-            (sha256, requested_tier, uncovered_page_range, PARSE_STATUS_PENDING, privacy, now, now),
-        )
-        await self._record_count("parse_task.created.count", dimensions={"tier": requested_tier})
-        created_parse_ids = [parse_id]
-        return ParseResponse(
-            sha256=sha256,
-            short_id=short_id,
-            tier=requested_tier,
-            page_range=request_page_range,
-            status=PARSE_STATUS_PENDING,
-            cache_hit=False,
-            wait_parse_ids=reused_parse_ids + created_parse_ids,
-            created_parse_ids=created_parse_ids,
-            reused_parse_ids=reused_parse_ids,
-        )
+            uncovered_page_range = _page_numbers_to_range_str(remaining) if supports_page_range else request_page_range
+            now = _now_ms()
+            cursor = await conn.execute(
+                "INSERT INTO parses (sha256, tier, page_range, status, privacy, priority, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+                (sha256, requested_tier, uncovered_page_range, PARSE_STATUS_PENDING, privacy, now, now),
+            )
+            if cursor.lastrowid is None:
+                raise RuntimeError("SQLite insert did not return a parse ID")
+            created_parse_ids = [cursor.lastrowid]
+            await conn.execute(
+                "INSERT INTO parse_consumers (parse_id, consumer_key, protected, created_at) VALUES (?, ?, ?, ?)",
+                (cursor.lastrowid, consumer_key or "system:request", 0 if consumer_key else 1, now),
+            )
+            return ParseResponse(
+                sha256=sha256,
+                short_id=short_id,
+                tier=requested_tier,
+                page_range=request_page_range,
+                status=PARSE_STATUS_PENDING,
+                cache_hit=False,
+                wait_parse_ids=reused_parse_ids + created_parse_ids,
+                created_parse_ids=created_parse_ids,
+                reused_parse_ids=reused_parse_ids,
+            )
+
+        response = await self.db.write_transaction(_queue)
+        if response.created_parse_ids:
+            await self._record_count("parse_task.created.count", dimensions={"tier": requested_tier})
+        return response
 
     # ── worker ──────────────────────────────────────────────────
 

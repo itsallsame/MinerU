@@ -99,6 +99,13 @@ class ParseRequest(DoclibModel):
     page_range: str | None = Field(default=None, description=PAGE_RANGE_DESCRIPTION)
     force: bool = False
     remote: bool = False
+    consumer_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9:_-]*$",
+        description="Stable work-intent key for shared parse batches; not a user identity or authorization token.",
+    )
 
 
 class ParseResponse(DoclibModel):

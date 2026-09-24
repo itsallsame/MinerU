@@ -378,6 +378,7 @@ class DoclibServer(AsyncDoclibInterface):
                 page_range=request.page_range,
                 force=request.force,
                 remote=request.remote,
+                consumer_key=request.consumer_key,
             )
             response = ParseResponse.model_validate(result)
             status = _parse_route_status(response)

@@ -74,6 +74,7 @@ def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> 
     submitted = workflow.submit(io.BytesIO(b"<h1>Lantern</h1>"), filename="report.html")
     assert submitted.task.status == "submitted"
     assert submitted.task.parse_ids == (7,)
+    assert client.ensure_parse.call_args.args[0].consumer_key == f"business:{submitted.task.id}"
     assert (shared / submitted.document.storage_key).exists()
     client.get_parse.return_value = _parse_info(submitted.document.sha256, status="pending")
     assert workflow.refresh(submitted.task.id).status == "submitted"
@@ -151,6 +152,9 @@ def test_request_key_replays_one_upload_without_suppressing_intentional_duplicat
     new_intent = workflow.submit(io.BytesIO(source), filename="report.html", request_key="second-upload-request-key")
     assert new_intent.document.id != first.document.id
     assert client.ensure_parse.call_count == 2
+    assert [call.args[0].consumer_key for call in client.ensure_parse.call_args_list] == [
+        f"business:{first.task.id}", f"business:{new_intent.task.id}"
+    ]
     assert store.list_documents(limit=20, offset=0)[1] == 2
 
     with pytest.raises(ValueError, match="Idempotency key"):

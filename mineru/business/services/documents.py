@@ -109,6 +109,7 @@ class DocumentWorkflow:
             submitted = self._gateway.submit(
                 source_path, tier=task.requested_tier,
                 force=task.error_code in ("doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"),
+                consumer_key=f"business:{task.id}",
             )
             if submitted.sha256 != expected_sha256:
                 raise DocumentIntegrityError("Doclib submission no longer matches the business source")
