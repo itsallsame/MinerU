@@ -170,6 +170,16 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "COPY models/" not in dockerfile
 
 
+def test_dockerignore_excludes_model_metadata_from_allowed_source_tree() -> None:
+    patterns = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    source_allow = patterns.index("!mineru/**")
+    for pattern in (
+        "**/models/", "**/weights/", "**/checkpoints/", "**/snapshots/",
+        "**/*.model", "**/*.tiktoken", "**/*.npy", "**/*.npz",
+    ):
+        assert pattern in patterns and patterns.index(pattern) > source_allow
+
+
 def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Path) -> None:
     if shutil.which("docker") is None:
         pytest.skip("Docker CLI is unavailable")
@@ -189,6 +199,9 @@ def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Pa
         "LICENSE.md": "license",
         "mineru/keep.py": "source",
         "mineru/accidental-model.safetensors": "private-weight",
+        "mineru/models/config.json": "private-model-metadata",
+        "mineru/weights/tokenizer.json": "private-model-tokenizer",
+        "mineru/tokenizer.model": "private-model-data",
         "mineru/private.sqlite3": "private-database",
         "mineru/.env.local": "private-config",
         "scripts/offline_package.py": "package",
@@ -221,7 +234,9 @@ def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Pa
     for name in ("mineru/keep.py", "scripts/offline_package.py", "business-web/dist/index.html",
                  "wheelhouse/requirements.lock", "wheelhouse/probe.whl"):
         assert (output / "payload" / name).is_file(), name
-    for name in ("mineru/accidental-model.safetensors", "mineru/private.sqlite3", "mineru/.env.local",
+    for name in ("mineru/accidental-model.safetensors", "mineru/models/config.json",
+                 "mineru/weights/tokenizer.json", "mineru/tokenizer.model",
+                 "mineru/private.sqlite3", "mineru/.env.local",
                  "scripts/other.py",
                  "business-web/src/private.js", "wheelhouse/private.txt", "wheelhouse/nested/old.whl",
                  "models-v2/weights.onnx",

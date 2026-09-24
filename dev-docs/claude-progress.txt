@@ -1072,3 +1072,11 @@ Changes: Generated and verified an actual 12 KiB incremental Git source bundle f
 Verification: Targeted source-bundle 10 passed; full Mac business 316 passed/2 skipped/2 dependency warnings; Ruff lint/format, JSON and diff checks passed. Manifest checksum and full commit identities are in the evidence. This is Mac transfer proof only, not Kylin image/model/runtime or real-sample acceptance.
 Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
 Next: Hardened commit b85d1c9c was also packaged as an 8 KiB verified real-fork increment from b8ac2b24; continue offline release and P3/P6 gates. Keep Goal active.
+
+=== 2026-09-24 Session 119 (Docker context model boundary) ===
+Status: In progress; INF-003/026 and target Kylin/NVIDIA gates remain open
+Discovery: Dockerfile COPY sources from a .dockerignore-allowlisted mineru/ tree. The prior exclusion list covered known weight suffixes but could allow model metadata and tokenizers under an accidentally created models/weights directory. Docker daemon remains unresponsive, so actual context copying cannot be claimed.
+Changes: Added common model directories and data/wordpiece suffixes after source allow rules, extended the Docker context fixture, and added a static rule-order regression. Updated stale offline deployment schema 10 to current schema 12 and corrected Docker availability wording. Model weights remain host-mounted, and the open business system has no login/user/permission layer.
+Verification: Focused offline-configuration 13 passed/1 Docker-daemon skip; full Mac business suite 317 passed/2 skipped/2 dependency warnings. A Doclib contract test was corrected to accept an already-queued ingest batch before asserting the next forced generation; production behavior was unchanged. Ruff, JSON and diff checks passed. Official Docker documentation confirms directory exclusion, ** wildcard, and last-match rule semantics. Actual BuildKit and isolated Kylin/NVIDIA verification remain open.
+Evidence: dev-docs/evidence/2026-09-24-docker-context-model-boundary.md
+Next: Re-run actual Docker build-context and target image/runtime gates when daemon and Kylin amd64 NVIDIA environment are available; continue other product work in parallel.

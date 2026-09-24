@@ -158,15 +158,19 @@ def test_public_doclib_submission_generation_replays_force_response(
         consumer_key="business:public-generation", submission_attempt=1,
     )
     first = client.ensure_parse(initial)
-    assert first.created_parse_ids
+    # The background ingest scan may already have queued this file. A forced
+    # request shares an active batch; it only creates a new one after that
+    # batch finishes.
+    assert first.wait_parse_ids
     _wait_for_parse(client, first.wait_parse_ids)
     assert client.ensure_parse(initial) == first
     second = client.ensure_parse(initial.model_copy(update={"submission_attempt": 2}))
-    assert second.created_parse_ids and second.created_parse_ids != first.created_parse_ids
+    assert second.created_parse_ids
+    assert set(second.created_parse_ids).isdisjoint(first.wait_parse_ids)
     assert client.ensure_parse(initial.model_copy(update={"submission_attempt": 2})) == second
     released = client.release_parse_consumer(ParseReleaseRequest(consumer_key="business:public-generation"))
     assert {item.parse_id for item in released.results} == {
-        *first.created_parse_ids, *second.created_parse_ids,
+        *first.wait_parse_ids, *second.wait_parse_ids,
     }
 
 

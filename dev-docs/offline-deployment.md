@@ -4,7 +4,7 @@
 
 ## 制品边界
 
-- 代码镜像：从本 fork 的确定提交分别构建 `docker/worker/Dockerfile` 与 `docker/business-api/Dockerfile`。`.dockerignore` 采用构建必需文件白名单，未知名称的模型/业务数据目录不会发送给 Docker daemon；源码树内误放的常见权重、文档和数据库格式也排除。两个镜像只复制源码和预先准备的 `wheelhouse/`，没有模型权重；业务镜像还复制由 `business-web/` 构建的静态 `dist/`，并设置 `MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist`，不依赖 Python 安装后文件所在路径推算页面位置。依赖安装层在源码复制前，源码变更通常只产生较小的后续层。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。当前两个 Dockerfile 可共用这一基础镜像及锁定依赖，但业务 API 不挂模型、不申请 GPU。
+- 代码镜像：从本 fork 的确定提交分别构建 `docker/worker/Dockerfile` 与 `docker/business-api/Dockerfile`。`.dockerignore` 采用构建必需文件白名单，未知名称的模型/业务数据目录不会发送给 Docker daemon；即使误放在已放行的 `mineru/` 树下，常见模型目录、权重/词表后缀、文档和数据库也显式排除。两个镜像只复制源码和预先准备的 `wheelhouse/`，不得放入模型权重；业务镜像还复制由 `business-web/` 构建的静态 `dist/`，并设置 `MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist`，不依赖 Python 安装后文件所在路径推算页面位置。依赖安装层在源码复制前，源码变更通常只产生较小的后续层。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。当前两个 Dockerfile 可共用这一基础镜像及锁定依赖，但业务 API 不挂模型、不申请 GPU。
 - 模型：在联网准备机按目标 Torch + vLLM 组合取得完整权重，生成 `model-manifest.json`，通过批准介质分别导入麒麟宿主目录。`compose.business.yaml` 将模型和清单只读挂载；启动时先比对清单本身与所选发布记录的 SHA-256，再逐文件验证模型，并检查 Torch 与 vLLM 两个必需模型仓库的 MinerU 完整标记。更换模型不需要重建代码镜像，但必须重新生成清单和发布记录并做回归。
 - 运行数据：Doclib 的 `MINERU_HOME` 持久挂载；共享原文件目录 `/srv/mineru-inbox` 在 worker 中只读、业务 API 中可写，且必须是**同一宿主目录与同一容器绝对路径**。业务 SQLite 目录另行持久挂载，三者都不进入代码镜像。业务 API 启动时只初始化新的业务库、校验已有上传目录，并以显式内部 URL 连接 Doclib；不在启动时要求 worker 已可用。业务 API 容器内部另有文档任务恢复线程，使用独立 Doclib 客户端轮询持久任务，不需要第三个镜像；Doclib 暂时不可达时保持任务意图，恢复后重放同世代提交或取消。
 - 业务证据引用历史 parse ID。Doclib 默认压缩可能合并/删除旧批次；本 Compose 将 `MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0`，保留历史解析文件以供版本绑定证据读取。需要监测 Doclib 目录增长，并把业务 SQLite、原文件和 Doclib 目录做一致备份；不得在业务修订仍引用时手动清理相关批次。
@@ -32,13 +32,13 @@
 8. 在物理断网情况下启动容器，然后运行 `python3 -m scripts.verify_business_runtime --release /受控发布目录/release.json --artifact-report /独立验收目录/当前版本/artifact-verification.json --model-dir /模型目录 --model-manifest /模型目录外/model-manifest.json --business-bind 127.0.0.1 --business-port 8088 --output /独立验收目录/当前版本/runtime-preflight.json`。如果第 7 步改变了 `MINERU_BUSINESS_BIND_ADDRESS` 或端口，这里必须使用同一值；可用 `--compose-file` 指定非默认 Compose 文件。运行态命令先校验第 6 步的成功报告与当前发布清单字节哈希、源码、镜像 ID 和模型清单哈希一致，不接受缺失、失败或旧版报告，然后检查实际容器与所选镜像 ID、只读根文件系统、精确的模型/数据挂载清单及宿主路径互不重叠、单一内部网络、仅业务端口对外、离线环境变量、业务 API、内部 Doclib 状态、Docker GPU 请求、容器内 CUDA 与宿主 `nvidia-smi`。业务容器只允许业务数据和共享原件两个挂载，worker 只允许 Doclib 数据、共享原件、只读模型与只读清单四个挂载；额外 bind/volume 即使不在约定路径也视为异常。还必须确认容器实际环境变量把 Doclib、模型、清单、业务数据库、上传目录和 Web 根目录指向上述已核验挂载，并保持 `MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0`，否则旧解析批次与证据引用可能失效。只允许私网或回环业务绑定，Doclib 不得发布宿主端口。失败返回非零且不写成功报告；报告不含模型路径或业务正文。同名运行态报告不可覆盖。此检查不证明物理断网、权重能被 vLLM 完整加载或解析质量。
 9. 继续验收模型加载、真实 PDF/图片和四类标注样本、服务重启、备份与回退。重启演练应在任务分别处于 `uploaded`、`submitting`、`submitted`、`cancel_requested` 时停止/启动业务 API，确认无需逐个打开浏览器任务页也能恢复，并核对没有重复修订或重复 force 批次；Doclib 暂不可用和原件缺失须分别演练。第 6 步只证明制品一致，第 8 步只证明启动时配置和基础 GPU/服务可用性，两者均不能替代端到端解析与目标机性能测试。目前只有 Mac 模拟单测与真实本地 Doclib 联调，尚无麒麟/NVIDIA 现场结果。
 
-回退时须保留上一版的发布清单、基础/代码镜像、wheelhouse、模型目录和模型清单；先核对清单哈希，再切回上一版镜像与模型挂载并复测。当前业务数据库 schema 为 10，上传请求键持久化在同事务的 `ingest_requests` 表，提交轮次与强制重试标记、取消意图与结果保存在 `tasks` 表；旧 schema 9 及更早版本不做隐式迁移，原文件会保留但新服务拒绝启动。回退代码镜像不得直接挂载不兼容数据库，须按已核验的匹配版本备份/恢复方案处理；目前目标机数据库回退演练未完成，不能仅凭替换镜像宣称可回滚。
+回退时须保留上一版的发布清单、基础/代码镜像、wheelhouse、模型目录和模型清单；先核对清单哈希，再切回上一版镜像与模型挂载并复测。当前业务数据库 schema 为 12，上传请求键持久化在同事务的 `ingest_requests` 表，提交轮次与强制重试标记、取消意图与结果保存在 `tasks` 表；旧 schema 11 及更早版本不做隐式迁移，原文件会保留但新服务拒绝启动。回退代码镜像不得直接挂载不兼容数据库，须按已核验的匹配版本备份/恢复方案处理；目前目标机数据库回退演练未完成，不能仅凭替换镜像宣称可回滚。
 
 业务状态停机备份、哈希校验和仅恢复到新目录的命令见 [offline-state-backup.md](./offline-state-backup.md)；恢复时必须提供与备份哈希相同的原发布清单。该工具不含模型权重，也不能代替目标机回退演练。
 
 ## 当前已知限制
 
-- Docker daemon 经授权后可访问；现有 `mineru:4.0.2` 是 **Linux arm64**，不能充当麒麟 amd64 基础镜像。没有真实 `docker build`/`up` 证据；amd64 wheelhouse、目标基础镜像和模型也尚未准备。
+- 上次可查询到的 `mineru:4.0.2` 是 **Linux arm64**，不能充当麒麟 amd64 基础镜像；本轮本机 Docker daemon 的只读查询无响应，构建上下文测试按预设超时跳过。没有真实 `docker build`/`up` 证据；amd64 wheelhouse、目标基础镜像和模型也尚未准备。
 - 当前 Compose 包含开放业务 Web/API 与内部 Doclib/GPU worker；业务 Web 已有复核/成果、模板管理、历史块树与块级候选检索，但仍缺四类真实样本验收。Mac 已做同源页面和 Playwright 合成数据回归，运行态预检仅有模拟单测；Compose 宿主端口映射、内部网络及跨容器 Doclib 通信仍须在目标环境实测。业务 API 现对 `POST /api/business/documents` 的请求体在 multipart 解析前检查 `Content-Length`，并在接收流时累计限制为文件上限加 64 KiB 表单开销；文件存储层继续执行精确文件上限。Mac 单测覆盖超限、无长度流与虚报长度；目标机上仍须验证真实连接中断和超限行为。若另加反向代理，需在代理处设置相同或更严格的请求体上限，避免请求到达 API 前被代理缓冲。
 - 上游本地模型读取路径原先会创建 `.locks`；fork 已加入不写锁的 `source=local` 分支，其相关单测已在 Mac 开发环境通过。只读挂载容器本身仍待实测。
 - 模型清单和必需仓库检查只证实文件一致及 MinerU 标记齐全，不证实权重与源码、GPU 驱动或 vLLM 兼容。生产验收必须覆盖这些组合。
