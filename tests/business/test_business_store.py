@@ -252,7 +252,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 12")
+        database.execute("PRAGMA user_version = 13")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()
@@ -270,13 +270,14 @@ def test_previous_prototype_schema_is_refused_without_migration(tmp_path: Path) 
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"
 
 
-def test_previous_business_schema_is_preserved_without_implicit_migration(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", [7, 12])
+def test_previous_business_schema_is_preserved_without_implicit_migration(tmp_path: Path, version: int) -> None:
     database_path = tmp_path / "old-business.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 7")
+        database.execute(f"PRAGMA user_version = {version}")
         database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
         database.execute("INSERT INTO old_business_data VALUES ('preserve')")
-    with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 7"):
+    with pytest.raises(BusinessStoreError, match=f"Unsupported business schema version: {version}"):
         BusinessStore(database_path).initialize()
     with closing(sqlite3.connect(database_path)) as database:
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"

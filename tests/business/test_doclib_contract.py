@@ -342,6 +342,39 @@ def test_real_doclib_abstract_heading_proposes_unconfirmed_candidate(
     assert keyword.value in store.get_evidence(keyword.evidence_id).snippet
 
 
+def test_real_doclib_html_table_proposes_evidence_bound_field(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "table-uploads"
+    upload_root.mkdir()
+    store = BusinessStore(root / "table-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(upload_root, max_bytes=2048), store=store,
+        gateway=DoclibGateway(doclib, shared_root=upload_root), doclib=doclib, producer_version="4.0.6",
+    )
+    source = (
+        "<html><body><table><tr><th>项目</th><th>内容</th></tr>"
+        "<tr><td>发文单位</td><td>办公室</td></tr></table></body></html>"
+    )
+    submitted = workflow.submit(io.BytesIO(source.encode()), filename="table.html", template_code="official_document")
+    _wait_for_parse(doclib, list(submitted.task.parse_ids))
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    extraction = FieldExtraction(
+        store=store, doclib=doclib, evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    )
+    completed = extraction.process_next()
+    assert completed is not None and completed.status == "done"
+    candidates = [item for item in store.list_field_candidates(completed.id) if item.field_code == "issuer"]
+    assert [(item.value, item.method) for item in candidates] == [("办公室", "table_row")], (
+        doclib.read_parse_content(submitted.task.parse_ids[0],
+                                  f"doc:{revision.short_id}/tier:flash/page:1", limit=30000).content
+    )
+    assert "办公室" in store.get_evidence(candidates[0].evidence_id).snippet
+
+
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
     client, root, _home = live_doclib
     source = root / "report.html"

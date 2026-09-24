@@ -96,20 +96,26 @@ class FieldExtraction:
                 if page_no == 1:
                     first_page_content = page.content
                 matches = [
-                    (field.code, value)
+                    (field.code, value, "label_rule")
                     for field in template.fields
                     for value in _label_values(page.content, field)
                 ]
-                explicit_title_found |= any(code == "title" for code, _value in matches)
-                explicit_abstract_found |= any(code == "abstract" for code, _value in matches)
+                seen = {(field_code, value) for field_code, value, _method in matches}
+                for field in template.fields:
+                    for value in _table_values(page.content, field):
+                        if (field.code, value) not in seen:
+                            matches.append((field.code, value, "table_row"))
+                            seen.add((field.code, value))
+                explicit_title_found |= any(code == "title" for code, _value, _method in matches)
+                explicit_abstract_found |= any(code == "abstract" for code, _value, _method in matches)
                 if not matches:
                     continue
                 self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
                 evidence = self._evidence_writer.capture(revision_id, locator=locator)
-                for field_code, value in matches:
+                for field_code, value, method in matches:
                     self._store.add_field_candidate(
                         run.id, claim_token=run.claim_token, field_code=field_code,
-                        value=value, evidence_id=evidence.id,
+                        value=value, evidence_id=evidence.id, method=method,
                     )
             if native_title_field is not None and not explicit_title_found and 1 in page_numbers:
                 parse_id = revision.parse_id_for_page(1)
@@ -191,6 +197,41 @@ def _label_values(content: str, field: TemplateField) -> tuple[str, ...]:
         if 0 < len(value) <= 2000 and value not in result:
             result.append(value)
     return tuple(result)
+
+
+def _table_cells(line: str) -> tuple[str, str] | None:
+    """Read only an unescaped, exactly two-column Markdown table row."""
+    stripped = line.strip()
+    if not (stripped.startswith("|") and stripped.endswith("|")):
+        return None
+    cells = stripped[1:-1].split("|")
+    if len(cells) != 2:
+        return None
+    return cells[0].strip(), cells[1].strip()
+
+
+def _table_values(content: str, field: TemplateField) -> tuple[str, ...]:
+    """Take explicit key/value cells only from two-column tables with a separator."""
+    lines = content.splitlines()
+    values: list[str] = []
+    index = 0
+    while index + 2 < len(lines):
+        separator = _table_cells(lines[index + 1]) if _table_cells(lines[index]) is not None else None
+        if separator is not None and all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator):
+            index += 2
+            while index < len(lines):
+                cells = _table_cells(lines[index])
+                if cells is None:
+                    break
+                label, value = cells
+                if label.startswith("**") and label.endswith("**"):
+                    label = label[2:-2].strip()
+                if label == field.label and 0 < len(value) <= 2000 and value not in values:
+                    values.append(value)
+                index += 1
+        else:
+            index += 1
+    return tuple(values)
 
 
 def _native_title_value(content: str) -> str | None:

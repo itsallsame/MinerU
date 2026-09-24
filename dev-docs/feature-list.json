@@ -2680,7 +2680,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "新增严格两列 Markdown 表格的标签/值数据行候选，要求分隔行与冻结模板标签完全匹配，来源标为 table_row，历史修订页证据冻结且仍需人工确认；多列、无分隔行、表头和不匹配标签不猜值。Mac 单测及真实 Doclib HTML Flash 联调通过；复杂/跨页表格、四类真实标注样本和麒麟/NVIDIA 现场仍待验收，不标完成。schema 13 不迁移旧库；见 dev-docs/evidence/2026-09-24-table-row-candidate.md。"
     },
     {
       "id": "BE-040",

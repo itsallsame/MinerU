@@ -8,6 +8,7 @@ export function candidateMethodLabel(method) {
   if (method === "label_rule") return "显式字段标签";
   if (method === "native_doc_title") return "MinerU 原生标题块";
   if (method === "section_heading") return "摘要章节标题";
+  if (method === "table_row") return "表格字段行";
   return "来源未识别";
 }
 

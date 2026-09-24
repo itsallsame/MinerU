@@ -231,6 +231,57 @@ def test_explicit_keyword_labels_make_unconfirmed_source_bound_candidates(
         assert not hasattr(candidates[0], "confirmed")
 
 
+@pytest.mark.parametrize("content,expected", [
+    ("| 项目 | 内容 |\n| --- | --- |\n| 发文单位 | 办公室 |", "办公室"),
+    ("| 项目 | 内容 |\n| :--- | ---: |\n| **发文单位** | 办公室 |", "办公室"),
+    ("| 项目 | 内容 |\n| 发文单位 | 办公室 |", None),
+    ("| 发文单位 | 办公室 |\n| --- | --- |", None),
+    ("| 项目 | 内容 | 备注 |\n| --- | --- | --- |\n| 发文单位 | 办公室 | 草稿 |", None),
+    ("| 项目 | 内容 |\n| --- | --- |\n| 其他单位 | 办公室 |", None),
+])
+def test_two_column_table_candidate_requires_explicit_data_row_and_frozen_evidence(
+    tmp_path: Path, content: str, expected: str | None,
+) -> None:
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content=content)
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    candidates = [item for item in store.list_field_candidates(run.id) if item.field_code == "issuer"]
+    assert [(item.value, item.method) for item in candidates] == ([(expected, "table_row")] if expected else [])
+    if expected:
+        evidence = store.get_evidence(candidates[0].evidence_id)
+        assert evidence.revision_id == revision_id and expected in evidence.snippet
+        assert not hasattr(candidates[0], "confirmed")
+
+
+def test_distinct_table_values_remain_unconfirmed_conflicting_candidates(tmp_path: Path) -> None:
+    content = (
+        "| 项目 | 内容 |\n| --- | --- |\n| 发文单位 | 办公室 |\n\n"
+        "| 项目 | 内容 |\n| --- | --- |\n| 发文单位 | 委员会 |"
+    )
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content=content)
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    assert {(item.value, item.method) for item in store.list_field_candidates(run.id) if item.field_code == "issuer"} == {
+        ("办公室", "table_row"), ("委员会", "table_row"),
+    }
+    assert ("issuer", "conflicting_candidates", "blocking") in {
+        (issue.field_code, issue.code, issue.severity) for issue in store.list_quality_issues(run.id)
+    }
+
+
+def test_same_page_label_and_table_value_is_one_preferred_candidate(tmp_path: Path) -> None:
+    content = "发文单位：办公室\n\n| 项目 | 内容 |\n| --- | --- |\n| 发文单位 | 办公室 |"
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content=content)
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    assert [(item.value, item.method) for item in store.list_field_candidates(run.id) if item.field_code == "issuer"] == [
+        ("办公室", "label_rule")
+    ]
+
+
 def test_multi_batch_revision_extracts_each_page_from_its_historical_batch(tmp_path: Path) -> None:
     store = BusinessStore(tmp_path / "business.sqlite3")
     store.initialize()

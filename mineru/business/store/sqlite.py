@@ -44,7 +44,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 12
+_SCHEMA_VERSION = 13
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -227,7 +227,9 @@ class BusinessStore:
                         field_code TEXT NOT NULL,
                         value TEXT NOT NULL,
                         evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
-                        method TEXT NOT NULL CHECK(method IN ('label_rule', 'native_doc_title', 'section_heading')),
+                        method TEXT NOT NULL CHECK(method IN (
+                            'label_rule', 'native_doc_title', 'section_heading', 'table_row'
+                        )),
                         created_at_ms INTEGER NOT NULL,
                         UNIQUE(run_id, field_code, value, evidence_id)
                     );
@@ -299,7 +301,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 12")
+                database.execute("PRAGMA user_version = 13")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -526,7 +528,7 @@ class BusinessStore:
         """Only a frozen snippet from this run's revision can support a candidate."""
         if not value.strip() or len(value) > 2000:
             raise BusinessStoreError("Candidate value must be 1-2000 characters")
-        if method not in ("label_rule", "native_doc_title", "section_heading"):
+        if method not in ("label_rule", "native_doc_title", "section_heading", "table_row"):
             raise BusinessStoreError("Unsupported candidate method")
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")

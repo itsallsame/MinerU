@@ -1088,3 +1088,11 @@ Changes: Added an exact English alias only for the frozen `keywords`/关键词 f
 Verification: Focused field tests and real local Doclib HTML Flash integration passed; final Mac business suite 325 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This does not prove real four-class accuracy or isolated Kylin/NVIDIA behavior.
 Evidence: dev-docs/evidence/2026-09-24-keyword-label-candidate.md
 Next: Continue P3 field/quality and P4 experience work; obtain four-class annotated samples and target hardware for P6. Keep Goal active.
+
+=== 2026-09-24 Session 121 (source-bound table-row candidate) ===
+Status: In progress; BE-039 and P3/P6 real-sample/target gates remain open
+Discovery: Native Doclib HTML Flash emits Markdown tables, while business extraction only recognized colon-label lines. A table source type also requires explicit persistence/UI provenance, and duplicate label/table values must not fail the extraction.
+Changes: Added conservative two-column header/separator/data-row extraction with exact frozen-template labels and page-level historical evidence. The candidate method `table_row` is displayed in Web and remains unconfirmed; same-page identical label candidates are deduplicated, while differing values produce the existing blocking conflict. Business SQLite and offline backup advanced to schema 13 without migration or deletion of older databases. No user/role/permission system or model-bundling change.
+Verification: Focused extraction/store/backup 64 passed; real local Doclib HTML table integration passed; final Mac business 336 passed/2 skipped/2 dependency warnings. Web Node 13 passed, eight offline assets built, all 24 Chromium regressions passed. Ruff lint, JSON and diff checks passed. Complex/cross-page table accuracy and isolated Kylin/NVIDIA remain unproven.
+Evidence: dev-docs/evidence/2026-09-24-table-row-candidate.md
+Next: Continue P3 evidence/quality work and obtain four-class annotated samples plus target Kylin/NVIDIA access. Keep Goal active.

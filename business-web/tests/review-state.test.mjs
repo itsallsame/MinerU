@@ -10,6 +10,7 @@ test("candidate method labels preserve distinct provenance without implying conf
   assert.equal(candidateMethodLabel("label_rule"), "显式字段标签");
   assert.equal(candidateMethodLabel("native_doc_title"), "MinerU 原生标题块");
   assert.equal(candidateMethodLabel("section_heading"), "摘要章节标题");
+  assert.equal(candidateMethodLabel("table_row"), "表格字段行");
   assert.equal(candidateMethodLabel("future_method"), "来源未识别");
   assert.equal(candidateMethodLabel("__proto__"), "来源未识别");
 });
