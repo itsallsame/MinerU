@@ -12,7 +12,7 @@
 
 ## 准备与验证步骤
 
-1. 在联网的 **Linux amd64** 准备机锁定 MinerU 提交、Python 版本和目标基础镜像摘要。准备环境必须与基础镜像的 Python ABI 一致；从该镜像导出 `torch==...`、`torchvision==...`、`vllm==...` 三项精确版本到约束文件，再设置 `MINERU_BASE_CONSTRAINTS` 指向它并运行 `sh scripts/prepare-worker-wheelhouse.sh`。脚本生成带哈希的 `wheelhouse/requirements.lock` 和全部目标架构 wheel；不把 Mac 解析出的依赖当作 Linux 锁。当前尚无真实 Linux 制品，不能视为已完成。
+1. 在联网的 **Linux amd64** 准备机锁定 MinerU 提交、Python 版本和目标基础镜像摘要。准备环境必须与基础镜像的 Python ABI 一致；从该镜像导出 `torch==...`、`torchvision==...`、`vllm==...` 三项精确版本到约束文件，再设置 `MINERU_BASE_CONSTRAINTS` 指向它并运行 `sh scripts/prepare-worker-wheelhouse.sh`。脚本只接受尚无 `wheelhouse/` 的新工作目录，先在同一文件系统的 `.wheelhouse-stage.*` 暂存目录中编译带哈希的锁文件并下载 wheel，两个步骤成功后才发布为 `wheelhouse/`；失败时保留暂存目录供检查，不能把它作为发布制品。旧 `wheelhouse/` 必须原样保留在另一受控位置，不得混入新锁。Mac 上只验证了脚本控制流程，尚无真实 Linux 制品，不能视为已完成。
 2. 准备完整模型目录后运行：`python3 scripts/offline_package.py create-manifest --model-dir /path/to/models --manifest /受控模型清单目录/新版本/model-manifest.json`。每个模型版本使用尚不存在的独立清单路径，保留旧模型目录与旧清单配对；工具拒绝覆盖已有文件或符号链接，并拒绝把清单写进模型目录。该命令只生成哈希清单，不负责下载模型或判断 MinerU 模型组合是否正确。
 3. 在开发/准备机执行 `cd business-web && pnpm test && pnpm build`，只需预置 Node/pnpm，无第三方前端包；传输 `business-web/dist/` 时核对其中 `asset-manifest.json` 与全部静态文件的 SHA-256。计算该 manifest 文件本身的 SHA-256，作为业务镜像构建参数 `WEB_ASSET_MANIFEST_SHA256`。前端源码属于 Git 提交，构建产物独立校验和传输，不依赖麒麟在线安装前端依赖。
 4. 在麒麟隔离区逐项校验导入文件哈希，再分别构建两个代码镜像。示例 worker 命令：`docker build --pull=false --network=none -f docker/worker/Dockerfile --build-arg BASE_IMAGE=<已导入的精确镜像引用> --build-arg BASE_IMAGE_ID=<docker image inspect 得到的基础镜像 ID> --build-arg SOURCE_REVISION=<源码提交> -t <本地worker标签> .`；业务 API 将 `-f` 改为 `docker/business-api/Dockerfile`，标签改为业务 API 标签，并额外传 `--build-arg WEB_ASSET_MANIFEST_SHA256=<前端manifest的SHA256>`。尖括号项必须替换为真实值；不能使用浮动标签做正式发布。Dockerfile 会校验前端 manifest 哈希，再按锁文件/哈希安装依赖、以 `--no-deps` 安装本 fork 源码。

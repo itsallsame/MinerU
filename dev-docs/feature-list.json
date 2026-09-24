@@ -715,7 +715,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "联网准备脚本已拒绝复用旧 wheelhouse 并在暂存目录完成锁与 wheel 后才发布；Mac 上 4 项模拟 Linux 控制流程测试通过。尚无与麒麟目标基础镜像匹配的真实 Linux wheelhouse，也未在物理隔离目标机安装验证，不标完成。证据：dev-docs/evidence/2026-09-24-wheelhouse-fresh-publish.md"
     },
     {
       "id": "INF-020",

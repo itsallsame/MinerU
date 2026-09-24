@@ -26,12 +26,22 @@ for dependency in torch torchvision vllm; do
   fi
 done
 
-mkdir -p wheelhouse
+if [ -e wheelhouse ] || [ -L wheelhouse ]; then
+  echo 'wheelhouse already exists; preserve it and prepare this release in a fresh source checkout.' >&2
+  exit 1
+fi
+stage=$(mktemp -d .wheelhouse-stage.XXXXXX)
+echo "Preparing wheelhouse in $stage; a failed run leaves it for inspection." >&2
 uv pip compile pyproject.toml docker/worker/build-requirements.in \
   --extra full --no-emit-package mineru --generate-hashes \
   --constraint "$MINERU_BASE_CONSTRAINTS" \
-  --output-file wheelhouse/requirements.lock
+  --output-file "$stage/requirements.lock"
 python3 -m pip download --require-hashes --only-binary=:all: \
-  --dest wheelhouse --requirement wheelhouse/requirements.lock
+  --dest "$stage" --requirement "$stage/requirements.lock"
+if [ -e wheelhouse ] || [ -L wheelhouse ]; then
+  echo 'wheelhouse appeared during preparation; leaving the staged files untouched.' >&2
+  exit 1
+fi
+mv "$stage" wheelhouse
 
 echo 'Wheelhouse prepared. Verify Python ABI, CUDA/vLLM compatibility and hashes before transfer.'

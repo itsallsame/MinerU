@@ -821,3 +821,10 @@ Changes: Release creation and imported-artifact verification now reject wheelhou
 Verification: Three new release-record negative cases failed before fix and pass after; imported-artifact negative case passes. Targeted release/verify 21 passed, exact Docker-backed offline configuration 12 passed with nested-wheel exclusion, final full Mac business suite 197 passed/1 skipped, Ruff and diff checks passed. No real amd64 image or Kylin/GPU claim.
 Evidence: dev-docs/evidence/2026-09-24-wheelhouse-context-identity.md
 Next: Acquire target NVIDIA base image and Linux wheelhouse, build/import both code images, execute artifact/runtime chain and annotated sample acceptance on isolated Kylin. Continue P4 gaps. Keep goal active.
+
+=== 2026-09-24 Session 85 (P1 fresh wheelhouse preparation) ===
+Status: In progress; 78/241 passed; INF-019 remains incomplete pending real Linux artifacts
+Changes: Connected Linux preparation now refuses an existing wheelhouse, stages dependency lock and wheels separately, and publishes only after both steps succeed. Failed staging and old wheelhouses remain untouched. No model-in-image or user/auth/permission layer.
+Verification: Shell syntax, 4 mocked-Linux control-flow tests, full Mac business suite 201 passed/1 skipped, Ruff and diff checks passed. No real package download, amd64 base-image build or Kylin/NVIDIA check.
+Evidence: dev-docs/evidence/2026-09-24-wheelhouse-fresh-publish.md
+Next: Produce actual Linux wheelhouse against the selected NVIDIA base image, then execute target offline build/import, model and four-class sample acceptance. Keep goal active.
