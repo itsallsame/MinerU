@@ -702,3 +702,10 @@ Changes: Extended opt-in live Web/API/Doclib test to invoke the fork's own Skill
 Verification: Final opt-in live test 1 passed; Skill contract 6 passed; Ruff check/format passed. Same-turn full business 176 passed/1 opt-in skipped and upstream unittest 2798 passed/4 skipped were run before the final opt-in extraction assertions. Initial live read failed due test-generated wrong locator; corrected test passed.
 Evidence: dev-docs/evidence/2026-09-24-live-skill-business-flow.md
 Next: P6 Web critical-flow acceptance, real annotated four-class sources and target Kylin/NVIDIA offline gates remain. Keep goal active.
+
+=== 2026-09-24 Session 68 (QA-005 live Web review flow) ===
+Status: In progress; QA-005 verified complete on Mac (70/241 passed); P6 remains incomplete
+Changes: Extended opt-in live Playwright Web/API/Doclib scenario with a labeled temporary DOCX and paper template; asserted review gate, explicit candidate acceptance, immutable result v1, JSON export and reload persistence. No production behavior or auth layer changed.
+Verification: Live opt-in 1 passed; Web 11 Node tests and 8-asset offline build passed; full business 176 passed/1 opt-in skipped; upstream unittest 2798 passed/4 skipped; Ruff lint/format passed. Mac with public/synthetic sources only.
+Evidence: dev-docs/evidence/2026-09-24-live-web-review-flow.md
+Next: Four-class annotated business samples, target Kylin/NVIDIA air-gap acceptance and remaining P4/P1 gaps. Keep goal active.

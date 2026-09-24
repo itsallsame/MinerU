@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -32,6 +33,7 @@ def main(base_url: str, sample: Path, office_files: list[Path]) -> None:
             assert "afforestation" in content.inner_text().lower()
             assert page.get_by_text("机器解析文本，未人工确认", exact=False).count() >= 1
 
+            page.locator("#upload-template").select_option("paper")
             page.locator("#files").set_input_files([str(path) for path in office_files])
             page.get_by_role("button", name="开始上传与解析").click()
             for office in office_files:
@@ -47,8 +49,29 @@ def main(base_url: str, sample: Path, office_files: list[Path]) -> None:
                 marker = f"MinerUOffice{office.suffix[1:].capitalize()}Marker"
                 assert marker in parsed.inner_text(), f"Missing native content from {office.name}"
                 assert page.get_by_text("该格式暂不支持浏览器原文预览", exact=False).count() == 1
+                if office.suffix == ".docx":
+                    page.get_by_role("button", name="生成字段候选").click()
+                    title_field = page.locator('.field-review[data-field-code="title"]')
+                    candidate = title_field.locator(".candidate-row").filter(has_text=marker)
+                    candidate.wait_for(timeout=30000)
+                    confirm = page.get_by_role("button", name="确认并生成不可变成果版本")
+                    assert confirm.is_disabled(), "A machine candidate must not be confirmed without review"
+                    candidate.get_by_role("button", name="接受候选").click()
+                    title_field.get_by_text(f"已复核：{marker}", exact=False).wait_for(timeout=30000)
+                    confirm.wait_for(state="visible")
+                    assert confirm.is_enabled()
+                    confirm.click()
+                    page.get_by_text("确认成果 v1", exact=True).wait_for(timeout=30000)
+                    assert marker in page.locator(".result-card").inner_text()
+                    with page.expect_download() as receipt:
+                        page.get_by_role("button", name="下载 JSON").click()
+                    exported = json.loads(Path(receipt.value.path()).read_text(encoding="utf-8"))
+                    assert any(field["value"] == marker for field in exported["fields"])
+                    page.reload(wait_until="networkidle")
+                    page.get_by_role("button", name=f"查看 {office.name}，已解析").click()
+                    page.get_by_text("确认成果 v1", exact=True).wait_for(timeout=30000)
             assert not errors, errors
-            print("Live Web smoke passed: real PDF and DOCX/PPTX/XLSX upload, Flash parse and historical read")
+            print("Live Web smoke passed: native formats, historical read, review, confirmation and JSON export")
         finally:
             browser.close()
 

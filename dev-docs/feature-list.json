@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 69,
+  "completed_features": 70,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5152,9 +5152,9 @@
         "实现：前端关键流程回归",
         "验证：.venv/bin/python -m pytest tests/business && .venv/bin/python -m pytest tests/unittest"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Mac 真实 Playwright→Web/API→Doclib 回归覆盖 PDF/Office 上传与历史读取、DOCX 模板机器候选、显式接受、确认成果、JSON 导出与刷新后持久读取；未 mock 业务路由。opt-in 1 通过，前端 11 测试/8 资源构建，业务 176 通过/1 默认跳过，上游 2798 通过/4 跳过。真实四类标注样本和麒麟/GPU/断网未验收。证据：dev-docs/evidence/2026-09-24-live-web-review-flow.md"
     },
     {
       "id": "QA-006",

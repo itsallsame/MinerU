@@ -143,7 +143,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
         uploads.mkdir()
         office_files = [home / f"smoke.{extension}" for extension in ("docx", "pptx", "xlsx")]
         document = Document()
-        document.add_paragraph("MinerUOfficeDocxMarker")
+        document.add_paragraph("题目：MinerUOfficeDocxMarker")
         document.save(office_files[0])
         presentation = Presentation()
         slide = presentation.slides.add_slide(presentation.slide_layouts[6])
