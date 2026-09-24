@@ -37,6 +37,8 @@ class IngestTask:
     updated_at_ms: int
     cancel_effect: CancelEffect | None = None
     cancel_results_json: str | None = None
+    submission_attempt: int = 1
+    submission_force: bool = False
 
 
 @dataclass(frozen=True)

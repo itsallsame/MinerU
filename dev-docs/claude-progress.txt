@@ -987,3 +987,10 @@ Changes: Business schema 9 adds submitting/cancel_requested/cancelled with durab
 Verification: Final Mac business 258 passed/1 skipped; official unit 2828 passed/4 skipped before final business-only cache fix; exact live Doclib contract file 23 passed; Web pnpm test 12 passed, 8 assets built, 23 Chromium regressions passed. Ruff/diff checks passed. This does not prove Kylin NVIDIA, model-running preemption or force-retry generation idempotency.
 Evidence: dev-docs/evidence/2026-09-24-business-task-cancellation.md
 Next: Design and verify per-attempt force-retry idempotency / cross-process submission recovery, complete BE-029, then continue real amd64 NVIDIA artifacts, isolated Kylin and four-class labeled-sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 108 (force retry submission generations) ===
+Status: In progress; BE-028/BE-029 remain false pending target-machine fault and rollback acceptance
+Changes: Business schema 10 persists submission_attempt and force flag; ambiguous response retries the same request, while confirmed parse failure starts a new generation. Doclib schema 5 atomically stores the first response per consumer/generation and rejects conflicts, gaps, released intents and unversioned reuse. Stale polls cannot fail or complete a newer generation. Open-system contract unchanged: no user/auth/role/permission management; consumer_key is only a work-intent key.
+Verification: Full Mac business 264 passed/1 skipped after authorized local socket run; official unit 2832 passed/4 skipped; real Doclib SDK targeted 2 passed; Ruff, JSON and diff checks passed. Initial sandboxed business run failed only at Unix/TCP socket bind and was rerun with local test permission. Target isolated Kylin/NVIDIA, real sample quality and rollback remain unverified.
+Evidence: dev-docs/evidence/2026-09-24-submission-attempt-idempotency.md
+Next: Complete target-compatible amd64 NVIDIA base/wheelhouse and Kylin offline fault, GPU, four-class sample and rollback acceptance before marking BE-028/BE-029 or goal complete.

@@ -111,19 +111,27 @@ class DocumentWorkflow:
         try:
             submitted = self._gateway.submit(
                 source_path, tier=task.requested_tier,
-                force=task.error_code in ("doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"),
+                force=task.submission_force,
                 consumer_key=f"business:{task.id}",
+                submission_attempt=task.submission_attempt,
             )
             if submitted.sha256 != expected_sha256:
                 raise DocumentIntegrityError("Doclib submission no longer matches the business source")
             if not submitted.parse_ids:
                 raise DocumentWorkflowError("Doclib did not return a trackable parse ID")
         except DocumentIntegrityError as exc:
-            self._store.mark_task_failed(task.id, error_code="source_integrity_failed")
+            self._store.mark_task_failed(
+                task.id, error_code="source_integrity_failed", expected_submission_attempt=task.submission_attempt
+            )
             raise DocumentWorkflowError("Source integrity failed during Doclib submission") from exc
         except (MineruError, OSError, ValueError, DocumentWorkflowError):
-            return self._store.mark_task_failed(task.id, error_code="doclib_submission_failed")
-        return self._store.mark_task_submitted(task.id, actual_tier=submitted.tier, parse_ids=submitted.parse_ids)
+            return self._store.mark_task_failed(
+                task.id, error_code="doclib_submission_failed", expected_submission_attempt=task.submission_attempt
+            )
+        return self._store.mark_task_submitted(
+            task.id, actual_tier=submitted.tier, parse_ids=submitted.parse_ids,
+            submission_attempt=task.submission_attempt,
+        )
 
     def cancel(self, task_id: str) -> IngestTask:
         """Fence business completion, then durably release the Doclib work intent."""
@@ -166,7 +174,10 @@ class DocumentWorkflow:
         except MineruError:
             return task  # A transient worker outage must not erase a submitted task.
         if any(parse.status in ("failed", "superseded", "skipped") for parse in parses):
-            return self._store.mark_task_failed(task.id, error_code="doclib_parse_failed")
+            return self._store.fail_submitted_task_if_current(
+                task.id, error_code="doclib_parse_failed", parse_ids=task.parse_ids,
+                submission_attempt=task.submission_attempt,
+            )
         if not all(parse.status == "done" for parse in parses):
             return task
         document = self._store.get_document(task.document_id)
@@ -178,13 +189,20 @@ class DocumentWorkflow:
                 return task
             covered_pages = set().union(*(parse_page_range_set(parse.page_range) for parse in parses))
             if not isinstance(doc.page_count, int) or doc.page_count < 1 or covered_pages != set(range(1, doc.page_count + 1)):
-                return self._store.mark_task_failed(task.id, error_code="parse_coverage_incomplete")
+                return self._store.fail_submitted_task_if_current(
+                    task.id, error_code="parse_coverage_incomplete", parse_ids=task.parse_ids,
+                    submission_attempt=task.submission_attempt,
+                )
         try:
             return self._store.complete_task_with_revision(
-                task.id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version
+                task.id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version,
+                submission_attempt=task.submission_attempt,
             )
         except BusinessStoreError:
-            return self._store.mark_task_failed(task.id, error_code="parse_batch_invalid")
+            return self._store.fail_submitted_task_if_current(
+                task.id, error_code="parse_batch_invalid", parse_ids=task.parse_ids,
+                submission_attempt=task.submission_attempt,
+            )
 
 
 __all__ = ["DocumentSubmission", "DocumentWorkflow", "DocumentWorkflowError"]

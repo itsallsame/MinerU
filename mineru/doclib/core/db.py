@@ -14,7 +14,7 @@ from ...config import SQLiteConfig
 from ...errors import ServerBusyError
 from ..config_defaults import CONFIG_DEFAULTS
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 _T = TypeVar("_T")

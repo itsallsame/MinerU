@@ -752,10 +752,16 @@ class ParseService:
         force: bool = False,
         remote: bool = False,
         consumer_key: str | None = None,
+        submission_attempt: int | None = None,
     ) -> ParseResponse:
         """Handle a parse request from CLI.  Returns info for status polling."""
         if consumer_key is not None:
             _validate_consumer_key(consumer_key)
+        if submission_attempt is not None and (consumer_key is None or not 1 <= submission_attempt <= 1_000_000):
+            raise InvalidRequestError(
+                "submission_attempt_invalid", "A submission attempt requires a consumer key and a positive generation.",
+                "submission_attempt",
+            )
         page_range = normalize_page_range_input(page_range) or None
         # ensure the path is current before trusting files.sha256
         refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True, queue_initial_parse=False)
@@ -826,13 +832,19 @@ class ParseService:
         requested_page_range_input = page_range or (default_parse_range(page_count) if supports_page_range else None)
         request_page_range = expand_page_range(requested_page_range_input, page_count or 1)
         needed_page_numbers = parse_page_range_set(request_page_range)
+        fingerprint = json.dumps(
+            [path, sha256, requested_tier, page_range, force, remote],
+            ensure_ascii=False, separators=(",", ":"),
+        )
+        created_batch = False
 
         async def _queue(conn: aiosqlite.Connection) -> ParseResponse:
+            nonlocal created_batch
             # The done/active lookup, priority bump and insert must share the same
             # write transaction. Otherwise concurrent requests can both see a gap.
             if consumer_key is not None:
                 cursor = await conn.execute(
-                    "SELECT state FROM parse_intents WHERE consumer_key=?",
+                    "SELECT state, latest_attempt FROM parse_intents WHERE consumer_key=?",
                     (consumer_key,),
                 )
                 intent = await cursor.fetchone()
@@ -845,6 +857,48 @@ class ParseService:
                         "INSERT INTO parse_intents (consumer_key, state, created_at) VALUES (?, 'active', ?)",
                         (consumer_key, _now_ms()),
                     )
+                    latest_attempt = 0
+                else:
+                    latest_attempt = intent["latest_attempt"]
+                if latest_attempt and submission_attempt is None:
+                    raise InvalidRequestError(
+                        "submission_attempt_required", "This consumer requires a submission generation.",
+                        "submission_attempt",
+                    )
+                if submission_attempt is not None:
+                    if submission_attempt <= latest_attempt:
+                        cursor = await conn.execute(
+                            "SELECT request_fingerprint, response_json FROM parse_submissions "
+                            "WHERE consumer_key=? AND attempt=?",
+                            (consumer_key, submission_attempt),
+                        )
+                        previous = await cursor.fetchone()
+                        if previous is None or previous["request_fingerprint"] != fingerprint:
+                            raise InvalidRequestError(
+                                "submission_attempt_conflict", "Submission generation already belongs to another request.",
+                                "submission_attempt",
+                            )
+                        return ParseResponse.model_validate_json(previous["response_json"])
+                    if submission_attempt != latest_attempt + 1:
+                        raise InvalidRequestError(
+                            "submission_attempt_gap", "Submission generations must be consecutive.",
+                            "submission_attempt",
+                        )
+
+            async def _save(response: ParseResponse) -> ParseResponse:
+                if consumer_key is not None and submission_attempt is not None:
+                    await conn.execute(
+                        "INSERT INTO parse_submissions "
+                        "(consumer_key, attempt, request_fingerprint, response_json, created_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (consumer_key, submission_attempt, fingerprint, response.model_dump_json(), _now_ms()),
+                    )
+                    await conn.execute(
+                        "UPDATE parse_intents SET latest_attempt=? WHERE consumer_key=?",
+                        (submission_attempt, consumer_key),
+                    )
+                return response
+
             remaining = set(needed_page_numbers)
             if not force:
                 cursor = await conn.execute(
@@ -859,9 +913,9 @@ class ParseService:
                     for batch in valid_done_batches:
                         remaining -= parse_page_range_set(batch["page_range"])
                     if not remaining:
-                        return _done_response(sha256, short_id, requested_tier, request_page_range)
+                        return await _save(_done_response(sha256, short_id, requested_tier, request_page_range))
                 elif any(remaining <= parse_page_range_set(batch["page_range"]) for batch in valid_done_batches):
-                    return _done_response(sha256, short_id, requested_tier, request_page_range)
+                    return await _save(_done_response(sha256, short_id, requested_tier, request_page_range))
 
             cursor = await conn.execute(
                 "SELECT * FROM parses WHERE sha256=? AND tier=? AND status IN (?, ?)",
@@ -895,7 +949,7 @@ class ParseService:
                     )
 
                 if not remaining:
-                    return ParseResponse(
+                    return await _save(ParseResponse(
                         sha256=sha256,
                         short_id=short_id,
                         tier=requested_tier,
@@ -906,7 +960,7 @@ class ParseService:
                         created_parse_ids=[],
                         reused_parse_ids=reused_parse_ids,
                         tip="Pages already queued. Priority bumped.",
-                    )
+                    ))
 
             uncovered_page_range = _page_numbers_to_range_str(remaining) if supports_page_range else request_page_range
             now = _now_ms()
@@ -918,11 +972,12 @@ class ParseService:
             if cursor.lastrowid is None:
                 raise RuntimeError("SQLite insert did not return a parse ID")
             created_parse_ids = [cursor.lastrowid]
+            created_batch = True
             await conn.execute(
                 "INSERT INTO parse_consumers (parse_id, consumer_key, protected, created_at) VALUES (?, ?, ?, ?)",
                 (cursor.lastrowid, consumer_key or "system:request", 0 if consumer_key else 1, now),
             )
-            return ParseResponse(
+            return await _save(ParseResponse(
                 sha256=sha256,
                 short_id=short_id,
                 tier=requested_tier,
@@ -932,10 +987,10 @@ class ParseService:
                 wait_parse_ids=reused_parse_ids + created_parse_ids,
                 created_parse_ids=created_parse_ids,
                 reused_parse_ids=reused_parse_ids,
-            )
+            ))
 
         response = await self.db.write_transaction(_queue)
-        if response.created_parse_ids:
+        if created_batch:
             await self._record_count("parse_task.created.count", dimensions={"tier": requested_tier})
         return response
 

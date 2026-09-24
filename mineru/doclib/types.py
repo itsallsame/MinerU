@@ -107,6 +107,10 @@ class ParseRequest(DoclibModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9:_-]*$",
         description="Stable work-intent key for shared parse batches; not a user identity or authorization token.",
     )
+    submission_attempt: int | None = Field(
+        default=None, ge=1, le=1_000_000,
+        description="Monotonic generation for one consumer; same-generation retries replay the first response.",
+    )
 
 
 class ParseResponse(DoclibModel):

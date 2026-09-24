@@ -145,6 +145,29 @@ def test_public_doclib_release_is_idempotent_and_rejects_late_requeue(
     assert error.value.code == "consumer_released"
 
 
+def test_public_doclib_submission_generation_replays_force_response(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    client, root, _home = live_doclib
+    source = root / "generation.html"
+    source.write_text("<h1>Force generation</h1>", encoding="utf-8")
+    initial = ParseRequest(
+        path=str(source), tier="flash", force=True,
+        consumer_key="business:public-generation", submission_attempt=1,
+    )
+    first = client.ensure_parse(initial)
+    assert first.created_parse_ids
+    _wait_for_parse(client, first.wait_parse_ids)
+    assert client.ensure_parse(initial) == first
+    second = client.ensure_parse(initial.model_copy(update={"submission_attempt": 2}))
+    assert second.created_parse_ids and second.created_parse_ids != first.created_parse_ids
+    assert client.ensure_parse(initial.model_copy(update={"submission_attempt": 2})) == second
+    released = client.release_parse_consumer(ParseReleaseRequest(consumer_key="business:public-generation"))
+    assert {item.parse_id for item in released.results} == {
+        *first.created_parse_ids, *second.created_parse_ids,
+    }
+
+
 def test_real_doclib_business_cancel_route_persists_release_facts(
     live_doclib: tuple[DoclibClient, Path, Path]
 ) -> None:

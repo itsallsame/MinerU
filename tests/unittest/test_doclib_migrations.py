@@ -18,7 +18,7 @@ def test_fresh_database_records_all_schema_migrations(tmp_path: Path) -> None:
         await db.initialize()
 
         rows = await db.fetchall("SELECT version FROM _migrations ORDER BY version")
-        assert rows == [{"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}]
+        assert rows == [{"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}, {"version": 5}]
 
     asyncio.run(_run())
 
@@ -99,6 +99,32 @@ def test_v4_migration_preserves_existing_consumer_claims(tmp_path: Path, monkeyp
         await db.initialize()
         assert await db.fetchall("SELECT version FROM _migrations ORDER BY version") == [
             {"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}
+        ]
+
+    asyncio.run(_run())
+
+
+def test_v5_migration_retains_release_tombstone_and_adds_submission_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 4)
+        await db.initialize()
+        await db.execute(
+            "INSERT INTO parse_intents (consumer_key, state, created_at, released_at, result_json) "
+            "VALUES ('business:old', 'released', 1, 2, ?)",
+            ('{"consumer_key":"business:old","results":[]}',),
+        )
+        monkeypatch.setattr(db_module, "SCHEMA_VERSION", 5)
+        await db.initialize()
+        assert await db.fetchone(
+            "SELECT state, released_at, latest_attempt FROM parse_intents WHERE consumer_key='business:old'"
+        ) == {"state": "released", "released_at": 2, "latest_attempt": 0}
+        assert await db.fetchall("SELECT * FROM parse_submissions") == []
+        await db.initialize()
+        assert await db.fetchall("SELECT version FROM _migrations ORDER BY version") == [
+            {"version": 1}, {"version": 2}, {"version": 3}, {"version": 4}, {"version": 5}
         ]
 
     asyncio.run(_run())

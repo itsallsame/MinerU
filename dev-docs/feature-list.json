@@ -2405,7 +2405,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "业务 schema 10 与 Doclib schema 5 已实现提交世代、请求指纹/首次响应持久重放；force 响应丢失、跨实例并发与旧轮询均有 Mac 回归。目标麒麟/NVIDIA 重启与故障注入验收仍未完成，暂不标通过。见 dev-docs/evidence/2026-09-24-submission-attempt-idempotency.md。"
     },
     {
       "id": "BE-029",
@@ -2430,7 +2430,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "业务 schema 9 已实现 submitting/cancel_requested/cancelled、跨库未知结果重放及完成竞态裁决；Mac 业务与真实 Doclib 路由已测。失败后 force 重试的意图世代化、跨进程并发矩阵与目标机验收尚未完成，保持未通过。见 dev-docs/evidence/2026-09-24-business-task-cancellation.md。"
+      "notes": "业务 schema 10 保留 submitting/cancel_requested/cancelled 与跨库未知结果重放；Doclib schema 5 提交世代防止 force 重复排队，旧轮询不能覆盖新世代。Mac 并发及真实 Doclib SDK 已测；隔离麒麟/NVIDIA 上的跨进程故障矩阵和回退仍未验收，保持未通过。见 dev-docs/evidence/2026-09-24-business-task-cancellation.md 与 2026-09-24-submission-attempt-idempotency.md。"
     },
     {
       "id": "BE-030",

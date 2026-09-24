@@ -159,6 +159,109 @@ def test_cancel_during_doclib_submission_prevents_late_submitted_state(tmp_path:
     assert store.list_revisions(submitted.document.id) == ()
 
 
+def test_parallel_failed_parse_retries_share_one_force_generation(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    force_barrier = Barrier(2)
+    requests: list[ParseRequest] = []
+
+    def submit(request: ParseRequest) -> ParseResponse:
+        requests.append(request)
+        if request.force:
+            force_barrier.wait(timeout=5)
+        return _parse_response(request.path, parse_id=8 if request.force else 7)
+
+    client.ensure_parse.side_effect = submit
+    workflow, store, shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Retry race</h1>"), filename="race.html")
+    client.get_parse.return_value = _parse_info(initial.document.sha256, status="failed")
+    assert workflow.refresh(initial.task.id).status == "failed"
+    reopened = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024),
+        store=BusinessStore(tmp_path / "business" / "business.sqlite3"),
+        gateway=DoclibGateway(client, shared_root=shared), doclib=client, producer_version="4.0.6",
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(workflow.retry, initial.task.id)
+        second = pool.submit(reopened.retry, initial.task.id)
+        results = [first.result(timeout=5), second.result(timeout=5)]
+    assert all(task.status == "submitted" and task.parse_ids == (8,) for task in results)
+    assert store.get_task(initial.task.id).submission_attempt == 2
+    assert [(request.submission_attempt, request.force) for request in requests] == [
+        (1, False), (2, True), (2, True)
+    ]
+
+
+def test_lost_force_response_retries_same_generation_and_force_flag(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    requests: list[ParseRequest] = []
+    force_calls = 0
+
+    def submit(request: ParseRequest) -> ParseResponse:
+        nonlocal force_calls
+        requests.append(request)
+        if request.force:
+            force_calls += 1
+            if force_calls == 1:
+                raise ServerNotRunningError()
+        return _parse_response(request.path, parse_id=8 if request.force else 7)
+
+    client.ensure_parse.side_effect = submit
+    workflow, store, _shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Lost force response</h1>"), filename="lost.html")
+    client.get_parse.return_value = _parse_info(initial.document.sha256, status="failed")
+    assert workflow.refresh(initial.task.id).status == "failed"
+    uncertain = workflow.retry(initial.task.id)
+    assert uncertain.status == "failed" and uncertain.error_code == "doclib_submission_failed"
+    assert uncertain.submission_attempt == 2 and uncertain.submission_force is True
+    recovered = workflow.retry(initial.task.id)
+    assert recovered.status == "submitted" and recovered.parse_ids == (8,)
+    assert recovered.submission_attempt == 2
+    assert [(request.submission_attempt, request.force) for request in requests] == [
+        (1, False), (2, True), (2, True)
+    ]
+    assert store.list_revisions(initial.document.id) == ()
+
+
+def test_stale_failed_poll_cannot_fail_newer_submission_generation(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(
+        request.path, parse_id=8 if request.force else 7
+    )
+    workflow, store, _shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Stale failure</h1>"), filename="stale.html")
+
+    def replace_before_old_failure(_parse_id: int) -> ParseInfo:
+        store.mark_task_failed(initial.task.id, error_code="doclib_parse_failed")
+        newer = workflow.retry(initial.task.id)
+        assert newer.status == "submitted" and newer.submission_attempt == 2
+        return _parse_info(initial.document.sha256, status="failed", parse_id=7)
+
+    client.get_parse.side_effect = replace_before_old_failure
+    observed = workflow.refresh(initial.task.id)
+    assert observed.status == "submitted" and observed.parse_ids == (8,)
+    assert store.list_revisions(initial.document.id) == ()
+
+
+def test_stale_done_poll_cannot_create_revision_for_newer_generation(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(
+        request.path, parse_id=8 if request.force else 7
+    )
+    workflow, store, _shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Stale completion</h1>"), filename="stale.html")
+
+    def replace_before_old_completion(_parse_id: int) -> ParseInfo:
+        store.mark_task_failed(initial.task.id, error_code="doclib_parse_failed")
+        newer = workflow.retry(initial.task.id)
+        assert newer.status == "submitted" and newer.submission_attempt == 2
+        return _parse_info(initial.document.sha256, status="done", parse_id=7)
+
+    client.get_parse.side_effect = replace_before_old_completion
+    observed = workflow.refresh(initial.task.id)
+    assert observed.status == "submitted" and observed.parse_ids == (8,)
+    assert store.list_revisions(initial.document.id) == ()
+
+
 def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)

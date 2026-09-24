@@ -43,7 +43,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 9
+_SCHEMA_VERSION = 10
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -143,7 +143,9 @@ class BusinessStore:
                         created_at_ms INTEGER NOT NULL,
                         updated_at_ms INTEGER NOT NULL,
                         cancel_effect TEXT CHECK(cancel_effect IN ('not_submitted', 'queued_skipped', 'may_continue')),
-                        cancel_results_json TEXT
+                        cancel_results_json TEXT,
+                        submission_attempt INTEGER NOT NULL CHECK(submission_attempt BETWEEN 1 AND 1000000),
+                        submission_force INTEGER NOT NULL CHECK(submission_force IN (0, 1))
                     );
                     CREATE INDEX tasks_document_created ON tasks(document_id, created_at_ms);
                     CREATE TABLE ingest_requests (
@@ -296,7 +298,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 9")
+                database.execute("PRAGMA user_version = 10")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -965,9 +967,9 @@ class BusinessStore:
             )
             self._insert_document(database, document)
             database.execute(
-                "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (task.id, task.document_id, task.requested_tier, task.actual_tier, task.status, "[]", None, now, now,
-                 None, None),
+                 None, None, 1, 0),
             )
             if request_key is not None:
                 database.execute(
@@ -1110,9 +1112,15 @@ class BusinessStore:
             if row is None:
                 raise BusinessStoreError("Task not found")
             if row["status"] in ("uploaded", "failed"):
+                new_force_attempt = row["status"] == "failed" and row["error_code"] in (
+                    "doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"
+                )
+                attempt = row["submission_attempt"] + int(new_force_attempt)
+                force = bool(new_force_attempt or row["submission_force"])
                 database.execute(
-                    "UPDATE tasks SET status='submitting', updated_at_ms=? WHERE id=?",
-                    (_now_ms(), task_id),
+                    "UPDATE tasks SET status='submitting', submission_attempt=?, submission_force=?, updated_at_ms=? "
+                    "WHERE id=?",
+                    (attempt, int(force), _now_ms(), task_id),
                 )
                 row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             assert row is not None
@@ -1159,46 +1167,80 @@ class BusinessStore:
             assert row is not None
             return self._task_from_row(row)
 
-    def mark_task_submitted(self, task_id: str, *, actual_tier: Tier, parse_ids: tuple[int, ...]) -> IngestTask:
+    def mark_task_submitted(
+        self, task_id: str, *, actual_tier: Tier, parse_ids: tuple[int, ...], submission_attempt: int
+    ) -> IngestTask:
         if not parse_ids or any(parse_id < 1 for parse_id in parse_ids):
             raise BusinessStoreError("Doclib submission must expose parse IDs")
         with closing(self._connect()) as database, database:
             cursor = database.execute(
                 "UPDATE tasks SET status='submitted', actual_tier=?, parse_ids_json=?, error_code=NULL, updated_at_ms=? "
-                "WHERE id=? AND status='submitting'",
-                (actual_tier, json.dumps(parse_ids), _now_ms(), task_id),
+                "WHERE id=? AND submission_attempt=? AND "
+                "(status='submitting' OR (status='failed' AND error_code='doclib_submission_failed'))",
+                (actual_tier, json.dumps(parse_ids), _now_ms(), task_id, submission_attempt),
             )
             if cursor.rowcount != 1:
                 task = self.get_task(task_id)
-                if task is not None and task.status in ("cancel_requested", "cancelled"):
+                if task is not None and (
+                    task.status in ("cancel_requested", "cancelled", "submitted", "done")
+                    or task.submission_attempt != submission_attempt
+                ):
                     return task
                 raise BusinessStoreError("Task cannot be submitted from its current state")
         task = self.get_task(task_id)
         assert task is not None
         return task
 
-    def mark_task_failed(self, task_id: str, *, error_code: str) -> IngestTask:
+    def mark_task_failed(
+        self, task_id: str, *, error_code: str, expected_submission_attempt: int | None = None
+    ) -> IngestTask:
         if not error_code.strip():
             raise BusinessStoreError("Failure code is required")
         with closing(self._connect()) as database, database:
-            cursor = database.execute(
-                "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
-                "WHERE id=? AND status IN ('uploaded', 'submitting', 'submitted', 'failed')",
-                (error_code, _now_ms(), task_id),
-            )
+            if expected_submission_attempt is None:
+                cursor = database.execute(
+                    "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
+                    "WHERE id=? AND status IN ('uploaded', 'submitting', 'submitted', 'failed')",
+                    (error_code, _now_ms(), task_id),
+                )
+            else:
+                cursor = database.execute(
+                    "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
+                    "WHERE id=? AND status='submitting' AND submission_attempt=?",
+                    (error_code, _now_ms(), task_id, expected_submission_attempt),
+                )
             if cursor.rowcount != 1:
                 task = self.get_task(task_id)
-                if task is not None and task.status in ("cancel_requested", "cancelled", "done"):
+                if task is not None and (task.status in ("cancel_requested", "cancelled", "done", "submitted")
+                                         or expected_submission_attempt is not None):
                     return task
                 raise BusinessStoreError("Task cannot fail from its current state")
         task = self.get_task(task_id)
         assert task is not None
         return task
 
+    def fail_submitted_task_if_current(
+        self, task_id: str, *, error_code: str, parse_ids: tuple[int, ...], submission_attempt: int
+    ) -> IngestTask:
+        """A stale Doclib poll may not fail a newer submission generation."""
+        if not error_code.strip():
+            raise BusinessStoreError("Failure code is required")
+        with closing(self._connect()) as database, database:
+            database.execute(
+                "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
+                "WHERE id=? AND status='submitted' AND parse_ids_json=? AND submission_attempt=?",
+                (error_code, _now_ms(), task_id, json.dumps(parse_ids), submission_attempt),
+            )
+        task = self.get_task(task_id)
+        if task is None:
+            raise BusinessStoreError("Task not found")
+        return task
+
     @staticmethod
     def _task_from_row(row: sqlite3.Row) -> IngestTask:
         payload = dict(row)
         payload["parse_ids"] = tuple(json.loads(payload.pop("parse_ids_json")))
+        payload["submission_force"] = bool(payload["submission_force"])
         return IngestTask(**payload)
 
     def add_completed_revision(
@@ -1223,6 +1265,7 @@ class BusinessStore:
         *,
         parse: ParseInfo | tuple[ParseInfo, ...],
         producer_version: str,
+        submission_attempt: int | None = None,
     ) -> IngestTask:
         """Commit a submitted task and its revision together, or observe a concurrent terminal transition."""
         first, parse_batches, page_range = self._completed_batches(parse, producer_version)
@@ -1231,7 +1274,9 @@ class BusinessStore:
             task_row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if task_row is None:
                 raise BusinessStoreError("Task not found")
-            if task_row["status"] != "submitted":
+            if task_row["status"] != "submitted" or (
+                submission_attempt is not None and task_row["submission_attempt"] != submission_attempt
+            ):
                 return self._task_from_row(task_row)
             if first.tier != task_row["actual_tier"]:
                 raise BusinessStoreError("Completed parse tier does not match the submitted task")

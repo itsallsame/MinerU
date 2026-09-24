@@ -101,7 +101,8 @@ class DoclibGateway:
         self._shared_root = root
 
     def submit(
-        self, source: Path, *, tier: Tier | None = None, force: bool = False, consumer_key: str | None = None
+        self, source: Path, *, tier: Tier | None = None, force: bool = False, consumer_key: str | None = None,
+        submission_attempt: int | None = None,
     ) -> SubmittedParse:
         if source.is_symlink():
             raise DocumentPathError("Symlink sources are not allowed")
@@ -116,7 +117,7 @@ class DoclibGateway:
         before = _sha256_file(path)
         response = self._client.ensure_parse(ParseRequest(
             path=str(path), tier=resolved_tier, page_range="all" if extension == "pdf" else None,
-            force=force, remote=False, consumer_key=consumer_key,
+            force=force, remote=False, consumer_key=consumer_key, submission_attempt=submission_attempt,
         ))
         after = _sha256_file(path)
         if before != after or response.sha256 != before:
