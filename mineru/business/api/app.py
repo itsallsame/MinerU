@@ -328,6 +328,7 @@ class TaskView(BaseModel):
     actual_tier: Tier | None
     status: str
     error_code: str | None
+    cancel_effect: str | None
     created_at_ms: int
     updated_at_ms: int
 
@@ -340,6 +341,7 @@ class TaskView(BaseModel):
             actual_tier=task.actual_tier,
             status=task.status,
             error_code=task.error_code,
+            cancel_effect=task.cancel_effect,
             created_at_ms=task.created_at_ms,
             updated_at_ms=task.updated_at_ms,
         )
@@ -1016,6 +1018,15 @@ def create_app(
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except UploadError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return TaskView.from_record(task)
+
+    @app.post("/api/business/tasks/{task_id}/cancel", response_model=TaskView)
+    def cancel_task(task_id: str) -> TaskView:
+        try:
+            task = workflow.cancel(task_id)
+        except DocumentWorkflowError as exc:
+            status_code = 404 if str(exc) == "Task not found" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return TaskView.from_record(task)
 
     if web_root is not None:

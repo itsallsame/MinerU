@@ -229,6 +229,9 @@ def parser() -> argparse.ArgumentParser:
     commands.choices["extract"].add_argument(
         "--confirm-write", action="store_true", help="Acknowledge an explicitly requested extraction run",
     )
+    cancel = commands.add_parser("cancel")
+    cancel.add_argument("task_id")
+    cancel.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested task cancellation")
     return main
 
 
@@ -287,6 +290,10 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/content?{query}")
     if command == "task":
         return client.request("GET", f"/tasks/{quote(args.task_id, safe='')}")
+    if command == "cancel":
+        if not args.confirm_write:
+            raise BusinessAPIError("Cancellation requires --confirm-write after explicit user approval")
+        return client.request("POST", f"/tasks/{quote(args.task_id, safe='')}/cancel")
     if command == "revisions":
         return client.request("GET", f"/documents/{quote(args.document_id, safe='')}/revisions")
     if command == "extract":

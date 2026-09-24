@@ -1,11 +1,11 @@
 {
   "project": "基于 MinerU 4 的离线业务文档平台",
   "created_at": "2026-09-23",
-  "last_updated": "2026-09-23",
+  "last_updated": "2026-09-24",
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 74,
+  "completed_features": 80,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -1307,9 +1307,9 @@
         "实现：解析取消状态映射",
         "验证：.venv/bin/python -m pytest tests/business/test_doclib_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Doclib v4 的 skipped/shared/running/finished/retained 逐批次释放事实映射到业务 not_submitted/queued_skipped/may_continue；完成缓存按不重叠全页覆盖选择批次。真实 Doclib 契约文件 23 passed，见 dev-docs/evidence/2026-09-24-business-task-cancellation.md。目标机模型计算抢占不在此映射承诺内。"
     },
     {
       "id": "DOC-017",
@@ -2430,7 +2430,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "业务 schema 9 已实现 submitting/cancel_requested/cancelled、跨库未知结果重放及完成竞态裁决；Mac 业务与真实 Doclib 路由已测。失败后 force 重试的意图世代化、跨进程并发矩阵与目标机验收尚未完成，保持未通过。见 dev-docs/evidence/2026-09-24-business-task-cancellation.md。"
     },
     {
       "id": "BE-030",
@@ -3805,9 +3805,9 @@
         "实现：任务取消入口",
         "验证：cd business-web && pnpm test && pnpm build"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": "Doclib 已有逐批次释放契约，只有 skipped 可证明待处理计算被跳过；共享/运行中/保守保留均不能冒充停 GPU。业务 cancel_requested 恢复协议、业务 API、Web/Skill 入口及跨库/目标环境验收仍未完成，见 dev-docs/2026-09-23-task-cancellation-design.md。"
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Web 提供确认后取消、未知结果核对与 may_continue/queued_skipped/not_submitted 的真实文案；自有 Skill 同走开放业务 API。pnpm test/build 与 23 个离线 Chromium 回归通过。BE-029 的 force 重试与目标机验收仍单独未完成，见 dev-docs/evidence/2026-09-24-business-task-cancellation.md。"
     },
     {
       "id": "FE-017",

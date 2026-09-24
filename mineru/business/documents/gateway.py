@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from ...doclib import DoclibInterface, ParseRequest
-from ...doclib.types import ParseSubmitStatus
+from ...doclib.types import ParseInfo, ParseSubmitStatus
 from ...filetypes import FLASH_ONLY_PARSE_EXTENSIONS, TIERED_PARSE_EXTENSIONS, normalize_parse_extension
+from ...parser.page_range import parse_page_range_set
 from ...types import Tier
 
 
@@ -53,6 +55,41 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _completed_coverage_ids(parses: list[ParseInfo], *, page_range: str) -> tuple[int, ...]:
+    """Choose a non-overlapping exact cover, not every historical done batch."""
+    requested = frozenset(parse_page_range_set(page_range))
+    if not requested:
+        raise DocumentIntegrityError("Completed parse response has no page coverage")
+    candidates = []
+    for parse in parses:
+        pages = frozenset(parse_page_range_set(parse.page_range))
+        if parse.status == "done" and pages and pages <= requested:
+            candidates.append((parse.id, pages, parse.done_at or 0))
+    candidates.sort(key=lambda item: (-len(item[1]), -item[2], -item[0]))
+    explored = 0
+
+    @lru_cache(maxsize=10000)
+    def cover(remaining: frozenset[int]) -> tuple[int, ...] | None:
+        nonlocal explored
+        if not remaining:
+            return ()
+        explored += 1
+        if explored > 10000:
+            raise DocumentIntegrityError("Completed parse coverage is too ambiguous")
+        first = min(remaining)
+        for parse_id, pages, _done_at in candidates:
+            if first in pages and pages <= remaining:
+                rest = cover(remaining - pages)
+                if rest is not None:
+                    return (parse_id, *rest)
+        return None
+
+    selected = cover(requested)
+    if selected is None:
+        raise DocumentIntegrityError("Completed parse batches do not form a disjoint full-page cover")
+    return selected
+
+
 class DoclibGateway:
     """Submit only shared, immutable business source paths to the local Doclib."""
 
@@ -91,10 +128,10 @@ class DoclibGateway:
             listing = self._client.list_parses(doc_ref=response.sha256, tier=response.tier, status="done", limit=200)
             if listing.total > len(listing.parses):
                 raise DocumentIntegrityError("Completed parse listing was truncated")
-            parse_ids = tuple(
-                parse_info.id
-                for parse_info in listing.parses
-                if parse_info.sha256 == response.sha256 and parse_info.tier == response.tier
+            parse_ids = _completed_coverage_ids(
+                [parse_info for parse_info in listing.parses
+                 if parse_info.sha256 == response.sha256 and parse_info.tier == response.tier],
+                page_range=response.page_range,
             )
         return SubmittedParse(
             sha256=response.sha256,

@@ -145,6 +145,39 @@ def test_public_doclib_release_is_idempotent_and_rejects_late_requeue(
     assert error.value.code == "consumer_released"
 
 
+def test_real_doclib_business_cancel_route_persists_release_facts(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "business-uploads"
+    upload_root.mkdir()
+    uploads = ImmutableUploadStore(upload_root, max_bytes=1024)
+    store = BusinessStore(root / "cancel-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=uploads, store=store, gateway=DoclibGateway(doclib, shared_root=upload_root),
+        doclib=doclib, producer_version="4.0.6",
+    )
+    api = TestClient(create_app(
+        workflow=workflow, store=store, uploads=uploads,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    submitted = api.post(
+        "/api/business/documents", files={"file": ("cancel.html", b"<h1>Live cancellation</h1>", "text/html")},
+    )
+    assert submitted.status_code == 202, submitted.text
+    task_id = submitted.json()["task"]["id"]
+    cancelled = api.post(f"/api/business/tasks/{task_id}/cancel")
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["cancel_effect"] in {"queued_skipped", "may_continue"}
+    assert api.post(f"/api/business/tasks/{task_id}/cancel").json() == cancelled.json()
+    assert store.list_revisions(submitted.json()["document"]["id"]) == ()
+    task = store.get_task(task_id)
+    assert task is not None and task.cancel_results_json is not None
+
+
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
     client, root, _home = live_doclib
     source = root / "report.html"
@@ -553,7 +586,14 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
     duplicate_doc = duplicate.json()["document"]
     assert duplicate_doc["id"] != document["id"]
     duplicate_task = client.get(f"/api/business/tasks/{duplicate.json()['task']['id']}").json()
-    assert duplicate_task["status"] == "done", duplicate_task
+    if duplicate_task["status"] != "done":
+        saved_duplicate = store.get_task(duplicate.json()["task"]["id"])
+        assert saved_duplicate is not None
+        batch_states = [
+            (parse_id, doclib.get_parse(parse_id).status, doclib.get_parse(parse_id).page_range)
+            for parse_id in saved_duplicate.parse_ids
+        ]
+        raise AssertionError(f"Duplicate task failed: {duplicate_task['error_code']}; batches={batch_states}")
     duplicate_revisions = client.get(f"/api/business/documents/{duplicate_doc['id']}/revisions").json()
     assert len(duplicate_revisions) == 1 and duplicate_revisions[0]["page_range"] == "1-13"
 

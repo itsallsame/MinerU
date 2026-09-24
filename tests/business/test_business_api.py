@@ -14,6 +14,7 @@ from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.business.services import DocumentWorkflow, EvidenceReader, EvidenceWriter
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse
+from mineru.doclib.types import ParseReleaseItem, ParseReleaseResponse
 
 
 def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Path) -> None:
@@ -42,6 +43,7 @@ def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Pat
         "/api/business/upload-requests/{request_key}": {"get"},
         "/api/business/tasks/{task_id}": {"get"},
         "/api/business/tasks/{task_id}/retry": {"post"},
+        "/api/business/tasks/{task_id}/cancel": {"post"},
         "/api/business/revisions/{revision_id}/content": {"get"},
         "/api/business/revisions/{revision_id}/extractions": {"get", "post"},
         "/api/business/extractions/{run_id}/confirm": {"post"},
@@ -134,8 +136,51 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
     )
     assert client.get(f"/api/business/tasks/{task_id}").json()["status"] == "done"
     assert client.post(f"/api/business/tasks/{task_id}/retry").json()["status"] == "done"
+    assert client.post(f"/api/business/tasks/{task_id}/cancel").status_code == 409
     assert client.get("/api/business/tasks/unknown").status_code == 404
     assert client.get("/api/business/documents/unknown").status_code == 404
+
+
+def test_open_cancel_api_distinguishes_business_cancel_from_compute_stop(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    store = BusinessStore(tmp_path / "business.sqlite3")
+    store.initialize()
+    doclib = Mock(spec=DoclibInterface)
+
+    def submit_to_doclib(request: ParseRequest) -> ParseResponse:
+        digest = hashlib.sha256(Path(request.path).read_bytes()).hexdigest()
+        return ParseResponse(
+            sha256=digest, short_id=digest[:12], tier="flash", page_range="1",
+            status="pending", created_parse_ids=[7],
+        )
+
+    doclib.ensure_parse.side_effect = submit_to_doclib
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024), store=store,
+        gateway=DoclibGateway(doclib, shared_root=shared), doclib=doclib, producer_version="4.0.6",
+    )
+    client = TestClient(create_app(
+        workflow=workflow, store=store,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    uploaded = client.post(
+        "/api/business/documents", files={"file": ("report.html", b"<h1>Open</h1>", "text/html")},
+    )
+    task_id = uploaded.json()["task"]["id"]
+    doclib.release_parse_consumer.return_value = ParseReleaseResponse(
+        consumer_key=f"business:{task_id}",
+        results=[ParseReleaseItem(parse_id=7, disposition="shared", status_at_release="pending")],
+    )
+    cancelled = client.post(f"/api/business/tasks/{task_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["cancel_effect"] == "may_continue"
+    assert client.post(f"/api/business/tasks/{task_id}/cancel").json() == cancelled.json()
+    assert client.post(f"/api/business/tasks/{task_id}/retry").json() == cancelled.json()
+    assert client.post("/api/business/tasks/missing/cancel").status_code == 404
+    assert store.list_revisions(uploaded.json()["document"]["id"]) == ()
 
 
 def test_upload_idempotency_key_replays_same_intent_and_rejects_conflict(tmp_path: Path) -> None:

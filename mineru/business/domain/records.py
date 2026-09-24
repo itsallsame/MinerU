@@ -8,7 +8,8 @@ from typing import Literal
 from ...types import Tier
 from ...parser.page_range import parse_page_range_set
 
-TaskStatus = Literal["uploaded", "submitted", "done", "failed"]
+TaskStatus = Literal["uploaded", "submitting", "submitted", "done", "failed", "cancel_requested", "cancelled"]
+CancelEffect = Literal["not_submitted", "queued_skipped", "may_continue"]
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,8 @@ class IngestTask:
     error_code: str | None
     created_at_ms: int
     updated_at_ms: int
+    cancel_effect: CancelEffect | None = None
+    cancel_results_json: str | None = None
 
 
 @dataclass(frozen=True)
@@ -77,4 +80,4 @@ class EvidenceSnapshot:
     created_at_ms: int
 
 
-__all__ = ["BusinessDocument", "EvidenceSnapshot", "IngestTask", "ParseBatch", "ParseRevision", "TaskStatus"]
+__all__ = ["BusinessDocument", "CancelEffect", "EvidenceSnapshot", "IngestTask", "ParseBatch", "ParseRevision", "TaskStatus"]

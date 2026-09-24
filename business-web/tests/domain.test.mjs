@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyFile, extensionOf, sourcePreviewKind, taskFailure, tierForFile } from "../src/domain.js";
+import { cancelEffectLabel, classifyFile, extensionOf, sourcePreviewKind, taskFailure, taskLabel, tierForFile } from "../src/domain.js";
 
 const capabilities = {
   max_upload_bytes: 100,
@@ -42,4 +42,12 @@ test("task failures distinguish recoverable parsing from source integrity loss",
     assert.ok(taskFailure(code).message.length > 10);
   }
   assert.equal(taskFailure("other_failure").retryable, true);
+});
+
+test("cancel labels never imply running or shared computation stopped", () => {
+  assert.equal(taskLabel("cancel_requested"), "取消待确认");
+  assert.equal(taskLabel("cancelled"), "已取消");
+  assert.match(cancelEffectLabel("queued_skipped"), /队列批次均已跳过/);
+  assert.match(cancelEffectLabel("may_continue"), /底层计算可能继续/);
+  assert.match(cancelEffectLabel(null), /请勿假定底层计算已停止/);
 });

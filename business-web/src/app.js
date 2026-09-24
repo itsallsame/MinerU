@@ -1,5 +1,5 @@
 import { businessApi } from "./api.js";
-import { classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskFailure, taskLabel, tierForFile } from "./domain.js";
+import { cancelEffectLabel, classifyFile, extensionOf, formatBytes, sourcePreviewKind, taskFailure, taskLabel, tierForFile } from "./domain.js";
 import { createReviewWorkbench } from "./review.js";
 import { createTemplateManager } from "./templates.js";
 
@@ -639,6 +639,9 @@ function renderDetail() {
     explanation.setAttribute("role", "alert");
     summary.append(explanation);
   }
+  if (task?.status === "cancel_requested" || task?.status === "cancelled") {
+    summary.append(element("p", "review-hint", cancelEffectLabel(task.cancel_effect)));
+  }
   const actions = element("div", "detail-actions");
   if (task && (task.status === "uploaded" || (task.status === "failed" && taskFailure(task.error_code).retryable))) {
     const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
@@ -658,6 +661,27 @@ function renderDetail() {
       }
     });
     actions.append(retry);
+  }
+  if (task && ["uploaded", "submitting", "submitted", "failed", "cancel_requested"].includes(task.status)) {
+    const cancel = element("button", "secondary-button", task.status === "cancel_requested" ? "继续核对取消结果" : "取消业务任务");
+    cancel.type = "button";
+    cancel.addEventListener("click", async () => {
+      if (task.status !== "cancel_requested" && !window.confirm(
+        "取消后将停止跟踪这个业务任务；共享或已经运行的底层计算可能继续。确认取消？",
+      )) return;
+      cancel.disabled = true;
+      const selectionRequest = state.selectionRequest;
+      try {
+        const result = await businessApi.cancel(task.id);
+        if (selectionRequest === state.selectionRequest) clearError();
+        await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
+          ? (result.status === "cancel_requested" ? "取消请求已记录，结果尚未确认" : "业务任务已取消") : "" });
+      } catch (error) {
+        if (selectionRequest === state.selectionRequest) showError(`取消结果未知，请刷新任务状态核对：${error.message}`);
+        cancel.disabled = false;
+      }
+    });
+    actions.append(cancel);
   }
   summary.append(actions);
   root.append(summary);
@@ -982,7 +1006,7 @@ async function submitFiles(event) {
 
 async function pollTasks() {
   if (state.polling || state.uploading || !state.items.length) return;
-  const pending = state.items.filter((item) => ["uploaded", "submitted"].includes(item.task?.status));
+  const pending = state.items.filter((item) => ["uploaded", "submitting", "submitted", "cancel_requested"].includes(item.task?.status));
   if (!pending.length) return;
   const listRequest = state.listRequest;
   const selectionRequest = state.selectionRequest;
@@ -996,7 +1020,7 @@ async function pollTasks() {
         const updated = await businessApi.task(item.task.id);
         if (listRequest !== state.listRequest) return;
         if (updated.status !== item.task.status || updated.actual_tier !== item.task.actual_tier
-          || updated.error_code !== item.task.error_code) changed = true;
+          || updated.error_code !== item.task.error_code || updated.cancel_effect !== item.task.cancel_effect) changed = true;
       } catch (error) {
         if (listRequest !== state.listRequest) return;
         showError(`任务状态暂不可用：${error.message}`);

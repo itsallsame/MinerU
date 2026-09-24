@@ -108,6 +108,7 @@ def test_task_completion_and_revision_are_one_atomic_transition(tmp_path: Path) 
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Atomic</h1>"), filename="atomic.html")
     document, task = business.create_document_with_task(upload, original_name="atomic.html", requested_tier=None)
+    business.begin_task_submission(task.id)
     business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
     parse = _done_parse(upload.sha256, parse_id=17)
 
@@ -132,6 +133,7 @@ def test_terminal_task_cannot_acquire_a_new_completed_revision(tmp_path: Path) -
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Stopped</h1>"), filename="stopped.html")
     document, task = business.create_document_with_task(upload, original_name="stopped.html", requested_tier=None)
+    business.begin_task_submission(task.id)
     business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
     failed = business.mark_task_failed(task.id, error_code="doclib_parse_failed")
 
@@ -147,6 +149,7 @@ def test_revision_conflict_rolls_back_task_completion(tmp_path: Path) -> None:
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Conflict</h1>"), filename="conflict.html")
     document, task = business.create_document_with_task(upload, original_name="conflict.html", requested_tier=None)
+    business.begin_task_submission(task.id)
     business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,))
     parse = _done_parse(upload.sha256, parse_id=17)
     business.add_completed_revision(document.id, parse=parse, producer_version="other-version")
@@ -226,7 +229,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 8")
+        database.execute("PRAGMA user_version = 9")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()
@@ -251,6 +254,18 @@ def test_previous_business_schema_is_preserved_without_implicit_migration(tmp_pa
         database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
         database.execute("INSERT INTO old_business_data VALUES ('preserve')")
     with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 7"):
+        BusinessStore(database_path).initialize()
+    with closing(sqlite3.connect(database_path)) as database:
+        assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"
+
+
+def test_previous_four_point_zero_schema_is_preserved_without_implicit_migration(tmp_path: Path) -> None:
+    database_path = tmp_path / "old-4.0.sqlite3"
+    with closing(sqlite3.connect(database_path)) as database, database:
+        database.execute("PRAGMA user_version = 8")
+        database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
+        database.execute("INSERT INTO old_business_data VALUES ('preserve')")
+    with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 8"):
         BusinessStore(database_path).initialize()
     with closing(sqlite3.connect(database_path)) as database:
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"

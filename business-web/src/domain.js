@@ -45,10 +45,21 @@ export function formatBytes(bytes) {
 export function taskLabel(status) {
   return {
     uploaded: "待提交",
+    submitting: "提交中",
     submitted: "解析中",
     done: "已解析",
     failed: "失败",
+    cancel_requested: "取消待确认",
+    cancelled: "已取消",
   }[status] || "未知状态";
+}
+
+export function cancelEffectLabel(effect) {
+  return {
+    not_submitted: "任务在提交前已取消；没有提交这次解析。",
+    queued_skipped: "本次请求引用的队列批次均已跳过；后续其他请求仍可能重新触发解析。",
+    may_continue: "业务任务已取消；共享、运行中或已完成的底层计算可能继续。",
+  }[effect] || "取消结果尚未确认；正在向文档处理服务核对，请勿假定底层计算已停止。";
 }
 
 export function taskFailure(errorCode) {

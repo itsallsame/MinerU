@@ -360,6 +360,23 @@ def test_skill_reports_business_error_without_success_guess() -> None:
     assert offline.value.status is None
 
 
+def test_skill_cancel_requires_explicit_write_ack_and_uses_only_business_api() -> None:
+    script = _script()
+    connection = _Connection({
+        ("POST", "/api/business/tasks/task-1/cancel"): _Response({
+            "status": "cancelled", "cancel_effect": "may_continue",
+        }),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    with pytest.raises(script.BusinessAPIError, match="explicit user approval"):
+        script.run(script.parser().parse_args(["cancel", "task-1"]), client)
+    assert connection.calls == []
+    result = script.run(script.parser().parse_args(["cancel", "task-1", "--confirm-write"]), client)
+    assert result == {"status": "cancelled", "cancel_effect": "may_continue"}
+    assert connection.calls == [("POST", "/api/business/tasks/task-1/cancel")]
+
+
 def test_skill_evidence_link_uses_the_same_validated_business_web_origin() -> None:
     script = _script()
     evidence = {

@@ -6,7 +6,7 @@ import hashlib
 import io
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +14,8 @@ import pytest
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.business.services import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
 from mineru.business.store import BusinessStore
-from mineru.doclib import DoclibInterface, ParseInfo, ParseResponse
+from mineru.doclib import DoclibInterface, ParseInfo, ParseRequest, ParseResponse
+from mineru.doclib.types import ParseReleaseItem, ParseReleaseResponse
 from mineru.errors import ServerNotRunningError
 
 
@@ -64,6 +65,98 @@ def _workflow(tmp_path: Path, client: Mock, *, initialize_db: bool = True) -> tu
         producer_version="4.0.6",
     )
     return workflow, store, shared
+
+
+def _released(task_id: str, *items: tuple[int, str, str]) -> ParseReleaseResponse:
+    return ParseReleaseResponse(
+        consumer_key=f"business:{task_id}",
+        results=[
+            ParseReleaseItem(parse_id=parse_id, disposition=disposition, status_at_release=status)
+            for parse_id, disposition, status in items
+        ],
+    )
+
+
+def test_uploaded_cancel_tombstones_intent_without_submitting(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    workflow, store, shared = _workflow(tmp_path, client)
+    upload = ImmutableUploadStore(shared, max_bytes=1024).store(io.BytesIO(b"<h1>Stop</h1>"), filename="stop.html")
+    document, task = store.create_document_with_task(upload, original_name="stop.html", requested_tier=None)
+    client.release_parse_consumer.return_value = _released(task.id)
+
+    cancelled = workflow.cancel(task.id)
+    assert cancelled.status == "cancelled" and cancelled.cancel_effect == "not_submitted"
+    assert workflow.cancel(task.id) == cancelled
+    assert workflow.retry(task.id) == cancelled
+    assert store.list_revisions(document.id) == ()
+    client.ensure_parse.assert_not_called()
+    client.release_parse_consumer.assert_called_once()
+
+
+def test_submitted_cancel_reports_only_actual_batch_release_and_blocks_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Shared</h1>"), filename="shared.html")
+    task_id = submitted.task.id
+    client.release_parse_consumer.return_value = _released(task_id, (7, "shared", "pending"))
+
+    cancelled = workflow.cancel(task_id)
+    assert cancelled.status == "cancelled" and cancelled.cancel_effect == "may_continue"
+    assert workflow.refresh(task_id) == cancelled
+    assert store.complete_task_with_revision(
+        task_id, parse=_parse_info(submitted.document.sha256), producer_version="4.0.6"
+    ) == cancelled
+    assert store.list_revisions(submitted.document.id) == ()
+
+
+def test_cancel_retries_unknown_doclib_result_after_restart(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Recover</h1>"), filename="recover.html")
+    client.release_parse_consumer.side_effect = [
+        ServerNotRunningError(),
+        _released(submitted.task.id, (7, "skipped", "skipped")),
+    ]
+
+    uncertain = workflow.cancel(submitted.task.id)
+    assert uncertain.status == "cancel_requested" and uncertain.cancel_effect is None
+    reopened = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024), store=BusinessStore(tmp_path / "business" / "business.sqlite3"),
+        gateway=DoclibGateway(client, shared_root=shared), doclib=client, producer_version="4.0.6",
+    )
+    cancelled = reopened.refresh(submitted.task.id)
+    assert cancelled.status == "cancelled" and cancelled.cancel_effect == "queued_skipped"
+    assert store.list_revisions(submitted.document.id) == ()
+    assert client.release_parse_consumer.call_count == 2
+
+
+def test_cancel_during_doclib_submission_prevents_late_submitted_state(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    entered = Event()
+    resume = Event()
+    task_ids: list[str] = []
+
+    def blocked_submit(request: ParseRequest) -> ParseResponse:
+        task_ids.append(request.consumer_key.removeprefix("business:"))
+        entered.set()
+        assert resume.wait(5)
+        return _parse_response(request.path)
+
+    client.ensure_parse.side_effect = blocked_submit
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        submitting = pool.submit(workflow.submit, io.BytesIO(b"<h1>Race</h1>"), filename="race.html")
+        assert entered.wait(5)
+        task_id = task_ids[0]
+        assert store.get_task(task_id).status == "submitting"
+        client.release_parse_consumer.return_value = _released(task_id, (7, "skipped", "skipped"))
+        cancelled = workflow.cancel(task_id)
+        resume.set()
+        submitted = submitting.result(timeout=5)
+    assert cancelled.status == submitted.task.status == "cancelled"
+    assert store.list_revisions(submitted.document.id) == ()
 
 
 def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> None:

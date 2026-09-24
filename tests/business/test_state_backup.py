@@ -44,6 +44,10 @@ def _state(root: Path) -> tuple[Path, Path, Path, Path]:
 
 def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) -> None:
     business, doclib, shared, release = _state(tmp_path)
+    prior = BusinessStore(business / "business.sqlite3").get_upload_request("backup-replay-request-key")
+    assert prior is not None
+    cancelled_intent = BusinessStore(business / "business.sqlite3").request_task_cancel(prior[1].id)
+    assert cancelled_intent.status == "cancel_requested"
     output = tmp_path / "backup"
     stopped_checks = 0
 
@@ -59,7 +63,7 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
         output=output,
         check_stopped=stopped,
     )
-    assert stopped_checks == 1 and record["business_schema"] == 8
+    assert stopped_checks == 1 and record["business_schema"] == 9
     assert backup.verify_backup(output) == record
     assert (output / "COMPLETE").is_file()
     assert (output / "shared_documents" / "opaque.html").read_bytes() == b"<h1>Business original</h1>"
@@ -76,10 +80,11 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
     assert (restored / "shared" / "opaque.html").read_bytes() == (shared / "opaque.html").read_bytes()
     assert (restored / "doclib" / "parsed-result.bin").read_bytes() == (doclib / "parsed-result.bin").read_bytes()
     with closing(sqlite3.connect(restored / "business" / "business.sqlite3")) as database:
-        assert database.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 9
         assert database.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     recovered_store = BusinessStore(restored / "business" / "business.sqlite3")
     recovered_store.initialize()
+    assert recovered_store.get_task(prior[1].id) == cancelled_intent
     original = b"<h1>Business original</h1>"
     _document, _task, created = recovered_store.create_or_reuse_document_with_task(
         StoredUpload(

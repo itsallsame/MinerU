@@ -86,6 +86,41 @@ def test_gateway_resolves_completed_cache_hit_without_response_ids(tmp_path: Pat
     assert client.list_parses.call_args.kwargs["status"] == "done"
 
 
+def test_completed_cache_hit_chooses_disjoint_cover_not_every_historical_batch(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir()
+    source = root / "report.pdf"
+    source.write_bytes(b"%PDF-placeholder")
+    response = _response(source).model_copy(update={
+        "status": "done", "page_range": "1-13", "created_parse_ids": [], "wait_parse_ids": [],
+    })
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.return_value = response
+
+    def done(parse_id: int, page_range: str) -> ParseInfo:
+        return ParseInfo(
+            id=parse_id, sha256=response.sha256, short_id=response.sha256[:12], tier="flash",
+            page_range=page_range, status="done", privacy="local", created_at=1,
+            updated_at=parse_id, done_at=parse_id,
+        )
+
+    client.list_parses.return_value = ListParsesResponse(
+        parses=[done(1, "1-13"), done(2, "1-10")], total=2, limit=200,
+    )
+    assert DoclibGateway(client, shared_root=root).submit(source, tier="flash").parse_ids == (1,)
+
+    client.list_parses.return_value = ListParsesResponse(
+        parses=[done(1, "1-10"), done(2, "11-13")], total=2, limit=200,
+    )
+    assert DoclibGateway(client, shared_root=root).submit(source, tier="flash").parse_ids == (1, 2)
+
+    client.list_parses.return_value = ListParsesResponse(
+        parses=[done(1, "1-10"), done(2, "5-13")], total=2, limit=200,
+    )
+    with pytest.raises(DocumentIntegrityError, match="disjoint"):
+        DoclibGateway(client, shared_root=root).submit(source, tier="flash")
+
+
 def test_gateway_rejects_unshared_path_and_symlink(tmp_path: Path) -> None:
     root = tmp_path / "shared"
     root.mkdir()

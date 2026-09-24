@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import BinaryIO
 
 from ...doclib import DoclibInterface
-from ...doclib.types import ParseInfo
+from ...doclib.types import ParseInfo, ParseReleaseRequest
 from ...errors import MineruError
 from ...parser.page_range import parse_page_range_set
 from ...types import Tier
-from ..documents import DoclibGateway, DocumentIntegrityError, ImmutableUploadStore, resolve_parse_tier
+from ..documents import DoclibGateway, DocumentIntegrityError, ImmutableUploadStore, UploadError, resolve_parse_tier
 from ..domain import BusinessDocument, IngestTask
 from ..store import BusinessStore, BusinessStoreError
 
@@ -96,7 +96,7 @@ class DocumentWorkflow:
         task = self._store.get_task(task_id)
         if task is None:
             raise DocumentWorkflowError("Task not found")
-        if task.status not in ("uploaded", "failed"):
+        if task.status not in ("uploaded", "submitting", "failed"):
             return task
         document = self._store.get_document(task.document_id)
         if document is None:
@@ -105,6 +105,9 @@ class DocumentWorkflow:
         return self._submit_existing(task, source_path=source_path, expected_sha256=document.sha256)
 
     def _submit_existing(self, task: IngestTask, *, source_path: Path, expected_sha256: str) -> IngestTask:
+        task = self._store.begin_task_submission(task.id)
+        if task.status != "submitting":
+            return task
         try:
             submitted = self._gateway.submit(
                 source_path, tier=task.requested_tier,
@@ -122,11 +125,40 @@ class DocumentWorkflow:
             return self._store.mark_task_failed(task.id, error_code="doclib_submission_failed")
         return self._store.mark_task_submitted(task.id, actual_tier=submitted.tier, parse_ids=submitted.parse_ids)
 
+    def cancel(self, task_id: str) -> IngestTask:
+        """Fence business completion, then durably release the Doclib work intent."""
+        task = self._store.get_task(task_id)
+        if task is None:
+            raise DocumentWorkflowError("Task not found")
+        if task.status == "done":
+            raise DocumentWorkflowError("Completed task cannot be cancelled")
+        if task.status == "cancelled":
+            return task
+        task = self._store.request_task_cancel(task_id)
+        if task.status == "cancelled":
+            return task
+        try:
+            released = self._doclib.release_parse_consumer(ParseReleaseRequest(consumer_key=f"business:{task_id}"))
+        except (MineruError, OSError):
+            return task  # The result is unknown; a later cancel call retries the same stable intent.
+        return self._store.finish_task_cancel(task_id, released)
+
     def refresh(self, task_id: str) -> IngestTask:
         """Poll Doclib and persist terminal state; safe to repeat after restart."""
         task = self._store.get_task(task_id)
         if task is None:
             raise DocumentWorkflowError("Task not found")
+        if task.status == "cancel_requested":
+            return self.cancel(task_id)
+        if task.status == "submitting":
+            document = self._store.get_document(task.document_id)
+            if document is None:
+                raise DocumentWorkflowError("Task source document not found")
+            try:
+                source_path = self._uploads.source_path(document.storage_key)
+            except (UploadError, OSError):
+                return self._store.mark_task_failed(task.id, error_code="source_unavailable")
+            task = self._submit_existing(task, source_path=source_path, expected_sha256=document.sha256)
         if task.status != "submitted":
             return task
         try:

@@ -14,7 +14,7 @@ from contextlib import closing
 from pathlib import Path
 
 from ...doclib.locators import parse_content_cursor
-from ...doclib.types import ParseInfo
+from ...doclib.types import ParseInfo, ParseReleaseResponse
 from ...parser.page_range import format_page_range, parse_page_range_set
 from ...types import Tier
 from ..documents.uploads import StoredUpload
@@ -43,7 +43,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -135,11 +135,15 @@ class BusinessStore:
                         document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE RESTRICT,
                         requested_tier TEXT CHECK(requested_tier IN ('flash', 'basic', 'standard', 'advanced')),
                         actual_tier TEXT CHECK(actual_tier IN ('flash', 'basic', 'standard', 'advanced')),
-                        status TEXT NOT NULL CHECK(status IN ('uploaded', 'submitted', 'done', 'failed')),
+                        status TEXT NOT NULL CHECK(status IN (
+                            'uploaded', 'submitting', 'submitted', 'done', 'failed', 'cancel_requested', 'cancelled'
+                        )),
                         parse_ids_json TEXT NOT NULL,
                         error_code TEXT,
                         created_at_ms INTEGER NOT NULL,
-                        updated_at_ms INTEGER NOT NULL
+                        updated_at_ms INTEGER NOT NULL,
+                        cancel_effect TEXT CHECK(cancel_effect IN ('not_submitted', 'queued_skipped', 'may_continue')),
+                        cancel_results_json TEXT
                     );
                     CREATE INDEX tasks_document_created ON tasks(document_id, created_at_ms);
                     CREATE TABLE ingest_requests (
@@ -292,7 +296,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 8")
+                database.execute("PRAGMA user_version = 9")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -389,7 +393,9 @@ class BusinessStore:
         """Count persisted workflow records, not inferred accuracy or unique content hashes."""
         queries = {
             "documents": "SELECT COUNT(*) FROM documents",
-            "parse_pending": "SELECT COUNT(*) FROM tasks WHERE status IN ('uploaded', 'submitted')",
+            "parse_pending": (
+                "SELECT COUNT(*) FROM tasks WHERE status IN ('uploaded', 'submitting', 'submitted', 'cancel_requested')"
+            ),
             "parse_failed": "SELECT COUNT(*) FROM tasks WHERE status = 'failed'",
             "parse_done": "SELECT COUNT(*) FROM tasks WHERE status = 'done'",
             "revisions": "SELECT COUNT(*) FROM revisions",
@@ -959,8 +965,9 @@ class BusinessStore:
             )
             self._insert_document(database, document)
             database.execute(
-                "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (task.id, task.document_id, task.requested_tier, task.actual_tier, task.status, "[]", None, now, now),
+                "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (task.id, task.document_id, task.requested_tier, task.actual_tier, task.status, "[]", None, now, now,
+                 None, None),
             )
             if request_key is not None:
                 database.execute(
@@ -1095,16 +1102,76 @@ class BusinessStore:
             row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         return self._task_from_row(row) if row is not None else None
 
+    def begin_task_submission(self, task_id: str) -> IngestTask:
+        """Persist intent before calling Doclib; a stranded submitting task can be retried."""
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise BusinessStoreError("Task not found")
+            if row["status"] in ("uploaded", "failed"):
+                database.execute(
+                    "UPDATE tasks SET status='submitting', updated_at_ms=? WHERE id=?",
+                    (_now_ms(), task_id),
+                )
+                row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            assert row is not None
+            return self._task_from_row(row)
+
+    def request_task_cancel(self, task_id: str) -> IngestTask:
+        """Fence completion and new submissions before the cross-DB release call."""
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise BusinessStoreError("Task not found")
+            if row["status"] in ("uploaded", "submitting", "submitted", "failed"):
+                initial_effect = "not_submitted" if row["status"] == "uploaded" else None
+                database.execute(
+                    "UPDATE tasks SET status='cancel_requested', cancel_effect=?, updated_at_ms=? WHERE id=?",
+                    (initial_effect, _now_ms(), task_id),
+                )
+                row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            assert row is not None
+            return self._task_from_row(row)
+
+    def finish_task_cancel(self, task_id: str, release: ParseReleaseResponse) -> IngestTask:
+        """Persist Doclib's first release facts; never turn an unknown result into stopped work."""
+        if release.consumer_key != f"business:{task_id}":
+            raise BusinessStoreError("Release result belongs to another task")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise BusinessStoreError("Task not found")
+            if row["status"] == "cancel_requested":
+                effect = (
+                    "not_submitted" if row["cancel_effect"] == "not_submitted" and not release.results
+                    else "queued_skipped" if release.results and all(item.disposition == "skipped" for item in release.results)
+                    else "may_continue"
+                )
+                database.execute(
+                    "UPDATE tasks SET status='cancelled', cancel_effect=?, cancel_results_json=?, updated_at_ms=? "
+                    "WHERE id=? AND status='cancel_requested'",
+                    (effect, release.model_dump_json(), _now_ms(), task_id),
+                )
+                row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            assert row is not None
+            return self._task_from_row(row)
+
     def mark_task_submitted(self, task_id: str, *, actual_tier: Tier, parse_ids: tuple[int, ...]) -> IngestTask:
         if not parse_ids or any(parse_id < 1 for parse_id in parse_ids):
             raise BusinessStoreError("Doclib submission must expose parse IDs")
         with closing(self._connect()) as database, database:
             cursor = database.execute(
                 "UPDATE tasks SET status='submitted', actual_tier=?, parse_ids_json=?, error_code=NULL, updated_at_ms=? "
-                "WHERE id=? AND status IN ('uploaded', 'failed')",
+                "WHERE id=? AND status='submitting'",
                 (actual_tier, json.dumps(parse_ids), _now_ms(), task_id),
             )
             if cursor.rowcount != 1:
+                task = self.get_task(task_id)
+                if task is not None and task.status in ("cancel_requested", "cancelled"):
+                    return task
                 raise BusinessStoreError("Task cannot be submitted from its current state")
         task = self.get_task(task_id)
         assert task is not None
@@ -1116,10 +1183,13 @@ class BusinessStore:
         with closing(self._connect()) as database, database:
             cursor = database.execute(
                 "UPDATE tasks SET status='failed', error_code=?, updated_at_ms=? "
-                "WHERE id=? AND status IN ('uploaded', 'submitted', 'failed')",
+                "WHERE id=? AND status IN ('uploaded', 'submitting', 'submitted', 'failed')",
                 (error_code, _now_ms(), task_id),
             )
             if cursor.rowcount != 1:
+                task = self.get_task(task_id)
+                if task is not None and task.status in ("cancel_requested", "cancelled", "done"):
+                    return task
                 raise BusinessStoreError("Task cannot fail from its current state")
         task = self.get_task(task_id)
         assert task is not None
