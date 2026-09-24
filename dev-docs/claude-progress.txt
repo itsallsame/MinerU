@@ -920,3 +920,11 @@ Changes: Fast-forward pushed 110 local commits to the user-designated itsallsame
 Verification: Web 11 Node tests and 8-asset offline build; opt-in real loopback Web/API/Doclib/own-Skill smoke 1 passed using public PDF plus generated Office files; 22 Chromium regressions passed. Initial unprivileged browser-suite attempt was blocked before tests by sandbox localhost bind; authorized retry passed. Mac Flash/CPU only, no four-class labels or isolated Kylin/GPU claim.
 Evidence: dev-docs/evidence/2026-09-24-fork-master-sync-live-smoke.md
 Next: Acquire actual Linux amd64/NVIDIA build inputs and four-class annotated samples, then run offline target artifact/runtime/quality/rollback acceptance. Keep goal active.
+
+=== 2026-09-24 Session 99 (P1 base-image-derived wheelhouse constraints) ===
+Status: In progress; 78/241 passed; INF-019 remains incomplete without real Linux artifacts
+Discovery: Preparation accepted manually written Torch/Torchvision/vLLM pins without proving they matched the base image; uv could also resolve against a different Python. Local Docker still has only arm64 MinerU 4, no amd64 NVIDIA/vLLM base, and Mac disk has about 12 GiB available.
+Changes: Added imported-base inspection requiring linux/amd64, exact immutable image ID, host/container Python ABI match and installed package versions. The probe runs by immutable image ID with no pull/network and a read-only root. Preparation verifies the generated constraints before staging and directs uv to the checked python3. Open-system/no-user-permission contract unchanged.
+Verification: New helper and preparation tests 12 passed; full Mac business suite 240 passed/1 skipped after replacing an obsolete static assertion. Following the immutable-ID probe tightening, targeted offline/configuration tests 24 passed/1 skipped, Ruff, shell syntax, JSON and diff checks passed; a one-shot read-only/no-network probe of the existing arm64 image by immutable ID succeeded. No real amd64 base or wheelhouse built; Kylin GPU compatibility not claimed.
+Evidence: dev-docs/evidence/2026-09-24-base-image-constraints.md
+Next: Obtain a target-compatible immutable amd64 NVIDIA/vLLM base image on a Linux preparation host with enough space, generate and test its real wheelhouse, then run isolated Kylin build/runtime/real-sample acceptance. Keep goal active.

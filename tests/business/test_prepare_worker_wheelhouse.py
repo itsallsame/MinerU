@@ -12,7 +12,13 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "prepare-worker-wheelhouse.sh"
 
 
-def _run_preparation(tmp_path: Path, *, fail_uv: bool = False, fail_pip: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_preparation(
+    tmp_path: Path,
+    *,
+    fail_uv: bool = False,
+    fail_pip: bool = False,
+    fail_base: bool = False,
+) -> subprocess.CompletedProcess[str]:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'mineru'\n")
     build_requirements = tmp_path / "docker" / "worker" / "build-requirements.in"
     build_requirements.parent.mkdir(parents=True)
@@ -37,6 +43,10 @@ done
 printf 'demo==1.0 --hash=sha256:%064d\\n' 1 > "$output"
 """,
         "python3": """#!/bin/sh
+if [ "$1" = -m ] && [ "$2" = scripts.inspect_worker_base ]; then
+  if [ "${TEST_FAIL_BASE:-}" = 1 ]; then exit 7; fi
+  exit 0
+fi
 if [ "${TEST_FAIL_PIP:-}" = 1 ]; then exit 8; fi
 while [ "$#" -gt 0 ]; do
   if [ "$1" = --dest ]; then shift; destination=$1; fi
@@ -50,10 +60,21 @@ printf wheel > "$destination/demo-1.0-py3-none-any.whl"
         executable.write_text(source)
         executable.chmod(0o755)
     return subprocess.run(
-        ["sh", str(SCRIPT)], cwd=tmp_path, capture_output=True, text=True, check=False,
-        env={**os.environ, "PATH": f"{mock_bin}:{os.environ['PATH']}",
-             "MINERU_BASE_CONSTRAINTS": str(constraints),
-             "TEST_FAIL_UV": "1" if fail_uv else "0", "TEST_FAIL_PIP": "1" if fail_pip else "0"},
+        ["sh", str(SCRIPT)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "PATH": f"{mock_bin}:{os.environ['PATH']}",
+            "MINERU_BASE_CONSTRAINTS": str(constraints),
+            "MINERU_BASE_IMAGE": "vllm:local",
+            "MINERU_BASE_IMAGE_ID": "sha256:" + "a" * 64,
+            "TEST_FAIL_BASE": "1" if fail_base else "0",
+            "TEST_FAIL_UV": "1" if fail_uv else "0",
+            "TEST_FAIL_PIP": "1" if fail_pip else "0",
+        },
     )
 
 
@@ -85,6 +106,14 @@ def test_success_publishes_only_new_lock_and_wheel(tmp_path: Path) -> None:
     result = _run_preparation(tmp_path)
     assert result.returncode == 0, result.stderr
     assert {path.name for path in (tmp_path / "wheelhouse").iterdir()} == {
-        "requirements.lock", "demo-1.0-py3-none-any.whl",
+        "requirements.lock",
+        "demo-1.0-py3-none-any.whl",
     }
+    assert not list(tmp_path.glob(".wheelhouse-stage.*"))
+
+
+def test_base_mismatch_stops_before_wheelhouse_stage(tmp_path: Path) -> None:
+    result = _run_preparation(tmp_path, fail_base=True)
+    assert result.returncode != 0
+    assert not (tmp_path / "wheelhouse").exists()
     assert not list(tmp_path.glob(".wheelhouse-stage.*"))

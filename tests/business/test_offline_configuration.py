@@ -293,6 +293,9 @@ def test_compose_bind_mounts_never_create_missing_host_paths(tmp_path: Path) -> 
 def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:
     script = (ROOT / "scripts" / "prepare-worker-wheelhouse.sh").read_text()
     assert "MINERU_BASE_CONSTRAINTS" in script
-    assert "for dependency in torch torchvision vllm" in script
+    assert "MINERU_BASE_IMAGE_ID" in script
+    assert "python3 -m scripts.inspect_worker_base" in script
+    assert script.index("python3 -m scripts.inspect_worker_base") < script.index("stage=$(mktemp")
+    assert '--python "$(command -v python3)"' in script
     assert "--generate-hashes" in script
     assert "--require-hashes --only-binary=:all:" in script
