@@ -54,6 +54,9 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
     results: list[dict[str, object]] = []
     writes: list[tuple[str, dict[str, object]]] = []
     navigation_status = "current_match"
+    results_read_failure = False
+    evidence_read_failure = False
+    evidence_writes = 0
 
     def fulfill(route: object, payload: object, status: int = 200) -> None:
         route.fulfill(status=status, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
@@ -77,7 +80,18 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 body=image_bytes if document["original_name"] == "scan.png" else b"%PDF-1.4\n",
             ))
             page.route("**/api/business/revisions/rev-1/extractions", lambda route: fulfill(route, [run]))
-            page.route("**/api/business/revisions/rev-1/evidence", lambda route: fulfill(route, [evidence]))
+            def revision_evidence(route: object) -> None:
+                nonlocal evidence_writes
+                if route.request.method == "POST":
+                    evidence_writes += 1
+                    fulfill(route, {**evidence, "id": "evidence-2"}, 201)
+                elif evidence_read_failure:
+                    fulfill(route, {"detail": "evidence_list_unavailable"}, 503)
+                else:
+                    items = [{**evidence, "id": "evidence-2"}, evidence] if evidence_writes else [evidence]
+                    fulfill(route, items)
+
+            page.route("**/api/business/revisions/rev-1/evidence", revision_evidence)
             page.route("**/api/business/revisions/rev-0/extractions", lambda route: fulfill(route, []))
             page.route("**/api/business/revisions/rev-0/evidence", lambda route: fulfill(route, []))
             page.route("**/api/business/revisions/rev-1/outline", lambda route: fulfill(route, {
@@ -122,7 +136,13 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 "run": run, "candidates": [candidate], "issues": [issue],
             }))
             page.route("**/api/business/extractions/run-1/decisions", lambda route: fulfill(route, decisions))
-            page.route("**/api/business/extractions/run-1/results", lambda route: fulfill(route, results))
+            def get_results(route: object) -> None:
+                if results_read_failure:
+                    fulfill(route, {"detail": "results_unavailable"}, 503)
+                else:
+                    fulfill(route, results)
+
+            page.route("**/api/business/extractions/run-1/results", get_results)
             page.route("**/api/business/extractions/run-1/audit", lambda route: fulfill(route, []))
             page.route("**/api/business/templates/official_document?version=1", lambda route: fulfill(route, {
                 "code": "official_document", "name": "公文", "version": 1, "built_in": True,
@@ -169,12 +189,13 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 payload = json.loads(route.request.post_data)
                 writes.append(("confirmation", payload))
                 assert payload == {"source": "web"}
+                version = len(results) + 1
                 result = {
-                    "id": "result-1", "run_id": run["id"], "version": 1, "revision_id": revision["id"],
+                    "id": f"result-{version}", "run_id": run["id"], "version": version, "revision_id": revision["id"],
                     "template_code": "official_document", "template_version": 1,
                     "fields": [{
-                        "field_code": "title", "value": "年度通知", "evidence_id": evidence["id"],
-                        "decision_id": "decision-1", "basis": "candidate_acceptance",
+                        "field_code": "title", "value": decisions[-1]["value"], "evidence_id": evidence["id"],
+                        "decision_id": decisions[-1]["id"], "basis": decisions[-1]["basis"],
                     }],
                     "fields_sha256": "e" * 64, "source": "web", "created_at_ms": now,
                 }
@@ -291,6 +312,23 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_role("button", name="查看已复核字段的证据").click()
             page.get_by_text("该复核值不在冻结片段中逐字出现").wait_for()
             assert page.locator(".evidence-snippet mark").count() == 0
+            results_read_failure = True
+            confirm_button.click()
+            page.get_by_text("成果 v2 已确认，但复核数据读取失败：results_unavailable").wait_for()
+            assert [name for name, _payload in writes].count("confirmation") == 2
+            results_read_failure = False
+            page.get_by_role("button", name="重试读取提取运行").click()
+            page.get_by_text("确认成果 v2").wait_for()
+            assert [name for name, _payload in writes].count("confirmation") == 2
+            assert confirm_button.is_disabled()
+            evidence_read_failure = True
+            page.get_by_role("button", name="采集第 N 页").click()
+            page.get_by_text("证据已冻结，但证据列表读取失败：evidence_list_unavailable").wait_for()
+            assert evidence_writes == 1
+            evidence_read_failure = False
+            page.get_by_role("button", name="重试读取证据列表").click()
+            page.get_by_role("button", name="采集第 N 页").wait_for()
+            assert evidence_writes == 1
             document["original_name"] = "scan.png"
             navigation_status = "current_match"
             page.goto(base_url, wait_until="networkidle")

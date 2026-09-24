@@ -673,12 +673,24 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       perform(async (isCurrent) => {
         const created = await businessApi.captureEvidence(revision.id, locator);
         if (!isCurrent()) return;
-        const evidence = await businessApi.revisionEvidence(revision.id);
-        if (!isCurrent()) return;
-        const inspection = await businessApi.inspectEvidence(created.id);
-        if (!isCurrent()) return;
-        state.evidence = evidence;
-        state.inspection = inspection;
+        state.evidence = [created, ...state.evidence.filter((item) => item.id !== created.id)];
+        state.inspection = null;
+        try {
+          const evidence = await businessApi.revisionEvidence(revision.id);
+          if (!isCurrent()) return;
+          state.evidence = evidence.some((item) => item.id === created.id) ? evidence : [created, ...evidence];
+        } catch (error) {
+          if (!isCurrent()) return;
+          state.evidenceLoadFailed = true;
+          state.error = `证据已冻结，但证据列表读取失败：${error.message}`;
+          return;
+        }
+        try {
+          const inspection = await businessApi.inspectEvidence(created.id);
+          if (isCurrent()) state.inspection = inspection;
+        } catch (error) {
+          if (isCurrent()) state.error = `证据已冻结，但证据核验读取失败：${error.message}`;
+        }
       });
     });
     box.append(capture);
@@ -866,8 +878,12 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
     box.append(button("确认并生成不可变成果版本", () => perform(async (isCurrent) => {
       const runId = state.runId;
-      await businessApi.confirm(runId);
-      if (isCurrent()) await loadRun(runId);
+      const confirmed = await businessApi.confirm(runId);
+      if (!isCurrent()) return;
+      await loadRun(runId);
+      if (isCurrent() && state.runLoadFailed) {
+        state.error = `成果 v${confirmed.version} 已确认，但${state.error}`;
+      }
     }), state.busy || !!blockers.length));
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {

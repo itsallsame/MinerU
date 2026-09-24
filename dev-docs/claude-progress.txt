@@ -793,3 +793,10 @@ Changes: Once extraction POST succeeds, preserve its run ID and acknowledge subm
 Verification: Browser regression reproduced the false-failure flow before the fix. Web 11 Node tests, offline build and 19 Chromium regressions passed after the fix. Mac synthetic API only; no real annotated sample or Kylin/NVIDIA claim.
 Evidence: dev-docs/evidence/2026-09-24-review-extraction-write-ack.md
 Next: Continue FE-047 other async boundaries and FE-046 accessibility audit; P1/P6 target and sample gates remain. Keep goal active.
+
+=== 2026-09-24 Session 81 (FE-047 immutable write/read boundaries) ===
+Status: In progress; 78/241 passed; FE-047 remains incomplete
+Changes: Preserved explicit success acknowledgement after result confirmation and evidence freezing when subsequent GETs fail; read-only recovery prevents accidental duplicate immutable writes. No user/auth/permission layer added.
+Verification: Confirmed-result regression failed before the fix, then passed. Web 11 Node tests, offline build and 19 Chromium regressions passed, including result and evidence POST-201/GET-503 recovery. Mac synthetic API only; no annotated real-sample or Kylin/NVIDIA claim.
+Evidence: dev-docs/evidence/2026-09-24-review-immutable-write-ack.md
+Next: Audit remaining FE-047 decision/issue write-read boundaries, then FE-046 accessibility; P1/P6 target and sample gates remain. Keep goal active.
