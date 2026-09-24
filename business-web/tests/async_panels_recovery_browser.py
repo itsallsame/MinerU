@@ -98,6 +98,36 @@ def main(base_url: str) -> None:
             assert page.get_by_text("第1页原文").count() == 1
             assert counts["blocks_later"] == 2
 
+            # A continuation can finish after the user restarts this hit's scan.
+            # The old page must not be appended to the new result set.
+            page.evaluate("""() => {
+              const originalFetch = window.fetch.bind(window);
+              window.__blockContinuationPending = false;
+              window.__delayOneContinuation = true;
+              window.fetch = (input, options) => {
+                if (window.__delayOneContinuation && String(input).includes('/search-blocks?')
+                  && String(input).includes('start_page=2')) {
+                  window.__delayOneContinuation = false;
+                  return originalFetch(input, options).then((response) => new Promise((resolve) => {
+                    window.__blockContinuationPending = true;
+                    window.__releaseContinuation = () => resolve(response);
+                  }));
+                }
+                return originalFetch(input, options);
+              };
+            }""")
+            page.get_by_role("button", name="查找块级候选依据").click()
+            page.get_by_role("button", name="继续扫描后续页").click()
+            page.wait_for_function("window.__blockContinuationPending === true")
+            page.get_by_role("button", name="查找块级候选依据").click()
+            page.get_by_text("第1页原文").wait_for()
+            assert page.get_by_text("第2页原文").count() == 0
+            page.evaluate("window.__releaseContinuation()")
+            page.wait_for_timeout(100)
+            assert page.get_by_text("第1页原文").count() == 1
+            assert page.get_by_text("第2页原文").count() == 0
+            assert page.get_by_role("button", name="继续扫描后续页").count() == 1
+
             page.locator("#audit-panel > summary").click()
             page.get_by_text("审计记录不可用：audit_unavailable").wait_for()
             assert page.get_by_role("button", name="加载更早记录").is_hidden()
@@ -111,7 +141,7 @@ def main(base_url: str) -> None:
             assert page.locator(".audit-record").count() == 2
             assert counts["audit_first"] == 2 and counts["audit_later"] == 2
             assert not errors, errors
-            print("Playwright async panels recovery passed: exact-query, block continuation, audit page retries")
+            print("Playwright async panels recovery passed: exact-query, stale block continuation, audit page retries")
         finally:
             browser.close()
 

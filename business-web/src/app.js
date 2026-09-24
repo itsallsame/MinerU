@@ -818,13 +818,13 @@ async function searchDocuments(event, retryQuery = null) {
       const findPages = element("button", "secondary-button", "查找块级候选依据");
       findPages.type = "button";
       const matches = element("div", "page-matches");
-      async function scan(startPage = null) {
-        findPages.disabled = true;
+      let scanGeneration = 0;
+      async function scan(startPage = null, generation = scanGeneration) {
         const loading = element("p", "review-hint", "正在扫描历史解析块（每次最多 25 页）…");
         matches.append(loading);
         try {
           const found = await businessApi.searchBlocks(hit.revision_id, query, startPage);
-          if (requestNumber !== state.searchRequest) return;
+          if (requestNumber !== state.searchRequest || generation !== scanGeneration) return;
           loading.remove();
           for (const match of found.items) {
             const result = element("div", "page-match");
@@ -880,11 +880,11 @@ async function searchDocuments(event, retryQuery = null) {
           if (found.next_page !== null) {
             const more = element("button", "secondary-button", "继续扫描后续页");
             more.type = "button";
-            more.addEventListener("click", () => { more.remove(); scan(found.next_page); });
+            more.addEventListener("click", () => { more.remove(); scan(found.next_page, generation); });
             matches.append(more);
           }
         } catch (error) {
-          if (requestNumber !== state.searchRequest) return;
+          if (requestNumber !== state.searchRequest || generation !== scanGeneration) return;
           loading.remove();
           const limitError = ["historical_search_limit_exceeded", "historical_search_too_many_matches"]
             .includes(error.message);
@@ -898,15 +898,17 @@ async function searchDocuments(event, retryQuery = null) {
             retry.addEventListener("click", () => {
               retry.previousElementSibling?.remove();
               retry.remove();
-              scan(startPage);
+              scan(startPage, generation);
             });
             matches.append(retry);
           }
-        } finally {
-          findPages.disabled = false;
         }
       }
-      findPages.addEventListener("click", () => { matches.replaceChildren(); scan(); });
+      findPages.addEventListener("click", () => {
+        scanGeneration += 1;
+        matches.replaceChildren();
+        scan(null, scanGeneration);
+      });
       row.append(findPages, matches);
       root.append(row);
     }

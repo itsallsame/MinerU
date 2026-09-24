@@ -942,3 +942,10 @@ Changes: Running the full official unit suite revealed that updated DocVortex ex
 Verification: Official unit suite 2805 passed/4 skipped/2 warnings; business suite 241 passed/1 skipped/2 warnings; targeted business capability assertion passed; Ruff lint, core-file format check and diff check passed. The previously unformatted business test file was not bulk-reformatted. First unprivileged unit run hit the CLI test's existing `~/.mineru` lock write restriction, so the full run used the established local test permission path.
 Evidence: dev-docs/evidence/2026-09-24-mhtml-format-regression.md
 Next: Continue upstream-rebase readiness and business P4 work; obtain target Kylin/NVIDIA details, actual amd64 artifacts, and four-class redacted samples for remaining gates. Do not claim target acceptance.
+
+=== 2026-09-24 Session 102 (P4 search rescan recovery) ===
+Status: In progress; P4 FE-047 remains incomplete
+Changes: Block-candidate search can now be restarted while a continuation request is pending. Per-hit scan generations discard stale success/error responses from the older scan, preventing old page results from mixing with the new view. No user/permission layer or server-side cancellation claim.
+Verification: Web Node 11 passed; eight offline assets built; 22 offline Chromium regressions passed, including delayed old continuation after a new scan; diff check passed. Browser APIs in this regression are simulated, not real Doclib or target Kylin.
+Evidence: dev-docs/evidence/2026-09-24-search-rescan-race.md
+Next: Continue P4 recovery and keyboard audit, obtain FE-033 scope choice and target Kylin/NVIDIA/four-class sample inputs; keep FE-047 and goal active.
