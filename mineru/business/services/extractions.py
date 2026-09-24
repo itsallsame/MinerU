@@ -171,10 +171,12 @@ def _label_values(content: str, field: TemplateField) -> tuple[str, ...]:
 
 
 def _native_title_value(content: str) -> str | None:
-    """Accept one complete textual title line, excluding Doclib page markers."""
+    """Accept one complete title line, excluding Doclib markers and native HTML anchors."""
     lines = [
         line.strip() for line in content.splitlines()
-        if line.strip() and re.fullmatch(r"<!-- page [1-9][0-9]*(?: of [1-9][0-9]*)? -->", line.strip()) is None
+        if line.strip()
+        and re.fullmatch(r"<!-- page [1-9][0-9]*(?: of [1-9][0-9]*)? -->", line.strip()) is None
+        and re.fullmatch(r'<a id="html-[0-9a-f]{8,64}"></a>', line.strip()) is None
     ]
     if len(lines) != 1:
         return None

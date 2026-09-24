@@ -140,6 +140,7 @@ def test_native_title_rejects_mismatched_historical_structure(tmp_path: Path, ba
 
 @pytest.mark.parametrize("block_text,truncated", [
     ("<!-- page 1 -->\n\n# 标题\n第二行", False),
+    ('<!-- page 1 -->\n\n<a id="other-anchor"></a>\n# 标题', False),
     ("<!-- page 1 -->\n\n# 标题", True),
 ])
 def test_native_title_never_uses_preview_or_incomplete_content(

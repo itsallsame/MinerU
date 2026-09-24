@@ -268,6 +268,39 @@ def test_real_doclib_completion_queues_templated_extraction_without_manual_post(
     )
 
 
+def test_real_doclib_native_heading_proposes_unconfirmed_title_candidate(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "native-title-uploads"
+    upload_root.mkdir()
+    store = BusinessStore(root / "native-title-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(upload_root, max_bytes=1024), store=store,
+        gateway=DoclibGateway(doclib, shared_root=upload_root), doclib=doclib, producer_version="4.0.6",
+    )
+    submitted = workflow.submit(
+        io.BytesIO("<html><body><h1>年度原生标题</h1><p>正文内容</p></body></html>".encode()),
+        filename="native-title.html", template_code="official_document",
+    )
+    _wait_for_parse(doclib, list(submitted.task.parse_ids))
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    queued = store.list_extractions(revision.id)
+    assert len(queued) == 1
+    extraction = FieldExtraction(
+        store=store, doclib=doclib, evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    )
+    completed = extraction.process_next()
+    assert completed is not None and completed.status == "done"
+    candidates = store.list_field_candidates(completed.id)
+    assert [(item.field_code, item.value, item.method) for item in candidates] == [
+        ("title", "年度原生标题", "native_doc_title")
+    ]
+    assert "年度原生标题" in store.get_evidence(candidates[0].evidence_id).snippet
+
+
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
     client, root, _home = live_doclib
     source = root / "report.html"

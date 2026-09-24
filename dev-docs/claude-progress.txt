@@ -1040,3 +1040,11 @@ Changes: Added a conservative `native_doc_title` candidate only when no explicit
 Verification: Targeted extraction/backup/store tests 38 passed; full Mac business 302 passed/2 skipped/2 dependency warnings. New schema-10 rejection test added after the full suite began and separately rerun. Ruff lint and diff check passed. No real four-class quality, isolated Kylin/NVIDIA or offline artifact claim.
 Evidence: dev-docs/evidence/2026-09-24-native-title-candidate.md
 Next: Continue P3/P4 product gaps; obtain target Kylin/NVIDIA and four-class annotated samples, keeping the Goal active.
+
+=== 2026-09-24 Session 115 (live native HTML title contract) ===
+Status: In progress; BE-032 remains false pending four-class annotated and Kylin/NVIDIA acceptance
+Discovery: A real 4.0 Doclib HTML `doc_title` block includes a parser-generated `<a id="html-…"></a>` line before the Markdown title. The previous complete-line rule therefore produced no candidate despite a valid native title; mock-only coverage missed this.
+Changes: Ignore only that exact generated hex-anchor form in title block text while preserving page-marker removal, full-block evidence, multi-line rejection and unconfirmed review state. Added live Doclib HTML upload/parse/automatic extraction/evidence regression and noncanonical-anchor negative coverage. No identity or permission layer.
+Verification: Live Doclib plus extraction targeted 17 passed on Mac; full business suite 305 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This is Flash/CPU HTML, not PDF/vision model quality or isolated Kylin proof.
+Evidence: dev-docs/evidence/2026-09-24-native-title-candidate.md
+Next: Continue P3 field/quality work and seek target hardware plus four-class samples.
