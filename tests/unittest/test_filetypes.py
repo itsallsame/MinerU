@@ -12,6 +12,7 @@ from mineru.filetypes import (
     FILE_TYPE_BY_EXTENSION,
     FLASH_ONLY_PARSE_EXTENSIONS,
     HTML_EXTENSIONS,
+    MHTML_EXTENSIONS,
     INGESTIBLE_EXTENSIONS,
     MIME_TYPE_BY_EXTENSION,
     ODF_EXTENSIONS,
@@ -131,6 +132,18 @@ def test_html_extensions_are_canonical_flash_only_inputs() -> None:
         assert ext in INGESTIBLE_EXTENSIONS
         assert FILE_TYPE_BY_EXTENSION[ext] == "html"
         assert MIME_TYPE_BY_EXTENSION[ext] == "text/html"
+        assert is_flash_only_parse_extension(ext)
+
+
+def test_mhtml_extensions_are_canonical_flash_only_inputs() -> None:
+    """MHTML/MHT 共用归档解析，不混入普通 HTML 或 Office。"""
+    assert MHTML_EXTENSIONS == frozenset({"mhtml", "mht"})
+    for ext in MHTML_EXTENSIONS:
+        assert ext in FLASH_ONLY_PARSE_EXTENSIONS
+        assert ext in PARSEABLE_EXTENSIONS
+        assert ext in INGESTIBLE_EXTENSIONS
+        assert FILE_TYPE_BY_EXTENSION[ext] == "mhtml"
+        assert MIME_TYPE_BY_EXTENSION[ext] == "multipart/related"
         assert is_flash_only_parse_extension(ext)
 
 

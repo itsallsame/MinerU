@@ -935,3 +935,10 @@ Changes: Before publishing the staged Linux wheelhouse, preparation now runs pip
 Verification: New failure regression and shell/configuration targeted tests 18 passed/1 skipped; full Mac business suite 241 passed/1 skipped; Ruff, shell syntax and diff checks passed. A no-network/read-only empty-requirements command worked on the existing arm64 image, but no real amd64 wheelhouse or Kylin install was tested.
 Evidence: dev-docs/evidence/2026-09-24-wheelhouse-platform-preflight.md
 Next: Obtain actual compatible amd64 NVIDIA base, prepare/download wheels on Linux, run this preflight and offline builds, then target GPU/model/four-class sample/rollback acceptance. Keep goal active.
+
+=== 2026-09-24 Session 101 (upstream unit regression and MHTML route) ===
+Status: In progress; 78/241 tracked features passed; target Kylin and real sample acceptance remain open
+Changes: Running the full official unit suite revealed that updated DocVortex exposes MHTML in the shared FileSuffix type while MinerU would wrongly dispatch it to Office. Added a public DocVortex MHTML analysis adapter and `.mhtml`/`.mht` Flash extension mapping, plus source-format tests and explicit open business API capabilities assertions. Kept the business system open with no user or permission layer. Removed only the exact stray `:memory:.ses` test artifact from the worktree.
+Verification: Official unit suite 2805 passed/4 skipped/2 warnings; business suite 241 passed/1 skipped/2 warnings; targeted business capability assertion passed; Ruff lint, core-file format check and diff check passed. The previously unformatted business test file was not bulk-reformatted. First unprivileged unit run hit the CLI test's existing `~/.mineru` lock write restriction, so the full run used the established local test permission path.
+Evidence: dev-docs/evidence/2026-09-24-mhtml-format-regression.md
+Next: Continue upstream-rebase readiness and business P4 work; obtain target Kylin/NVIDIA details, actual amd64 artifacts, and four-class redacted samples for remaining gates. Do not claim target acceptance.

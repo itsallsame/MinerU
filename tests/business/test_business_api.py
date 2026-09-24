@@ -288,6 +288,8 @@ def test_open_document_library_capabilities_and_source(tmp_path: Path) -> None:
     assert capabilities.json()["max_upload_bytes"] == 1024
     assert "pdf" in capabilities.json()["tiered_extensions"]
     assert "docx" in capabilities.json()["flash_only_extensions"]
+    assert {"mhtml", "mht"} <= set(capabilities.json()["flash_only_extensions"])
+    assert {"mhtml", "mht"} <= set(capabilities.json()["parseable_extensions"])
 
     html = uploads.store(io.BytesIO(b"<script>alert(1)</script>"), filename="untrusted.html")
     pdf = uploads.store(io.BytesIO(b"%PDF-1.4\nmock"), filename="report.pdf")
