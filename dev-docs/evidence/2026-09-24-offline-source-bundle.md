@@ -21,3 +21,5 @@
 对真实 fork 的 `978310dc895e16207228b8da04b1795fa002e6e1` → `b8ac2b240adfe312224b7b435f35f29b3ee06b96` 生成并校验了增量源码包。包体约 12 KiB，manifest SHA-256 为 `7b1e4390c9e67db60e5722732a38ebf21c4ee1c091d118c321b1732eaa323a49`；Git bundle refs 精确指向新 `master`，`pyproject.toml` 与 worker 构建依赖输入未变，`--reuse-wheelhouse` 门禁通过。该包位于本机临时目录，是开发验证产物，不是已导入麒麟的发布包；无目标机镜像构建或模型运行结论。
 
 原脚本只按已知权重扩展名拒绝，可能放过误提交到 `models/` 或 `weights/` 的 JSON/词表。现在额外拒绝常见模型目录名及 `.model`、`.tiktoken`、`.npy` 等模型数据后缀；首包和增量范围均检查，即使增量中先提交后删除也拒绝。检查提前到创建输出目录之前，避免拒绝后遗留空包目录。合成测试 10 项通过，完整 Mac 业务回归 316 项通过、2 项按现有条件跳过、2 个依赖警告；Ruff lint/format、JSON 和 diff 检查通过。该规则是防误混入护栏，不是对任意伪装文件内容的形式化证明；独立模型制品和目标机哈希/版本核验仍必需。
+
+加固版提交 `b85d1c9ca2b9529b204ec1751e75d67526da1ab2` 也已从上版 `b8ac2b240adfe312224b7b435f35f29b3ee06b96` 生成并验证真实增量包：约 8 KiB、manifest SHA-256 `408d52b8cffe033c6c393a9d41d5c6849de1b4e50590e6d4c599d411bad8f29a`，`--reuse-wheelhouse` 通过。两个临时包均未传输宿主模型；该事实不等于目标麒麟已经收到、构建或运行。
