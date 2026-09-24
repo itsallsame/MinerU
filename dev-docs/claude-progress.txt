@@ -716,3 +716,10 @@ Changes: Protected offline release-record creation against overwriting an existi
 Verification: Targeted release tests 17 passed; full Mac business suite 179 passed/1 opt-in skipped after local socket permission; Ruff lint passed. Initial restricted full run failed only on Doclib socket binding. No real linux/amd64 image, model or Kylin/NVIDIA acceptance claim.
 Evidence: dev-docs/evidence/2026-09-24-release-manifest-no-clobber.md
 Next: Obtain/build target linux/amd64 offline images and wheelhouse; verify real model artifacts and four-class annotated samples on isolated Kylin/NVIDIA, including rollback. Keep goal active.
+
+=== 2026-09-24 Session 70 (Offline model manifest no-clobber) ===
+Status: In progress; 70/241 passed; P1 target-machine gates remain incomplete
+Changes: Changed model-manifest generation to immutable, atomic create-only publication; documented version-specific manifest paths and retaining each prior model/manifest pair. No weights, user or permission layer changed.
+Verification: Offline configuration 10 passed; full Mac business suite 182 passed/1 opt-in skipped; Ruff lint and diff check passed. No Kylin/NVIDIA/physical-air-gap claim.
+Evidence: dev-docs/evidence/2026-09-24-model-manifest-no-clobber.md
+Next: Build/import real linux/amd64 offline artifacts, verify model loading and four-class annotated samples on isolated target, then exercise rollback. Keep goal active.

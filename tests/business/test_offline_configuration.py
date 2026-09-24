@@ -28,6 +28,63 @@ def test_model_manifest_round_trip(tmp_path: Path) -> None:
     assert json.loads(manifest_path.read_text())["files"]["weights.safetensors"]
 
 
+def test_model_manifest_never_overwrites_a_previous_version(tmp_path: Path) -> None:
+    model_dir = tmp_path / "models"
+    model_dir.mkdir()
+    (model_dir / "weights.safetensors").write_bytes(b"model-contents")
+    manifest_path = tmp_path / "version-1" / "model-manifest.json"
+    offline_package.create_manifest(model_dir, manifest_path)
+    original = manifest_path.read_bytes()
+
+    with pytest.raises(ValueError, match="already exists"):
+        offline_package.create_manifest(model_dir, manifest_path)
+    assert manifest_path.read_bytes() == original
+    assert not list(manifest_path.parent.glob(f".{manifest_path.name}.*"))
+
+    next_manifest = tmp_path / "version-2" / "model-manifest.json"
+    (model_dir / "weights.safetensors").write_bytes(b"new-model-contents")
+    offline_package.create_manifest(model_dir, next_manifest)
+    assert next_manifest.read_bytes() != original
+    assert manifest_path.read_bytes() == original
+
+
+def test_model_manifest_refuses_symlink_and_model_directory_output(tmp_path: Path) -> None:
+    model_dir = tmp_path / "models"
+    model_dir.mkdir()
+    (model_dir / "weights.safetensors").write_bytes(b"model-contents")
+    original = tmp_path / "original.json"
+    original.write_bytes(b"keep this file")
+    link = tmp_path / "model-manifest.json"
+    link.symlink_to(original)
+
+    with pytest.raises(ValueError, match="already exists"):
+        offline_package.create_manifest(model_dir, link)
+    assert original.read_bytes() == b"keep this file"
+
+    with pytest.raises(ValueError, match="outside the model directory"):
+        offline_package.create_manifest(model_dir, model_dir / "model-manifest.json")
+    assert not (model_dir / "model-manifest.json").exists()
+
+
+def test_model_manifest_concurrent_writer_wins_without_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_dir = tmp_path / "models"
+    model_dir.mkdir()
+    (model_dir / "weights.safetensors").write_bytes(b"model-contents")
+    output = tmp_path / "model-manifest.json"
+
+    def competing_writer(_source: Path, target: Path) -> None:
+        target.write_bytes(b"other writer")
+        raise FileExistsError(target)
+
+    monkeypatch.setattr(offline_package.os, "link", competing_writer)
+    with pytest.raises(FileExistsError):
+        offline_package.create_manifest(model_dir, output)
+    assert output.read_bytes() == b"other writer"
+    assert not list(tmp_path.glob(f".{output.name}.*"))
+
+
 def test_modified_or_missing_model_fails(tmp_path: Path) -> None:
     model_dir = tmp_path / "models"
     model_dir.mkdir()

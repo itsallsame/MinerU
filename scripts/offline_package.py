@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 MANIFEST_SCHEMA = 1
@@ -39,12 +40,26 @@ def create_manifest(root: Path, output: Path) -> dict[str, object]:
     if root.is_symlink():
         raise ValueError("Model directory must not be a symlink")
     root = root.resolve()
+    if output.exists() or output.is_symlink():
+        raise ValueError("Model manifest output already exists; keep prior manifests immutable")
     if output.resolve().is_relative_to(root):
         raise ValueError("Manifest must be outside the model directory")
     files = {path.relative_to(root).as_posix(): sha256_file(path) for path in model_files(root)}
     manifest: dict[str, object] = {"schema": MANIFEST_SCHEMA, "files": files}
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=output.parent, prefix=f".{output.name}.", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return manifest
 
 
