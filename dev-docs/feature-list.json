@@ -3873,7 +3873,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-23",
-      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过；目标麒麟与真实文档未验收。"
+      "notes": "Mac 单元测试、构建与 Playwright 合成记录复核流程通过。候选现在显示 API 提供的 label_rule/native_doc_title 来源和‘未确认’，未知方法不伪称已识别；只改变呈现，不自动形成决定。目标麒麟与真实文档未验收。见 dev-docs/evidence/2026-09-24-candidate-provenance-web.md。"
     },
     {
       "id": "FE-020",

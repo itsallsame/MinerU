@@ -153,7 +153,7 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .field-review { border-top: 1px solid #e8eee8; padding: 15px 0; }.field-review:first-of-type { border-top: 0; }
 .field-heading { display: flex; gap: 8px; align-items: center; font-size: 13px; }.required-tag { color: #b36e42; background: #fff1e7; border-radius: 4px; padding: 2px 5px; font-size: 9px; }
 .review-decision { border-left: 3px solid #60a77b; background: #eff8f0; color: #2f6846; font-size: 11px; padding: 8px 10px; overflow-wrap: anywhere; }
-.candidate-row { display: flex; align-items: center; gap: 7px; padding: 9px 0; border-bottom: 1px solid #f0f2ee; font-size: 11px; }.candidate-row span { flex: 1; overflow-wrap: anywhere; }
+.candidate-row { display: flex; align-items: center; gap: 7px; padding: 9px 0; border-bottom: 1px solid #f0f2ee; font-size: 11px; }.candidate-content { flex: 1; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }.candidate-method { color: #667f6d; font-size: 10px; }
 .candidate-row button, .result-actions button { padding: 6px 8px; font-size: 10px; }
 .field-edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }.field-edit-form textarea { grid-column: 1 / -1; resize: vertical; }.field-edit-form input { grid-column: 1 / -1; }.field-edit-form button { justify-self: start; }
 .field-edit-form textarea, .field-edit-form input, .capture-form input, .issue-form input { border: 1px solid #d9e3da; border-radius: 7px; background: #fff; color: #264537; padding: 9px; font-size: 11px; min-width: 0; }

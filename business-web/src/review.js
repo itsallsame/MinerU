@@ -1,5 +1,5 @@
 import { businessApi } from "./api.js";
-import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "./review-state.js";
+import { canNavigateEvidence, candidateMethodLabel, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "./review-state.js";
 
 const issueLabels = {
   required_missing: "必填字段缺失",
@@ -770,7 +770,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (!candidates.length) card.append(element("p", "review-hint", "暂无机器候选；可在采集证据后人工填写。"));
       for (const candidate of candidates) {
         const row = element("div", "candidate-row");
-        row.append(element("span", "", candidate.value));
+        const content = element("div", "candidate-content");
+        content.append(element("span", "candidate-value", candidate.value));
+        content.append(element("small", "candidate-method", `来源：${candidateMethodLabel(candidate.method)} · 未确认`));
+        row.append(content);
         row.append(button("看证据", () => inspectEvidence(candidate.evidence_id, field.code, candidate.value), state.busy));
         row.append(button("接受候选", () => perform(async (isCurrent) => {
           const runId = state.runId;

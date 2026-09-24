@@ -209,6 +209,7 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 notice.pdf，已解析").click()
             page.get_by_text("机器候选 · 未确认").wait_for()
+            page.get_by_text("来源：显式字段标签 · 未确认").wait_for()
             page.locator('select[aria-label="选择解析修订"]').select_option("rev-0")
             page.get_by_text("解析页范围：1-2", exact=False).wait_for()
             page.get_by_label("历史解析页码").fill("1")

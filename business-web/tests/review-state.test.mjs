@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canNavigateEvidence, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "../src/review-state.js";
+import { canNavigateEvidence, candidateMethodLabel, confirmationBlockers, confirmedResultMarkdown, evidenceHighlightParts, latestDecisions } from "../src/review-state.js";
 
 const template = { fields: [{ code: "title", label: "标题", required: true }, { code: "issuer", label: "发文单位", required: false }] };
 const run = { run: { status: "done" }, issues: [] };
 const decision = { id: "decision-1", field_code: "title", value: "通知", evidence_id: "evidence-1" };
+
+test("candidate method labels preserve distinct provenance without implying confirmation", () => {
+  assert.equal(candidateMethodLabel("label_rule"), "显式字段标签");
+  assert.equal(candidateMethodLabel("native_doc_title"), "MinerU 原生标题块");
+  assert.equal(candidateMethodLabel("future_method"), "来源未识别");
+  assert.equal(candidateMethodLabel("__proto__"), "来源未识别");
+});
 
 test("machine candidates never satisfy required review decisions", () => {
   assert.deepEqual(confirmationBlockers({ ...run, candidates: [{ field_code: "title", value: "通知" }] }, template, [], []), [

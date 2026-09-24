@@ -1048,3 +1048,11 @@ Changes: Ignore only that exact generated hex-anchor form in title block text wh
 Verification: Live Doclib plus extraction targeted 17 passed on Mac; full business suite 305 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This is Flash/CPU HTML, not PDF/vision model quality or isolated Kylin proof.
 Evidence: dev-docs/evidence/2026-09-24-native-title-candidate.md
 Next: Continue P3 field/quality work and seek target hardware plus four-class samples.
+
+=== 2026-09-24 Session 116 (Web candidate provenance) ===
+Status: In progress; Goal and P3/P6 real-sample/target gates remain open
+Discovery: The API distinguished label-rule and native Doclib title candidates, but the Web review form displayed only values; users could not see why a candidate was proposed.
+Changes: Display a safe, human-readable candidate method and explicit unconfirmed status beside each value. Unknown methods are not translated into a false provenance. This is presentation only: acceptance and confirmation remain explicit content decisions, and the open system has no user/role/permission layer.
+Verification: Web Node 13 passed; offline build produced 8 assets; all 24 Chromium regressions passed, including source-label visibility and existing review flow. JSON and diff checks passed. No target Kylin or four-class quality claim.
+Evidence: dev-docs/evidence/2026-09-24-candidate-provenance-web.md
+Next: Continue P3 field/quality work and obtain four-class annotated samples plus isolated Kylin/NVIDIA target access.

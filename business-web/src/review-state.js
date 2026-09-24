@@ -4,6 +4,12 @@ export function latestDecisions(decisions) {
   return latest;
 }
 
+export function candidateMethodLabel(method) {
+  if (method === "label_rule") return "显式字段标签";
+  if (method === "native_doc_title") return "MinerU 原生标题块";
+  return "来源未识别";
+}
+
 export function confirmationBlockers(extraction, template, decisions, results) {
   if (!extraction || extraction.run.status !== "done") return ["字段提取尚未完成。"];
   const latest = latestDecisions(decisions);
