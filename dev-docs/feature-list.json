@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 70,
+  "completed_features": 71,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4927,9 +4927,9 @@
         "实现：Skill写操作流程确认检查",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "自有 Skill 的 upload/extract CLI 写操作必须携带 --confirm-write；文档要求先确认用户明确请求和批准的隔离业务服务，标志不是认证。定向契约 7 通过，真实本地 Web/API/Doclib/Skill opt-in 1 通过。麒麟/真实样本仍未验收。证据：dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md"
     },
     {
       "id": "SKL-018",

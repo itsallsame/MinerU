@@ -85,7 +85,7 @@ def _skill(origin: str, *args: str) -> object:
 
 
 def _verify_live_skill(origin: str) -> None:
-    uploaded = _skill(origin, "upload", str(SAMPLE), "--tier", "flash", "--template", "paper")
+    uploaded = _skill(origin, "upload", str(SAMPLE), "--tier", "flash", "--template", "paper", "--confirm-write")
     assert isinstance(uploaded, dict)
     document = uploaded["document"]
     assert document["sha256"] == hashlib.sha256(SAMPLE.read_bytes()).hexdigest()
@@ -112,7 +112,7 @@ def _verify_live_skill(origin: str) -> None:
     assert isinstance(read, dict)
     assert read["state"] == "historical_parse_unconfirmed"
     assert read["content"].strip()
-    started = _skill(origin, "extract", revision["id"])
+    started = _skill(origin, "extract", revision["id"], "--confirm-write")
     assert isinstance(started, dict)
     run_id = started["id"]
     deadline = time.monotonic() + 90

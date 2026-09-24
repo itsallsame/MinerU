@@ -152,6 +152,7 @@ def parser() -> argparse.ArgumentParser:
     upload.add_argument("file", type=Path)
     upload.add_argument("--tier", choices=("flash", "basic", "standard", "advanced"))
     upload.add_argument("--template")
+    upload.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested upload")
     search = commands.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
@@ -179,6 +180,9 @@ def parser() -> argparse.ArgumentParser:
         ("results", "run_id"), ("result", "result_id"),
     ):
         commands.add_parser(command).add_argument(argument)
+    commands.choices["extract"].add_argument(
+        "--confirm-write", action="store_true", help="Acknowledge an explicitly requested extraction run",
+    )
     return main
 
 
@@ -187,6 +191,8 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command in ("capabilities", "templates", "documents"):
         return client.request("GET", f"/{command}")
     if command == "upload":
+        if not args.confirm_write:
+            raise BusinessAPIError("Upload requires --confirm-write after explicit user approval")
         return client.upload(args.file, tier=args.tier, template=args.template)
     if command == "overview":
         return client.overview(args.document_id)
@@ -217,6 +223,8 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "revisions":
         return client.request("GET", f"/documents/{quote(args.document_id, safe='')}/revisions")
     if command == "extract":
+        if not args.confirm_write:
+            raise BusinessAPIError("Extraction requires --confirm-write after explicit user approval")
         return client.request("POST", f"/revisions/{quote(args.revision_id, safe='')}/extractions")
     if command == "extraction":
         return {"state": "machine_unconfirmed", **client.request("GET", f"/extractions/{quote(args.run_id, safe='')}")}

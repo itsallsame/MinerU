@@ -16,10 +16,10 @@ Run `python3 skills/business-documents/scripts/business_documents.py --help` for
 ```bash
 python3 skills/business-documents/scripts/business_documents.py capabilities
 python3 skills/business-documents/scripts/business_documents.py templates
-python3 skills/business-documents/scripts/business_documents.py upload /path/to/notice.pdf --tier standard --template official_document
+python3 skills/business-documents/scripts/business_documents.py upload /path/to/notice.pdf --tier standard --template official_document --confirm-write
 python3 skills/business-documents/scripts/business_documents.py task TASK_ID
 python3 skills/business-documents/scripts/business_documents.py overview DOCUMENT_ID
-python3 skills/business-documents/scripts/business_documents.py extract REVISION_ID
+python3 skills/business-documents/scripts/business_documents.py extract REVISION_ID --confirm-write
 python3 skills/business-documents/scripts/business_documents.py extraction RUN_ID
 python3 skills/business-documents/scripts/business_documents.py search "年度通知" --limit 20
 python3 skills/business-documents/scripts/business_documents.py search-pages REVISION_ID "年度通知"
@@ -31,7 +31,7 @@ python3 skills/business-documents/scripts/business_documents.py evidence EVIDENC
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
 ```
 
-Upload requires an explicit local file and uses the business service's advertised size/extension/tier limits. PDF/images accept `flash`, `basic`, `standard`, or `advanced`; other supported native formats use Flash with no `--tier`. A response with `submitted`, `queued`, or `running` is **not** a finished parse/extraction; poll the returned task/run ID rather than guessing a completion time. Do not auto-retry failed writes or upload the same file again without the user's direction.
+`upload` and `extract` are write operations. Before using `--confirm-write`, confirm that the user explicitly requested **that file upload** or **that revision's extraction** and that `MINERU_BUSINESS_API_URL` points to the approved isolated business service. If either is unclear, ask first. The flag is an Agent-side acknowledgement, not authentication or an API permission check; never add it automatically merely to bypass an error. Read-only commands do not need it. Upload requires an explicit local file and uses the business service's advertised size/extension/tier limits. PDF/images accept `flash`, `basic`, `standard`, or `advanced`; other supported native formats use Flash with no `--tier`. A response with `submitted`, `queued`, or `running` is **not** a finished parse/extraction; poll the returned task/run ID rather than guessing a completion time. Do not auto-retry failed writes or upload the same file again without the user's direction.
 
 `extraction` returns **machine candidates, not confirmed facts**. Clearly label any answer based on candidates as “机器候选，未人工确认”; include the field, source evidence ID, and unresolved issues. Do not turn a candidate into a confirmed statement merely because it has a locator. `results` and `overview.confirmed_for_latest_run` read immutable **human-confirmed** versions only. `overview` selects the newest parse revision and newest extraction run; if its confirmed result is null, say that **this run** has no confirmed result, not that the document has never had one. Use `revisions` and `results` to inspect older runs. Do not run field decisions, issue resolutions, or result confirmation automatically: those are explicit review steps in the business Web, even though the open API has no permission layer.
 

@@ -730,3 +730,10 @@ Changes: Added ASGI request-body cap before multipart spooling for the open docu
 Verification: New upload ingress tests 4 passed; full Mac business suite 186 passed/1 opt-in skipped; Ruff lint, new-file format and diff check passed. No target Kylin/NVIDIA or real-network acceptance claim.
 Evidence: dev-docs/evidence/2026-09-24-upload-ingress-limit.md
 Next: Validate ingress and Compose on isolated target, obtain four-class annotated samples, and continue remaining business Web/Skill acceptance. Keep goal active.
+
+=== 2026-09-24 Session 72 (SKL-017 write acknowledgement) ===
+Status: In progress; SKL-017 verified complete on Mac (71/241 passed); P5/P6 remain incomplete
+Changes: The fork-owned Skill CLI now requires --confirm-write for upload and extraction, with guidance to check the user's explicit request and approved isolated service. No authentication or permission layer added; read-only commands are unchanged.
+Verification: Exact Skill contract command 7 passed; real local opt-in Web/API/Doclib/Skill flow 1 passed; full Mac business suite 187 passed/1 opt-in skipped; Ruff lint and diff check passed. No Kylin/NVIDIA/air-gap or real-sample claim.
+Evidence: dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md
+Next: Continue P5 Skill/Web state consistency and P4 remaining gaps; obtain controlled four-class samples and isolated target environment for P1/P6. Keep goal active.

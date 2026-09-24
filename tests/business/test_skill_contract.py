@@ -126,6 +126,32 @@ def test_skill_rejects_unconfigured_or_non_plain_business_endpoint(
     assert "confirm" not in script.parser()._subparsers._group_actions[0].choices
 
 
+def test_skill_write_commands_require_explicit_acknowledgement() -> None:
+    script = _script()
+    client = Mock()
+    source = Path("/tmp/not-a-real-document.pdf")
+    for command in (
+        ["upload", str(source), "--tier", "flash"],
+        ["extract", "revision-1"],
+    ):
+        with pytest.raises(script.BusinessAPIError, match="requires --confirm-write"):
+            script.run(script.parser().parse_args(command), client)
+    client.upload.assert_not_called()
+    client.request.assert_not_called()
+
+    client.upload.return_value = {"task": {"status": "submitted"}}
+    uploaded = script.run(
+        script.parser().parse_args(["upload", str(source), "--tier", "flash", "--confirm-write"]), client,
+    )
+    assert uploaded["task"]["status"] == "submitted"
+    client.upload.assert_called_once_with(source, tier="flash", template=None)
+
+    client.request.return_value = {"id": "run-1"}
+    extracted = script.run(script.parser().parse_args(["extract", "revision-1", "--confirm-write"]), client)
+    assert extracted["id"] == "run-1"
+    client.request.assert_called_once_with("POST", "/revisions/revision-1/extractions")
+
+
 def test_skill_overview_separates_unconfirmed_candidates_from_confirmed_result() -> None:
     script = _script()
     responses = {
