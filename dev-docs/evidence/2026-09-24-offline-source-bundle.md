@@ -14,4 +14,10 @@
 
 ## 信任和验收边界
 
-包内哈希与完成标记只检查一致性，不是签名。隔离区须通过独立可信渠道核对预期 manifest 摘要。依赖输入未变也不证明现有 wheelhouse 的内容、Linux Python ABI、NVIDIA 基础镜像或 vLLM/模型兼容。当前本机仅有 arm64 的 `mineru:4.0.2`，缺 amd64 NVIDIA 基础镜像、真实 Linux wheelhouse、模型目录和四类标注样本；因此 INF-026 及目标验收保持未完成，不能声称麒麟离线部署已通过。
+包内哈希与完成标记只检查一致性，不是签名。隔离区须通过独立可信渠道核对预期 manifest 摘要。依赖输入未变也不证明现有 wheelhouse 的内容、Linux Python ABI、NVIDIA 基础镜像或 vLLM/模型兼容。此前本机核对仅有 arm64 的 `mineru:4.0.2`；本轮 Docker daemon 查询超时，无法重验现有镜像。仍缺麒麟目标机上的 amd64 NVIDIA 基础镜像、真实 Linux wheelhouse、模型目录和四类标注样本验收；因此 INF-026 及目标验收保持未完成，不能声称麒麟离线部署已通过。
+
+## 2026-09-24 续测与防混入加固
+
+对真实 fork 的 `978310dc895e16207228b8da04b1795fa002e6e1` → `b8ac2b240adfe312224b7b435f35f29b3ee06b96` 生成并校验了增量源码包。包体约 12 KiB，manifest SHA-256 为 `7b1e4390c9e67db60e5722732a38ebf21c4ee1c091d118c321b1732eaa323a49`；Git bundle refs 精确指向新 `master`，`pyproject.toml` 与 worker 构建依赖输入未变，`--reuse-wheelhouse` 门禁通过。该包位于本机临时目录，是开发验证产物，不是已导入麒麟的发布包；无目标机镜像构建或模型运行结论。
+
+原脚本只按已知权重扩展名拒绝，可能放过误提交到 `models/` 或 `weights/` 的 JSON/词表。现在额外拒绝常见模型目录名及 `.model`、`.tiktoken`、`.npy` 等模型数据后缀；首包和增量范围均检查，即使增量中先提交后删除也拒绝。检查提前到创建输出目录之前，避免拒绝后遗留空包目录。合成测试 10 项通过，完整 Mac 业务回归 316 项通过、2 项按现有条件跳过、2 个依赖警告；Ruff lint/format、JSON 和 diff 检查通过。该规则是防误混入护栏，不是对任意伪装文件内容的形式化证明；独立模型制品和目标机哈希/版本核验仍必需。

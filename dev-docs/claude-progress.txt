@@ -1064,3 +1064,11 @@ Changes: Added conservative `section_heading` candidates for the first page's ex
 Verification: Focused extraction/store/backup/live Doclib tests 47 passed; full Mac business 312 passed/2 skipped/2 dependency warnings. Web Node 13 passed, eight offline assets built, all 24 Chromium regressions passed. Ruff lint, JSON and diff checks passed. Real sample accuracy and target isolated Kylin/NVIDIA are still unproven.
 Evidence: dev-docs/evidence/2026-09-24-abstract-heading-candidate.md
 Next: Continue P3 author/date/keyword and quality work; obtain annotated four-class samples and target Kylin/NVIDIA access. Keep Goal active.
+
+=== 2026-09-24 Session 118 (actual fork incremental source transfer and model guard) ===
+Status: In progress; INF-026 and P1/P6 target acceptance remain open
+Discovery: Docker daemon did not answer even the approved read-only version query; no image build or target claim was made. The source-bundle tool checked known weight extensions but could miss model metadata under a models/weights directory.
+Changes: Generated and verified an actual 12 KiB incremental Git source bundle from 978310dc to b8ac2b24, confirming unchanged dependency inputs and wheelhouse reuse eligibility. Hardened first-snapshot and incremental guards against common model directories and data suffixes; move rejection before output-directory creation, including transiently committed-and-deleted files. No model files or user/permission system were introduced.
+Verification: Targeted source-bundle 10 passed; full Mac business 316 passed/2 skipped/2 dependency warnings; Ruff lint/format, JSON and diff checks passed. Manifest checksum and full commit identities are in the evidence. This is Mac transfer proof only, not Kylin image/model/runtime or real-sample acceptance.
+Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
+Next: Commit and verify the new source guard against actual fork HEAD, then continue offline release and P3/P6 gates. Keep Goal active.

@@ -144,7 +144,7 @@ def test_first_snapshot_excludes_deleted_historical_model_weights(tmp_path: Path
     historical_weight.write_bytes(b"current model bytes")
     _git(repo, "add", "old-model.onnx")
     _git(repo, "commit", "-qm", "restore model")
-    with pytest.raises(ValueError, match="model-weight objects"):
+    with pytest.raises(ValueError, match="model artifacts"):
         offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "refused-snapshot")
 
 
@@ -158,8 +158,37 @@ def test_incremental_bundle_rejects_even_transient_model_weight_commit(tmp_path:
     weight.unlink()
     _git(repo, "add", "-u")
     _git(repo, "commit", "-qm", "remove model")
-    with pytest.raises(ValueError, match="model-weight objects"):
+    with pytest.raises(ValueError, match="model artifacts"):
         offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "unsafe-delta", previous=previous)
+
+
+@pytest.mark.parametrize("path", ["models/config.json", "assets/weights/tokenizer.json", "tokenizer.model"])
+def test_source_package_rejects_model_artifacts_without_weight_suffix(tmp_path: Path, path: str) -> None:
+    repo = _repository(tmp_path)
+    target = repo / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("model artifact", encoding="utf-8")
+    _git(repo, "add", path)
+    _git(repo, "commit", "-qm", "accidental model artifact")
+    with pytest.raises(ValueError, match="model artifacts"):
+        offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "blocked-first")
+    assert not (tmp_path / "blocked-first").exists()
+
+
+def test_incremental_rejects_transient_model_directory_even_after_delete(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    previous = _git(repo, "rev-parse", "HEAD")
+    artifact = repo / "models" / "config.json"
+    artifact.parent.mkdir()
+    artifact.write_text("transient", encoding="utf-8")
+    _git(repo, "add", "models/config.json")
+    _git(repo, "commit", "-qm", "accidental model metadata")
+    artifact.unlink()
+    _git(repo, "add", "-u")
+    _git(repo, "commit", "-qm", "remove model metadata")
+    with pytest.raises(ValueError, match="model artifacts"):
+        offline_source_bundle.create_bundle(repo=repo, output=tmp_path / "blocked-delta", previous=previous)
+    assert not (tmp_path / "blocked-delta").exists()
 
 
 def test_incremental_verifier_requires_exact_clean_target_baseline(tmp_path: Path) -> None:

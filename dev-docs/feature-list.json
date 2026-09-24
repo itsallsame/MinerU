@@ -869,7 +869,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Mac 合成仓库已验证当前树浅层首包/增量 Git 源码包、指定旧提交快进、宿主模型目录不变，且拒绝历史或增量范围内权重混入；真实 fork 历史包含已删除旧权重，完整 Git bundle 不可用。仍缺麒麟 amd64/NVIDIA 上的真实制品传输、构建及模型挂载验收。见 dev-docs/evidence/2026-09-24-offline-source-bundle.md。"
+      "notes": "Mac 合成仓库已验证当前树浅层首包/增量 Git 源码包、指定旧提交快进、宿主模型目录不变，且拒绝历史或增量范围内权重混入；真实 fork 历史包含已删除旧权重，完整 Git bundle 不可用。真实 fork 的近期代码更新已生成并校验约 12 KiB 增量包，依赖输入不变可复用 wheelhouse；防误混入检查扩展到模型目录和数据后缀，拒绝前不创建包目录。仍缺麒麟 amd64/NVIDIA 上的真实制品传输、构建及模型挂载验收。见 dev-docs/evidence/2026-09-24-offline-source-bundle.md。"
     },
     {
       "id": "INF-027",

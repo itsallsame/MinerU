@@ -14,7 +14,35 @@ from pathlib import Path
 COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 DEPENDENCY_INPUTS = ("pyproject.toml", "docker/worker/build-requirements.in")
-WEIGHT_SUFFIXES = {".safetensors", ".onnx", ".pt", ".pth", ".gguf", ".ckpt", ".bin"}
+WEIGHT_SUFFIXES = {
+    ".safetensors",
+    ".onnx",
+    ".pt",
+    ".pth",
+    ".gguf",
+    ".ckpt",
+    ".bin",
+    ".model",
+    ".tiktoken",
+    ".ggml",
+    ".ot",
+    ".npy",
+    ".npz",
+    ".h5",
+    ".hdf5",
+    ".pb",
+    ".pdparams",
+}
+MODEL_DIRECTORY_NAMES = {
+    "models",
+    "model-weights",
+    "model_weights",
+    "weights",
+    "checkpoints",
+    "snapshots",
+    "mineru-4_models_torch",
+    "mineru2.5-pro-2605-1.2b",
+}
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -49,9 +77,14 @@ def _source_files(repo: Path, *revisions: str) -> list[str]:
 
 
 def _reject_weights(paths: list[str]) -> None:
-    offenders = [path for path in paths if Path(path).suffix.lower() in WEIGHT_SUFFIXES]
+    offenders = [
+        path
+        for path in paths
+        if Path(path).suffix.lower() in WEIGHT_SUFFIXES
+        or any(part.lower() in MODEL_DIRECTORY_NAMES for part in Path(path).parts[:-1])
+    ]
     if offenders:
-        raise ValueError(f"Source package would include model-weight objects: {offenders[:3]}")
+        raise ValueError(f"Source package would include model artifacts: {offenders[:3]}")
 
 
 def _tree_hashes(root: Path) -> dict[str, str]:
@@ -120,13 +153,13 @@ def create_bundle(*, repo: Path, output: Path, previous: str | None = None, reus
         )
         if changed.returncode != 0:
             raise ValueError("Dependency inputs changed; prepare and verify a new Linux wheelhouse")
-    output.mkdir(mode=0o700)
     if previous is None:
         # Git bundles of full fork history would include deleted historical model
         # weights. A depth-one bare clone keeps the exact upstream commit ID while
         # transferring only the current tree and a shallow boundary.
         current_paths = _git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
         _reject_weights(current_paths)
+        output.mkdir(mode=0o700)
         snapshot = output / "source.git"
         subprocess.run(
             [
@@ -152,6 +185,7 @@ def create_bundle(*, repo: Path, output: Path, previous: str | None = None, reus
         format_name = "shallow-snapshot"
     else:
         _reject_weights(_source_files(repo, revision, f"^{previous}"))
+        output.mkdir(mode=0o700)
         bundle = output / "source.bundle"
         _git(repo, "bundle", "create", str(bundle), "HEAD", "master", f"^{previous}")
         _git(repo, "bundle", "verify", str(bundle))
