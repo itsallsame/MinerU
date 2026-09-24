@@ -751,3 +751,10 @@ Changes: Reproduced and fixed the Web skip link that changed #main without movin
 Verification: Initial browser run failed on the new focus assertion; final Web 11 Node tests/8-asset build and 19 Chromium regressions passed, including extra outline/Tab checks. Mac synthetic API only; no screen-reader or Kylin claim.
 Evidence: dev-docs/evidence/2026-09-24-skip-link-focus.md
 Next: Continue FE-046 full keyboard/screen-reader audit, FE-047 error recovery, and the Doclib-aware cancellation/structure-edit scopes; P1/P6 target gates remain. Keep goal active.
+
+=== 2026-09-24 Session 75 (FE-047 review evidence recovery) ===
+Status: In progress; 74/241 passed; FE-047 remains incomplete
+Changes: Fixed a review-panel false-empty state when extraction completes but the frozen evidence list fails to load. The UI now identifies evidence/field associations as unknown and offers repeatable in-place retry; run reload cannot silently clear the failure. No user/permission layer added.
+Verification: Browser regression reproduced missing retry before fix; final Web 11 Node tests, 8-asset offline build and 19 Chromium regressions passed, including repeated evidence failure then recovery. Mac synthetic API only; no Kylin/GPU or real annotated sample claim.
+Evidence: dev-docs/evidence/2026-09-24-review-evidence-recovery.md
+Next: Continue FE-047 remaining async paths, FE-046 screen-reader audit, and P1/P6 target validation. Keep goal active.

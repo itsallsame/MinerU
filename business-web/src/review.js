@@ -53,7 +53,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     selectedFieldCode: null, inspectionHighlightValue: null,
     sourcePageNo: null,
     revisionLoading: false, runLoading: false,
-    revisionLoadFailed: false, runLoadFailed: false, targetRunId: null, contextVersion: 0,
+    revisionLoadFailed: false, runLoadFailed: false, evidenceLoadFailed: false,
+    evidenceLoading: false, targetRunId: null, contextVersion: 0,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -79,6 +80,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runLoading = false;
     state.revisionLoadFailed = false;
     state.runLoadFailed = false;
+    state.evidenceLoadFailed = false;
+    state.evidenceLoading = false;
     state.targetRunId = null;
     state.busy = false;
     state.error = "";
@@ -186,6 +189,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.revisionLoadFailed = false;
     state.runLoading = false;
     state.runLoadFailed = false;
+    state.evidenceLoadFailed = false;
+    state.evidenceLoading = false;
     state.error = "";
     render();
     try {
@@ -237,6 +242,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.runLoading = false;
     state.revisionLoadFailed = false;
     state.runLoadFailed = false;
+    state.evidenceLoadFailed = false;
+    state.evidenceLoading = false;
     state.targetRunId = null;
     state.reading = null;
     state.outline = null;
@@ -274,23 +281,37 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     });
   }
 
+  async function refreshEvidence() {
+    if (state.evidenceLoading || !state.revisionId) return;
+    const revisionId = state.revisionId;
+    const runId = state.runId;
+    const contextVersion = state.contextVersion;
+    state.evidenceLoading = true;
+    render();
+    try {
+      const evidence = await businessApi.revisionEvidence(revisionId);
+      if (contextVersion !== state.contextVersion || runId !== state.runId) return;
+      state.evidence = evidence;
+      state.evidenceLoadFailed = false;
+      state.error = "";
+    } catch (error) {
+      if (contextVersion !== state.contextVersion || runId !== state.runId) return;
+      state.evidenceLoadFailed = true;
+      state.error = `证据列表读取失败：${error.message}`;
+    } finally {
+      if (contextVersion === state.contextVersion && runId === state.runId) {
+        state.evidenceLoading = false;
+        render();
+      }
+    }
+  }
+
   async function refreshActive() {
     if (!state.runId || !["queued", "running"].includes(state.extraction?.run.status) || state.busy) return;
     const runId = state.runId;
     await loadRun(runId);
     if (state.runId === runId && state.extraction?.run.status === "done") {
-      const revisionId = state.revisionId;
-      const contextVersion = state.contextVersion;
-      try {
-        const evidence = await businessApi.revisionEvidence(revisionId);
-        if (contextVersion !== state.contextVersion || runId !== state.runId) return;
-        state.evidence = evidence;
-        render();
-      } catch (error) {
-        if (contextVersion !== state.contextVersion || runId !== state.runId) return;
-        state.error = `证据列表读取失败：${error.message}`;
-        render();
-      }
+      await refreshEvidence();
     }
   }
 
@@ -903,6 +924,13 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
     ));
     root.append(tools);
+    if (state.evidenceLoadFailed || state.evidenceLoading) {
+      root.append(element("p", "review-hint", "冻结证据列表尚未成功读取；证据及字段关联状态未知。"));
+      if (state.evidenceLoadFailed) {
+        root.append(button("重试读取证据列表", refreshEvidence, state.evidenceLoading));
+      }
+      return;
+    }
     const sourceLinks = renderSourceFieldIndex();
     const diff = renderRevisionDiff();
     root.append(...(sourceLinks ? [sourceLinks] : []), ...(diff ? [diff] : []), renderOutline(), renderStructure(), renderReading(), renderEvidence());

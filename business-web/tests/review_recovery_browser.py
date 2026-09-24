@@ -29,7 +29,7 @@ def main(base_url: str) -> None:
         "template_version": 1, "status": "done", "error_code": None,
         "created_at_ms": now, "updated_at_ms": now,
     }
-    failures = {"revisions": True, "extractions": True, "run": True}
+    failures = {"revisions": True, "extractions": True, "run": True, "evidence": False}
 
     def route_api(route: object) -> None:
         path = route.request.url.split("/api/business", 1)[1].split("?", 1)[0]
@@ -41,6 +41,9 @@ def main(base_url: str) -> None:
             return
         if path == "/extractions/run-1" and failures["run"]:
             route.fulfill(status=503, content_type="application/json", body='{"detail":"run_unavailable"}')
+            return
+        if path == "/revisions/rev-1/evidence" and failures["evidence"]:
+            route.fulfill(status=503, content_type="application/json", body='{"detail":"evidence_unavailable"}')
             return
         if path == "/capabilities":
             payload = {"max_upload_bytes": 1000000, "parseable_extensions": ["pdf"],
@@ -96,12 +99,24 @@ def main(base_url: str) -> None:
             assert page.get_by_text("正在读取提取运行…").count() == 0
 
             failures["run"] = False
+            run["status"] = "queued"
             page.get_by_role("button", name="重试读取提取运行").click()
-            page.get_by_text("候选字段", exact=False).wait_for()
+            page.get_by_text("字段提取正在后台执行", exact=False).wait_for()
             assert page.get_by_role("button", name="重试读取提取运行").count() == 0
             assert page.locator("#workbench .error-banner").count() == 0
+            failures["evidence"] = True
+            run["status"] = "done"
+            page.get_by_text("证据列表读取失败：evidence_unavailable").wait_for(timeout=10000)
+            assert page.get_by_text("冻结证据列表尚未成功读取；证据及字段关联状态未知。").count() == 1
+            assert page.get_by_role("heading", name="字段候选与人工决定").count() == 0
+            page.get_by_role("button", name="重试读取证据列表").click()
+            page.get_by_text("证据列表读取失败：evidence_unavailable").wait_for()
+            failures["evidence"] = False
+            page.get_by_role("button", name="重试读取证据列表").click()
+            page.get_by_text("候选字段", exact=False).wait_for()
+            assert page.get_by_text("证据列表读取失败：evidence_unavailable").count() == 0
             assert not errors, errors
-            print("Playwright review recovery passed: revision list, parse revision and extraction run retries")
+            print("Playwright review recovery passed: revision list, parse revision, extraction run and evidence retries")
         finally:
             browser.close()
 
