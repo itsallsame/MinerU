@@ -170,6 +170,60 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "COPY models/" not in dockerfile
 
 
+def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Path) -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("Docker CLI is unavailable")
+    probe = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=10, check=False)
+    if probe.returncode:
+        pytest.skip("Docker daemon is unavailable")
+
+    context = tmp_path / "context"
+    context.mkdir()
+    shutil.copy2(ROOT / ".dockerignore", context / ".dockerignore")
+    fixtures = {
+        "pyproject.toml": "[project]\nname='probe'\n",
+        "README.md": "readme",
+        "LICENSE.md": "license",
+        "mineru/keep.py": "source",
+        "mineru/accidental-model.safetensors": "private-weight",
+        "mineru/private.sqlite3": "private-database",
+        "mineru/.env.local": "private-config",
+        "scripts/offline_package.py": "package",
+        "scripts/other.py": "excluded",
+        "docker/worker/entrypoint.sh": "entrypoint",
+        "business-web/dist/index.html": "web",
+        "business-web/src/private.js": "excluded",
+        "wheelhouse/requirements.lock": "lock",
+        "wheelhouse/probe.whl": "wheel",
+        "wheelhouse/private.txt": "excluded",
+        "models-v2/weights.onnx": "private-weight",
+        "new-customer-data/private.txt": "private-document",
+        "business-data/private.sqlite3": "private-database",
+        "secret.env": "private-config",
+    }
+    for name, content in fixtures.items():
+        path = context / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    (context / "Dockerfile").write_text("FROM scratch\nCOPY . /payload/\n")
+    output = tmp_path / "output"
+    subprocess.run(
+        [
+            "docker", "buildx", "build", "--pull=false", "--network=none", "--progress=quiet",
+            f"--output=type=local,dest={output}", "-f", str(context / "Dockerfile"), str(context),
+        ],
+        capture_output=True, text=True, timeout=90, check=True,
+    )
+    for name in ("mineru/keep.py", "scripts/offline_package.py", "business-web/dist/index.html",
+                 "wheelhouse/requirements.lock", "wheelhouse/probe.whl"):
+        assert (output / "payload" / name).is_file(), name
+    for name in ("mineru/accidental-model.safetensors", "mineru/private.sqlite3", "mineru/.env.local",
+                 "scripts/other.py",
+                 "business-web/src/private.js", "wheelhouse/private.txt", "models-v2/weights.onnx",
+                 "new-customer-data/private.txt", "business-data/private.sqlite3", "secret.env"):
+        assert not (output / "payload" / name).exists(), name
+
+
 def test_business_worker_retains_parse_history_for_evidence() -> None:
     compose = (ROOT / "docker" / "compose.business.yaml").read_text()
     worker = compose.split("  doclib-worker:", 1)[1]

@@ -4,7 +4,7 @@
 
 ## 制品边界
 
-- 代码镜像：从本 fork 的确定提交分别构建 `docker/worker/Dockerfile` 与 `docker/business-api/Dockerfile`。二者都只复制源码和预先准备的 `wheelhouse/`，没有模型权重；业务镜像还复制由 `business-web/` 构建的静态 `dist/`，并设置 `MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist`，不依赖 Python 安装后文件所在路径推算页面位置。依赖安装层在源码复制前，源码变更通常只产生较小的后续层。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。当前两个 Dockerfile 可共用这一基础镜像及锁定依赖，但业务 API 不挂模型、不申请 GPU。
+- 代码镜像：从本 fork 的确定提交分别构建 `docker/worker/Dockerfile` 与 `docker/business-api/Dockerfile`。`.dockerignore` 采用构建必需文件白名单，未知名称的模型/业务数据目录不会发送给 Docker daemon；源码树内误放的常见权重、文档和数据库格式也排除。两个镜像只复制源码和预先准备的 `wheelhouse/`，没有模型权重；业务镜像还复制由 `business-web/` 构建的静态 `dist/`，并设置 `MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist`，不依赖 Python 安装后文件所在路径推算页面位置。依赖安装层在源码复制前，源码变更通常只产生较小的后续层。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。当前两个 Dockerfile 可共用这一基础镜像及锁定依赖，但业务 API 不挂模型、不申请 GPU。
 - 模型：在联网准备机按目标 Torch + vLLM 组合取得完整权重，生成 `model-manifest.json`，通过批准介质分别导入麒麟宿主目录。`compose.business.yaml` 将模型和清单只读挂载；启动时先比对清单本身与所选发布记录的 SHA-256，再逐文件验证模型，并检查 Torch 与 vLLM 两个必需模型仓库的 MinerU 完整标记。更换模型不需要重建代码镜像，但必须重新生成清单和发布记录并做回归。
 - 运行数据：Doclib 的 `MINERU_HOME` 持久挂载；共享原文件目录 `/srv/mineru-inbox` 在 worker 中只读、业务 API 中可写，且必须是**同一宿主目录与同一容器绝对路径**。业务 SQLite 目录另行持久挂载，三者都不进入代码镜像。业务 API 启动时只初始化新的业务库、校验已有上传目录，并以显式内部 URL 连接 Doclib；不在启动时要求 worker 已可用。
 - 业务证据引用历史 parse ID。Doclib 默认压缩可能合并/删除旧批次；本 Compose 将 `MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0`，保留历史解析文件以供版本绑定证据读取。需要监测 Doclib 目录增长，并把业务 SQLite、原文件和 Doclib 目录做一致备份；不得在业务修订仍引用时手动清理相关批次。

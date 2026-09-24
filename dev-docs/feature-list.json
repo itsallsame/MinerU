@@ -383,9 +383,9 @@
         "实现：构建上下文排除模型目录",
         "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Docker 实际 scratch 构建验证白名单上下文排除新命名模型目录及误放在源码树内的权重；目标镜像构建另属 P1/P6。证据：dev-docs/evidence/2026-09-24-build-context-allowlist.md"
     },
     {
       "id": "INF-005",
@@ -405,9 +405,9 @@
         "实现：构建上下文排除用户文档目录",
         "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Docker 实际 scratch 构建验证白名单上下文不发送新命名的客户文档目录；生产真实数据仍必须放在宿主挂载中。证据：dev-docs/evidence/2026-09-24-build-context-allowlist.md"
     },
     {
       "id": "INF-006",
@@ -427,9 +427,9 @@
         "实现：构建上下文排除文档库数据目录",
         "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "白名单仅包含源码、离线 wheel 与 Web 成品，文档库运行数据不在 Docker 构建上下文；已用实际 scratch 构建验证排除。目标现场数据隔离仍待 P6。证据：dev-docs/evidence/2026-09-24-build-context-allowlist.md"
     },
     {
       "id": "INF-007",
@@ -449,9 +449,9 @@
         "实现：构建上下文排除业务数据库文件",
         "验证：.venv/bin/python -m pytest tests/business/test_offline_configuration.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Docker 实际 scratch 构建验证根目录及误放源码树的 SQLite 文件均未进入上下文；业务数据库继续由宿主挂载。证据：dev-docs/evidence/2026-09-24-build-context-allowlist.md"
     },
     {
       "id": "INF-008",

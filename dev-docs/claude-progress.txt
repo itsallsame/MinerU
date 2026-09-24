@@ -779,3 +779,10 @@ Changes: Real Compose rendering revealed all six short-form bind mounts would au
 Verification: Offline config 11 passed; business-server plus config 16 passed; full Mac business suite 192 passed/1 skipped; Ruff/diff checks passed. No actual target mount/GPU/model claim.
 Evidence: dev-docs/evidence/2026-09-24-compose-no-autocreate.md
 Next: Validate Compose plugin, mount permissions and model startup on Kylin; continue Doclib-aware cancellation contract and real-sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 79 (P1 build-context allowlist) ===
+Status: In progress; INF-004..007 verified complete on Mac Docker (78/241 passed); P1 target-machine gates remain incomplete
+Changes: Replaced blacklist .dockerignore with a minimal offline code-image allowlist so renamed model/data directories never enter Docker context. Added suffix defenses inside allowed source trees. A first real scratch build exposed a nested-rule leak, which was corrected and reverified. No user/auth/permission layer or model-in-image change.
+Verification: Exact offline feature command 12 passed with Docker daemon; full Mac business suite 193 passed/1 skipped; Ruff and diff checks passed. Synthetic sentinels prove context filtering, not a target amd64 image build.
+Evidence: dev-docs/evidence/2026-09-24-build-context-allowlist.md
+Next: Obtain target amd64 NVIDIA base image and Linux wheelhouse; execute real image/model/air-gap chain and annotated sample acceptance. Continue P4 cancellation/accessibility gaps. Keep goal active.
