@@ -194,7 +194,7 @@ def create_backup(
         release = json.loads(release_manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise BackupError("Release manifest is unreadable") from exc
-    if not isinstance(release, dict) or release.get("schema") != 3:
+    if not isinstance(release, dict) or release.get("schema") != 4:
         raise BackupError("Release manifest schema is unsupported")
     check_stopped()
     _verify_business_database(sources["business"] / "business.sqlite3")
@@ -235,10 +235,13 @@ def verify_backup(backup: Path) -> dict[str, Any]:
         raise BackupError("Backup completion marker does not match its manifest")
     try:
         record = json.loads(manifest.read_text(encoding="utf-8"))
+        release_record = json.loads(release.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise BackupError("Backup manifest is unreadable") from exc
+        raise BackupError("Backup manifest or release is unreadable") from exc
     if not isinstance(record, dict) or record.get("schema") != 1 or record.get("business_schema") != 10:
         raise BackupError("Backup manifest has an unsupported identity")
+    if not isinstance(release_record, dict) or release_record.get("schema") != 4:
+        raise BackupError("Backup release schema is unsupported")
     directories_by_name, files_by_name = record.get("directories"), record.get("files")
     if (
         not isinstance(directories_by_name, dict)

@@ -173,7 +173,10 @@ def test_worker_build_uses_local_source_only() -> None:
 def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Path) -> None:
     if shutil.which("docker") is None:
         pytest.skip("Docker CLI is unavailable")
-    probe = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=10, check=False)
+    try:
+        probe = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        pytest.skip("Docker daemon did not respond within the bounded probe")
     if probe.returncode:
         pytest.skip("Docker daemon is unavailable")
 

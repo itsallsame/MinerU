@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from mineru.model.registry import MINERU_2_5_PRO_2605_1_2B, MINERU_4_MODELS_TORCH
+
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("release_manifest", ROOT / "scripts" / "release_manifest.py")
 assert SPEC is not None and SPEC.loader is not None
@@ -44,7 +46,18 @@ def _artifacts(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     (wheelhouse / "requirements.lock").write_text("demo==1.0 --hash=sha256:" + "d" * 64)
     (wheelhouse / "demo-1.0-py3-none-any.whl").write_bytes(b"wheel")
     model_manifest = tmp_path / "model-manifest.json"
-    model_manifest.write_text(json.dumps({"schema": 1, "files": {"weights.bin": "e" * 64}}))
+    model_repos = (MINERU_4_MODELS_TORCH, MINERU_2_5_PRO_2605_1_2B)
+    source_lock = tmp_path / ".mineru_source_lock.json"
+    source_lock.write_text(json.dumps({
+        "schema": 1, "source": "huggingface",
+        "repos": [{"repo": repo.name, "repo_id": repo.repos["huggingface"],
+                   "revision": str(index + 1) * 40, "file_count": 1}
+                  for index, repo in enumerate(model_repos)],
+    }))
+    model_manifest.write_text(json.dumps({"schema": 1, "files": {
+        ".mineru_source_lock.json": hashlib.sha256(source_lock.read_bytes()).hexdigest(),
+        **{f"{repo.local_name}/weights.bin": "e" * 64 for repo in model_repos},
+    }}))
     web_dist = tmp_path / "web-dist"
     web_dist.mkdir()
     index = web_dist / "index.html"
@@ -63,15 +76,59 @@ def test_release_record_binds_code_image_deps_and_models(tmp_path: Path) -> None
         base=_image(BASE_ID),
         wheelhouse=wheelhouse,
         model_manifest=model_manifest,
+        model_source_lock=model_manifest.parent / ".mineru_source_lock.json",
         web_dist=web_dist,
     )
     assert record["source_revision"] == REVISION
-    assert record["schema"] == 3
+    assert record["schema"] == 4
     assert record["worker_image_id"] == IMAGE_ID
     assert record["business_image_id"] == BUSINESS_ID
-    assert record["model"]["file_count"] == 1
+    assert record["model"]["file_count"] == 3
+    assert [item["revision"] for item in record["model"]["repositories"]] == ["1" * 40, "2" * 40]
     assert "requirements.lock" in record["wheelhouse"]["files"]
     assert record["business_web"]["manifest_sha256"] == web_sha256
+
+
+@pytest.mark.parametrize(
+    "change, expected",
+    [
+        ("missing", "source lock is missing"),
+        ("unbound", "not bound"),
+        ("wrong_revision", "repository identity"),
+        ("wrong_repo", "repository identity"),
+        ("wrong_count", "file count differs"),
+    ],
+)
+def test_release_record_rejects_unverifiable_model_origin(tmp_path: Path, change: str, expected: str) -> None:
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    source_lock = model_manifest.parent / ".mineru_source_lock.json"
+    if change == "missing":
+        source_lock.unlink()
+    elif change == "unbound":
+        source_lock.write_text(source_lock.read_text() + " ")
+    else:
+        lock = json.loads(source_lock.read_text())
+        if change == "wrong_revision":
+            lock["repos"][0]["revision"] = "main"
+        elif change == "wrong_repo":
+            lock["repos"][0]["repo_id"] = "unapproved/repo"
+        else:
+            lock["repos"][0]["file_count"] = 2
+        source_lock.write_text(json.dumps(lock))
+        manifest = json.loads(model_manifest.read_text())
+        manifest["files"][".mineru_source_lock.json"] = hashlib.sha256(source_lock.read_bytes()).hexdigest()
+        model_manifest.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match=expected):
+        release_manifest.build_release_record(
+            revision=REVISION,
+            worker=_image(IMAGE_ID, revision=REVISION),
+            business=_image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
+            base=_image(BASE_ID),
+            wheelhouse=wheelhouse,
+            model_manifest=model_manifest,
+            model_source_lock=source_lock,
+            web_dist=web_dist,
+        )
 
 
 def test_release_record_rejects_wrong_architecture_and_revision(tmp_path: Path) -> None:
@@ -83,6 +140,7 @@ def test_release_record_rejects_wrong_architecture_and_revision(tmp_path: Path) 
         "base": _image(BASE_ID),
         "wheelhouse": wheelhouse,
         "model_manifest": model_manifest,
+        "model_source_lock": model_manifest.parent / ".mineru_source_lock.json",
         "web_dist": web_dist,
     }
     with pytest.raises(ValueError, match="linux/amd64"):
@@ -118,6 +176,7 @@ def test_release_record_rejects_forged_base_label_without_matching_layers(tmp_pa
         "base": _image(BASE_ID),
         "wheelhouse": wheelhouse,
         "model_manifest": model_manifest,
+        "model_source_lock": model_manifest.parent / ".mineru_source_lock.json",
         "web_dist": web_dist,
     }
     wrong_worker = _image(IMAGE_ID, revision=REVISION)
@@ -143,6 +202,7 @@ def test_release_record_rejects_unbound_or_changed_web_assets(tmp_path: Path) ->
         "base": _image(BASE_ID),
         "wheelhouse": wheelhouse,
         "model_manifest": model_manifest,
+        "model_source_lock": model_manifest.parent / ".mineru_source_lock.json",
         "web_dist": web_dist,
     }
     with pytest.raises(ValueError, match="Web asset manifest label"):
@@ -163,6 +223,7 @@ def test_release_record_rejects_incomplete_artifacts(tmp_path: Path) -> None:
             base=_image(BASE_ID),
             wheelhouse=wheelhouse,
             model_manifest=model_manifest,
+            model_source_lock=model_manifest.parent / ".mineru_source_lock.json",
             web_dist=web_dist,
         )
 
@@ -183,6 +244,7 @@ def test_release_record_rejects_wheelhouse_files_excluded_from_docker_context(
             base=_image(BASE_ID),
             wheelhouse=wheelhouse,
             model_manifest=model_manifest,
+            model_source_lock=model_manifest.parent / ".mineru_source_lock.json",
             web_dist=web_dist,
         )
 
@@ -221,6 +283,8 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
             str(wheelhouse),
             "--model-manifest",
             str(model_manifest),
+            "--model-source-lock",
+            str(model_manifest.parent / ".mineru_source_lock.json"),
             "--web-dist",
             str(web_dist),
             "--output",
@@ -276,7 +340,7 @@ def test_release_output_cannot_follow_symlink_to_prior_release(tmp_path: Path) -
 
 def test_release_writer_creates_once_without_overwriting(tmp_path: Path) -> None:
     output = tmp_path / "nested" / "release.json"
-    record = {"schema": 3, "source_revision": REVISION}
+    record = {"schema": 4, "source_revision": REVISION}
     release_manifest._write_new_release(output, record)
     original = output.read_bytes()
     assert json.loads(original) == record

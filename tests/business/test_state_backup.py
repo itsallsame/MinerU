@@ -38,8 +38,22 @@ def _state(root: Path) -> tuple[Path, Path, Path, Path]:
         request_key="backup-replay-request-key",
     )
     release = root / "release.json"
-    release.write_text(json.dumps({"schema": 3, "source_revision": "a" * 40}), encoding="utf-8")
+    release.write_text(json.dumps({"schema": 4, "source_revision": "a" * 40}), encoding="utf-8")
     return business, doclib, shared, release
+
+
+def test_backup_refuses_unshipped_older_release_schema(tmp_path: Path) -> None:
+    business, doclib, shared, release = _state(tmp_path)
+    release.write_text(json.dumps({"schema": 3, "source_revision": "a" * 40}))
+    with pytest.raises(backup.BackupError, match="schema is unsupported"):
+        backup.create_backup(
+            business_dir=business,
+            doclib_dir=doclib,
+            shared_documents_dir=shared,
+            release_manifest=release,
+            output=tmp_path / "backup",
+            check_stopped=lambda: None,
+        )
 
 
 def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) -> None:
@@ -154,7 +168,7 @@ def test_restore_requires_exact_selected_release_before_writing(tmp_path: Path) 
         check_stopped=lambda: None,
     )
     other_release = tmp_path / "other-release.json"
-    other_release.write_text(json.dumps({"schema": 3, "source_revision": "b" * 40}), encoding="utf-8")
+    other_release.write_text(json.dumps({"schema": 4, "source_revision": "b" * 40}), encoding="utf-8")
     destinations = {
         "business_dir": tmp_path / "restored-business",
         "doclib_dir": tmp_path / "restored-doclib",

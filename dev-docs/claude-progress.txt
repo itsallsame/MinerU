@@ -1017,3 +1017,11 @@ Verification: Mac fake-provider and offline-configuration tests 23 passed/1 skip
 Limits: No real weights downloaded, no Linux amd64 connected preparation host, no isolated Kylin/NVIDIA model load or four-class labeled-sample acceptance. Current Mac disk space is insufficient for safe real-weight staging. Keep P1/P6 and Goal active.
 Evidence: dev-docs/evidence/2026-09-24-pinned-model-preparation.md
 Next: Obtain approved exact model SHAs, target-compatible amd64 base/wheelhouse and isolated Kylin hardware for actual artifact and runtime validation; continue product work without adding identity/permission layers.
+
+=== 2026-09-24 Session 112 (model provenance through offline release) ===
+Status: In progress; P1/P6 target hardware, model-loading and real-sample gates remain open
+Changes: Required the pinned model source lock at release-record creation, checked its SHA-256 against the model manifest and its fixed Torch/vLLM repository identities, exact commits and file counts, and recorded both commits in release schema 4. Imported-artifact verification now rebuilds from the mounted source lock; runtime preflight and state backup require schema 4. Unshipped schema 3 prototype is not migrated. Docker-daemon probe timeout is an explicit local test skip, not a false code failure. No user/login/role/permission management was added.
+Verification: Focused release/verification/backup/model preparation tests 97 passed/1 skipped; final full Mac business suite 296 passed/2 skipped/2 existing dependency warnings with authorized local Doclib socket access. Ruff lint, direct release CLI help, new-file format and diff checks passed. The earlier full run had one Docker info timeout, then the bounded probe was made an explicit skip and the suite rerun successfully.
+Limits: No genuine Linux amd64 images, model weights, isolated Kylin/NVIDIA runtime or four-class labeled samples. Source lock and hashes are not signatures or model compatibility proof; keep Goal active.
+Evidence: dev-docs/evidence/2026-09-24-model-source-release-binding.md
+Next: Obtain approved model commits and target-compatible base/wheelhouse; on isolated Kylin execute full artifact, runtime, GPU and sample gates. Continue Mac product gaps without an identity layer.

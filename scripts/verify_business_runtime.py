@@ -111,7 +111,7 @@ def check_runtime(
     cuda: dict[str, Any],
     host_gpu_lines: list[str],
 ) -> dict[str, Any]:
-    if release.get("schema") != 3 or release.get("platform") != "linux/amd64":
+    if release.get("schema") != 4 or release.get("platform") != "linux/amd64":
         raise ValueError("Selected release is not a Linux amd64 release")
     _validated_bind(business_bind)
     if not (1 <= business_port <= 65535):

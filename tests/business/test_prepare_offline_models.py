@@ -93,6 +93,10 @@ def test_exact_commits_are_downloaded_and_hashed(tmp_path: Path, monkeypatch: py
     lock = json.loads((model_dir / ".mineru_source_lock.json").read_text())
     assert [item["revision"] for item in lock["repos"]] == [SMALL_SHA, VLM_SHA]
     assert offline_package.verify_manifest(model_dir, manifest) == 13
+    assert (
+        offline_package.validate_source_lock(model_dir / ".mineru_source_lock.json", json.loads(manifest.read_text()))
+        == lock["repos"]
+    )
     assert not list(model_dir.rglob(".cache"))
     assert (model_dir / MINERU_2_5_PRO_2605_1_2B.local_name / ".mineru_complete").is_file()
     with pytest.raises(ValueError, match="immutable"):

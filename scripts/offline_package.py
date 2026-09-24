@@ -6,12 +6,53 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
 
 MANIFEST_SCHEMA = 1
 CHUNK_SIZE = 1024 * 1024
+SOURCE_LOCK_NAME = ".mineru_source_lock.json"
+_COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
+
+
+def validate_source_lock(lock_path: Path, manifest: dict[str, object]) -> list[dict[str, object]]:
+    """Bind approved model repository commits to the hashed model-file manifest."""
+    from mineru.model.registry import MINERU_2_5_PRO_2605_1_2B, MINERU_4_MODELS_TORCH
+
+    if lock_path.name != SOURCE_LOCK_NAME or not lock_path.is_file() or lock_path.is_symlink():
+        raise ValueError("Model source lock is missing or invalid")
+    files = manifest.get("files")
+    if not isinstance(files, dict) or files.get(SOURCE_LOCK_NAME) != sha256_file(lock_path):
+        raise ValueError("Model source lock is not bound to the model manifest")
+    if any(not isinstance(name, str) for name in files):
+        raise ValueError("Model manifest contains an invalid file name")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if not isinstance(lock, dict) or lock.get("schema") != 1 or lock.get("source") != "huggingface":
+        raise ValueError("Model source lock has an unsupported schema or provider")
+    repos = lock.get("repos")
+    expected = (MINERU_4_MODELS_TORCH, MINERU_2_5_PRO_2605_1_2B)
+    if not isinstance(repos, list) or len(repos) != len(expected):
+        raise ValueError("Model source lock must identify the required Torch and vLLM repositories")
+    for item, repo in zip(repos, expected, strict=True):
+        if not isinstance(item, dict) or set(item) != {"repo", "repo_id", "revision", "file_count"}:
+            raise ValueError("Model source lock repository record is invalid")
+        revision = item["revision"]
+        if (
+            item["repo"] != repo.name or item["repo_id"] != repo.repos["huggingface"]
+            or not isinstance(revision, str) or _COMMIT_RE.fullmatch(revision) is None
+            or type(item["file_count"]) is not int or item["file_count"] < 1
+        ):
+            raise ValueError(f"Model source lock repository identity is invalid: {repo.name}")
+        count = sum(
+            name.startswith(f"{repo.local_name}/") and not name.endswith("/.mineru_complete")
+            and name != f"{repo.local_name}/.mineru_complete"
+            for name in files
+        )
+        if count != item["file_count"]:
+            raise ValueError(f"Model source lock file count differs from manifest: {repo.name}")
+    return repos
 
 
 def sha256_file(path: Path) -> str:

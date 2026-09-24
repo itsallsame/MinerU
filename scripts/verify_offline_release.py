@@ -32,7 +32,7 @@ def verify_release(
     if not release_path.is_file() or release_path.is_symlink():
         raise ValueError("Selected release manifest is missing or is a symlink")
     selected = json.loads(release_path.read_text(encoding="utf-8"))
-    if not isinstance(selected, dict) or selected.get("schema") != 3:
+    if not isinstance(selected, dict) or selected.get("schema") != 4:
         raise ValueError("Selected release manifest has an unsupported schema")
     revision = selected.get("source_revision")
     if not isinstance(revision, str):
@@ -46,6 +46,7 @@ def verify_release(
         base=base,
         wheelhouse=wheelhouse,
         model_manifest=model_manifest,
+        model_source_lock=model_dir / offline_package.SOURCE_LOCK_NAME,
         web_dist=web_dist,
         previous_release=previous_release,
     )

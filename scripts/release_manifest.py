@@ -13,6 +13,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import offline_package
+except ModuleNotFoundError as exc:
+    if exc.name != "scripts":
+        raise
+    import offline_package  # Direct `python3 scripts/release_manifest.py` entry point.
+
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -107,6 +114,7 @@ def build_release_record(
     base: dict[str, Any],
     wheelhouse: Path,
     model_manifest: Path,
+    model_source_lock: Path,
     web_dist: Path,
     previous_release: Path | None = None,
 ) -> dict[str, Any]:
@@ -143,10 +151,11 @@ def build_release_record(
         or not model_data["files"]
     ):
         raise ValueError("Model manifest is empty or unsupported")
+    model_repos = offline_package.validate_source_lock(model_source_lock, model_data)
     if previous_release is not None and (not previous_release.is_file() or previous_release.is_symlink()):
         raise ValueError("Previous release manifest is missing")
     return {
-        "schema": 3,
+        "schema": 4,
         "source_revision": revision,
         "platform": "linux/amd64",
         "worker_image_id": worker_id,
@@ -158,6 +167,7 @@ def build_release_record(
             "vlm_engine": "vllm",
             "manifest_sha256": _sha256(model_manifest),
             "file_count": len(model_data["files"]),
+            "repositories": model_repos,
         },
         "wheelhouse": {
             "files": {path.relative_to(wheelhouse).as_posix(): _sha256(path) for path in wheel_files},
@@ -208,6 +218,7 @@ def main() -> int:
     parser.add_argument("--base-image", required=True)
     parser.add_argument("--wheelhouse", required=True, type=Path)
     parser.add_argument("--model-manifest", required=True, type=Path)
+    parser.add_argument("--model-source-lock", required=True, type=Path)
     parser.add_argument("--web-dist", required=True, type=Path)
     parser.add_argument("--previous-release", type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -227,6 +238,7 @@ def main() -> int:
             base=_image_info(args.base_image),
             wheelhouse=args.wheelhouse,
             model_manifest=args.model_manifest,
+            model_source_lock=args.model_source_lock,
             web_dist=args.web_dist,
             previous_release=args.previous_release,
         )

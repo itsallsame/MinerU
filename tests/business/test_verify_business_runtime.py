@@ -96,7 +96,7 @@ def _deployment(tmp_path: Path) -> dict[str, object]:
     worker["NetworkSettings"]["Ports"] = {"15980/tcp": None}
     return {
         "release": {
-            "schema": 3,
+            "schema": 4,
             "platform": "linux/amd64",
             "source_revision": "a" * 40,
             "base_image_id": "sha256:base",

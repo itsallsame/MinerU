@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts import release_manifest, verify_offline_release
+from mineru.model.registry import MINERU_2_5_PRO_2605_1_2B, MINERU_4_MODELS_TORCH
+from scripts import offline_package, release_manifest, verify_offline_release
 
 REVISION = "a" * 40
 BASE_ID = "sha256:" + "b" * 64
@@ -49,9 +50,19 @@ def _release(tmp_path: Path, *, previous: bool = False) -> dict[str, object]:
     (wheelhouse / "demo-1.0-py3-none-any.whl").write_bytes(b"wheel")
     model_dir = tmp_path / "models"
     model_dir.mkdir()
-    (model_dir / "weights.bin").write_bytes(b"weights")
+    model_repos = (MINERU_4_MODELS_TORCH, MINERU_2_5_PRO_2605_1_2B)
+    for repo in model_repos:
+        local_dir = model_dir / repo.local_name
+        local_dir.mkdir()
+        (local_dir / "weights.bin").write_bytes(b"weights")
+    (model_dir / ".mineru_source_lock.json").write_text(json.dumps({
+        "schema": 1, "source": "huggingface",
+        "repos": [{"repo": repo.name, "repo_id": repo.repos["huggingface"],
+                   "revision": str(index + 1) * 40, "file_count": 1}
+                  for index, repo in enumerate(model_repos)],
+    }))
     model_manifest = tmp_path / "model-manifest.json"
-    model_manifest.write_text(json.dumps({"schema": 1, "files": {"weights.bin": _hash(b"weights")}}))
+    offline_package.create_manifest(model_dir, model_manifest)
     web_dist = tmp_path / "web-dist"
     web_dist.mkdir()
     (web_dist / "index.html").write_bytes(b"<h1>MinerU</h1>")
@@ -64,12 +75,13 @@ def _release(tmp_path: Path, *, previous: bool = False) -> dict[str, object]:
     }
     previous_release = tmp_path / "previous-release.json" if previous else None
     if previous_release:
-        previous_release.write_text('{"schema":3}\n')
+        previous_release.write_text('{"schema":4}\n')
     record = release_manifest.build_release_record(
         revision=REVISION,
         **images,
         wheelhouse=wheelhouse,
         model_manifest=model_manifest,
+        model_source_lock=model_dir / ".mineru_source_lock.json",
         web_dist=web_dist,
         previous_release=previous_release,
     )
@@ -90,7 +102,7 @@ def test_imported_release_artifacts_match_selected_record(tmp_path: Path) -> Non
     artifacts = _release(tmp_path)
     result = verify_offline_release.verify_release(**artifacts)
     assert result["result"] == "artifact_integrity_passed"
-    assert result["model_files_verified"] == 1
+    assert result["model_files_verified"] == 3
     assert result["wheelhouse_files_verified"] == 2
     assert result["web_assets_verified"] == 1
     assert result["worker_image_id"] == WORKER_ID
@@ -101,6 +113,16 @@ def test_imported_release_rejects_wheelhouse_file_excluded_from_build_context(tm
     artifacts = _release(tmp_path)
     (artifacts["wheelhouse"] / "transfer-notes.txt").write_text("not copied by Docker")
     with pytest.raises(ValueError, match="Wheelhouse contains files excluded from Docker build context"):
+        verify_offline_release.verify_release(**artifacts)
+
+
+def test_imported_release_rejects_different_model_source_lock(tmp_path: Path) -> None:
+    artifacts = _release(tmp_path)
+    source_lock = artifacts["model_dir"] / ".mineru_source_lock.json"
+    lock = json.loads(source_lock.read_text())
+    lock["repos"][0]["revision"] = "f" * 40
+    source_lock.write_text(json.dumps(lock))
+    with pytest.raises(ValueError, match="not bound"):
         verify_offline_release.verify_release(**artifacts)
 
 
@@ -116,7 +138,7 @@ def test_imported_release_rejects_wheelhouse_file_excluded_from_build_context(tm
 def test_imported_release_rejects_changed_artifacts(tmp_path: Path, changed: str, expected: str) -> None:
     artifacts = _release(tmp_path)
     if changed == "model":
-        (artifacts["model_dir"] / "weights.bin").write_bytes(b"altered")
+        (artifacts["model_dir"] / MINERU_4_MODELS_TORCH.local_name / "weights.bin").write_bytes(b"altered")
     elif changed == "wheelhouse":
         (artifacts["wheelhouse"] / "demo-1.0-py3-none-any.whl").write_bytes(b"altered")
     elif changed == "web":
@@ -173,7 +195,7 @@ def test_verify_cli_writes_report_only_after_all_checks(tmp_path: Path, monkeypa
     original = output.read_bytes()
     assert verify_offline_release.main() == 1
     assert output.read_bytes() == original
-    (artifacts["model_dir"] / "weights.bin").write_bytes(b"wrong")
+    (artifacts["model_dir"] / MINERU_4_MODELS_TORCH.local_name / "weights.bin").write_bytes(b"wrong")
     output.unlink()
     assert verify_offline_release.main() == 1
     assert not output.exists()
