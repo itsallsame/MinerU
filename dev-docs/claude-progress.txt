@@ -1002,3 +1002,10 @@ Changes: Added a bounded, keyset-scanning DocumentTaskWorker to the business API
 Verification: Final Mac business 274 passed/1 skipped; targeted worker/lifecycle 15 passed; real public Doclib restart recovery 1 passed. Ruff, new-file format, JSON and diff checks passed. No isolated Kylin/NVIDIA or model-quality claim.
 Evidence: dev-docs/evidence/2026-09-24-document-task-recovery-worker.md
 Next: Target-compatible amd64 base/wheelhouse, isolated Kylin recovery/fault/rollback and four-class real-sample acceptance; keep goal active.
+
+=== 2026-09-24 Session 110 (BE-031 automatic unconfirmed extraction) ===
+Status: In progress; BE-031 verified true; 81/241 tracked features passed; target Kylin and four-class real-sample gates remain open
+Changes: For templated documents, task completion, parse revision and first queued extraction now commit in one business SQLite transaction. Untemplated documents skip it; concurrent/replayed completion produces one run; manual rerun remains available. Web hint and live smoke flow reflect automatic generation. Own Skill sees queued machine_unconfirmed draft, never an automatically confirmed result. No user/auth/role/permission layer.
+Verification: Full Mac business 279 passed/1 skipped; live Doclib HTML upload→parse→automatic run→title candidate with evidence passed. Web Node 12 passed, 8 offline assets built, 23 offline Chromium regressions passed; own Skill quick validation passed. Ruff, JSON and diff checks passed. The first browser command used the project Python without Playwright and failed at import; rerun with installed system Python passed.
+Evidence: dev-docs/evidence/2026-09-24-automatic-field-extraction.md
+Next: Continue P3 quality/field extraction gaps and P4 experience while obtaining target amd64 NVIDIA base/wheelhouse, isolated Kylin and four-class labeled samples. Keep goal active.

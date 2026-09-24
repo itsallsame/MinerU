@@ -973,7 +973,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       return;
     }
     if (!state.runId) {
-      root.append(element("p", "review-hint", "选择“生成字段候选”后，后台将按上传时冻结的模板版本执行提取。"));
+      root.append(element("p", "review-hint", "解析完成后会按上传时冻结的模板版本自动提取；若尚无运行，可选择“生成字段候选”。"));
       return;
     }
     if (!state.extraction) {

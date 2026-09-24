@@ -21,7 +21,6 @@ python3 skills/business-documents/scripts/business_documents.py upload-request R
 python3 skills/business-documents/scripts/business_documents.py task TASK_ID
 python3 skills/business-documents/scripts/business_documents.py cancel TASK_ID --confirm-write
 python3 skills/business-documents/scripts/business_documents.py overview DOCUMENT_ID
-python3 skills/business-documents/scripts/business_documents.py extract REVISION_ID --confirm-write
 python3 skills/business-documents/scripts/business_documents.py extraction RUN_ID
 python3 skills/business-documents/scripts/business_documents.py search "年度通知" --limit 20
 python3 skills/business-documents/scripts/business_documents.py search-pages REVISION_ID "年度通知"
@@ -32,6 +31,8 @@ python3 skills/business-documents/scripts/business_documents.py read REVISION_ID
 python3 skills/business-documents/scripts/business_documents.py evidence EVIDENCE_ID
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
 ```
+
+When an uploaded document has a selected template, completion of its parse revision automatically queues the **first** unconfirmed field-extraction run. Check `task` and then `overview`/`extraction`; do not send `extract` just to start that first run. Use `extract REVISION_ID --confirm-write` only when the user explicitly asks to regenerate candidates for that revision. An upload without a template does not guess a template or auto-extract.
 
 `upload`, `extract`, and `cancel` are write operations. Before using `--confirm-write`, confirm that the user explicitly requested **that file upload**, **that revision's extraction**, or **that task's cancellation**, and that `MINERU_BUSINESS_API_URL` points to the approved isolated business service. If either is unclear, ask first. The flag is an Agent-side acknowledgement, not authentication or an API permission check; never add it automatically merely to bypass an error. Read-only commands do not need it. Upload requires an explicit local file and uses the business service's advertised size/extension/tier limits. PDF/images accept `flash`, `basic`, `standard`, or `advanced`; other supported native formats use Flash with no `--tier`. A response with `submitted`, `submitting`, `cancel_requested`, `queued`, or `running` is **not** a finished parse/extraction or cancellation; poll the returned task/run ID rather than guessing a completion time. Do not auto-retry failed writes or upload the same file again without the user's direction.
 

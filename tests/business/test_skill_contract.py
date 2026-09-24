@@ -446,7 +446,10 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     assert done_lookup["task"]["status"] == "done"
     overview = client.overview(submitted["document"]["id"])
     assert overview["revision"]["tier"] == "flash"
-    assert overview["draft"] is None
+    assert overview["draft"]["state"] == "machine_unconfirmed"
+    assert overview["draft"]["run"]["status"] == "queued"
+    assert overview["draft"]["run"]["revision_id"] == overview["revision"]["id"]
+    assert overview["draft"]["candidates"] == []
     assert overview["confirmed_for_latest_run"] is None
     doclib.search.return_value = SearchResponse(
         query="Notice", total=1, results=[SearchResult(

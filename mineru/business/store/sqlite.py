@@ -418,33 +418,45 @@ class BusinessStore:
         """Persist a run; repeated requests share one active run per revision."""
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
-            row = database.execute(
-                "SELECT d.template_code, d.template_version FROM revisions r "
-                "JOIN documents d ON d.id=r.document_id WHERE r.id=?", (revision_id,)
-            ).fetchone()
-            if row is None:
-                raise BusinessStoreError("Parse revision not found")
-            if row["template_code"] is None or row["template_version"] is None:
-                raise BusinessStoreError("Document has no selected template")
-            existing = database.execute(
-                "SELECT * FROM extraction_runs WHERE revision_id=? AND status IN ('queued', 'running')",
-                (revision_id,),
-            ).fetchone()
-            if existing is not None:
-                return ExtractionRun(**dict(existing))
-            now = _now_ms()
-            run = ExtractionRun(
-                id=uuid.uuid4().hex, revision_id=revision_id,
-                template_code=row["template_code"], template_version=row["template_version"],
-                status="queued", error_code=None, claim_token=None, lease_until_ms=None,
-                attempts=0, created_at_ms=now, updated_at_ms=now,
-            )
-            database.execute(
-                "INSERT INTO extraction_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (run.id, run.revision_id, run.template_code, run.template_version,
-                 run.status, run.error_code, run.claim_token, run.lease_until_ms, run.attempts,
-                 run.created_at_ms, run.updated_at_ms),
-            )
+            run = self._enqueue_extraction_in_transaction(database, revision_id, automatic=False)
+            assert run is not None
+        return run
+
+    @staticmethod
+    def _enqueue_extraction_in_transaction(
+        database: sqlite3.Connection, revision_id: str, *, automatic: bool
+    ) -> ExtractionRun | None:
+        row = database.execute(
+            "SELECT d.template_code, d.template_version FROM revisions r "
+            "JOIN documents d ON d.id=r.document_id WHERE r.id=?", (revision_id,)
+        ).fetchone()
+        if row is None:
+            raise BusinessStoreError("Parse revision not found")
+        if row["template_code"] is None or row["template_version"] is None:
+            if automatic:
+                return None
+            raise BusinessStoreError("Document has no selected template")
+        existing = database.execute(
+            "SELECT * FROM extraction_runs WHERE revision_id=?"
+            + ("" if automatic else " AND status IN ('queued', 'running')")
+            + " ORDER BY created_at_ms DESC, id DESC LIMIT 1",
+            (revision_id,),
+        ).fetchone()
+        if existing is not None:
+            return ExtractionRun(**dict(existing))
+        now = _now_ms()
+        run = ExtractionRun(
+            id=uuid.uuid4().hex, revision_id=revision_id,
+            template_code=row["template_code"], template_version=row["template_version"],
+            status="queued", error_code=None, claim_token=None, lease_until_ms=None,
+            attempts=0, created_at_ms=now, updated_at_ms=now,
+        )
+        database.execute(
+            "INSERT INTO extraction_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run.id, run.revision_id, run.template_code, run.template_version,
+             run.status, run.error_code, run.claim_token, run.lease_until_ms, run.attempts,
+             run.created_at_ms, run.updated_at_ms),
+        )
         return run
 
     def claim_next_extraction(self, *, lease_ms: int = 180000, max_attempts: int = 3) -> ExtractionRun | None:
@@ -1297,9 +1309,10 @@ class BusinessStore:
             expected_ids = set(json.loads(task_row["parse_ids_json"]))
             if not {batch.parse_id for batch in parse_batches} <= expected_ids:
                 raise BusinessStoreError("Completed parse does not belong to the submitted task")
-            self._insert_completed_revision(
+            revision = self._insert_completed_revision(
                 database, task_row["document_id"], first, parse_batches, page_range, producer_version, None
             )
+            self._enqueue_extraction_in_transaction(database, revision.id, automatic=True)
             database.execute(
                 "UPDATE tasks SET status='done', updated_at_ms=? WHERE id=? AND status='submitted'",
                 (_now_ms(), task_id),

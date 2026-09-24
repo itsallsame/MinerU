@@ -50,7 +50,9 @@ def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: 
                 assert marker in parsed.inner_text(), f"Missing native content from {office.name}"
                 assert page.get_by_text("该格式暂不支持浏览器原文预览", exact=False).count() == 1
                 if office.suffix == ".docx":
-                    page.get_by_role("button", name="生成字段候选").click()
+                    manual_start = page.get_by_role("button", name="生成字段候选", exact=True)
+                    if manual_start.count():
+                        manual_start.click()  # If the run has not appeared yet, use the same idempotent enqueue route.
                     title_field = page.locator('.field-review[data-field-code="title"]')
                     candidate = title_field.locator(".candidate-row").filter(has_text=marker)
                     candidate.wait_for(timeout=30000)

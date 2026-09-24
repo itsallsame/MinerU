@@ -129,6 +129,29 @@ def test_task_completion_and_revision_are_one_atomic_transition(tmp_path: Path) 
     assert len(business.list_revisions(document.id)) == 1
 
 
+def test_automatic_extraction_insert_failure_rolls_back_revision_and_completion(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Atomic proposal</h1>"), filename="atomic.html")
+    document, task = business.create_document_with_task(
+        upload, original_name="atomic.html", requested_tier=None, template_code="official_document",
+    )
+    business.begin_task_submission(task.id)
+    business.mark_task_submitted(task.id, actual_tier="flash", parse_ids=(17,), submission_attempt=1)
+    with closing(sqlite3.connect(tmp_path / "business" / "business.sqlite3")) as database, database:
+        database.execute(
+            "CREATE TRIGGER reject_extraction BEFORE INSERT ON extraction_runs "
+            "BEGIN SELECT RAISE(ABORT, 'test extraction insert failure'); END"
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="test extraction insert failure"):
+        business.complete_task_with_revision(
+            task.id, parse=_done_parse(upload.sha256, parse_id=17), producer_version="4.0.6",
+        )
+    assert business.get_task(task.id).status == "submitted"
+    assert business.list_revisions(document.id) == ()
+    assert business.quality_stats()["extraction_pending"] == 0
+
+
 def test_terminal_task_cannot_acquire_a_new_completed_revision(tmp_path: Path) -> None:
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Stopped</h1>"), filename="stopped.html")

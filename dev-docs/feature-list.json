@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 80,
+  "completed_features": 81,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -2478,9 +2478,9 @@
         "实现：解析完成触发字段抽取",
         "验证：.venv/bin/python -m pytest tests/business"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "模板文档解析修订完成时，同一业务 SQLite 事务排入首次字段提取；无模板不自动提取，重复/并发完成不重复排队，入队失败原子回滚。真实本地 Doclib→候选/证据、业务/Skill 契约和 Web 回归通过。只生成 machine_unconfirmed，四类真实样本与麒麟生产验收仍属 P6。见 dev-docs/evidence/2026-09-24-automatic-field-extraction.md。"
     },
     {
       "id": "BE-032",

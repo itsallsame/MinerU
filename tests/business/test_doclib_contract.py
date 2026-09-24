@@ -234,6 +234,40 @@ def test_restarted_document_worker_recovers_uploaded_task_with_real_doclib(
     assert len(restarted_store.list_revisions(document.id)) == 1
 
 
+def test_real_doclib_completion_queues_templated_extraction_without_manual_post(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "automatic-extraction-uploads"
+    upload_root.mkdir()
+    uploads = ImmutableUploadStore(upload_root, max_bytes=1024)
+    store = BusinessStore(root / "automatic-extraction-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=uploads, store=store, gateway=DoclibGateway(doclib, shared_root=upload_root),
+        doclib=doclib, producer_version="4.0.6",
+    )
+    submitted = workflow.submit(
+        io.BytesIO("<html><body><p>标题：离线验收样例</p></body></html>".encode()),
+        filename="automatic.html", template_code="official_document",
+    )
+    _wait_for_parse(doclib, list(submitted.task.parse_ids))
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    queued = store.list_extractions(revision.id)
+    assert len(queued) == 1 and queued[0].status == "queued"
+    extraction = FieldExtraction(
+        store=store, doclib=doclib, evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    )
+    completed = extraction.process_next()
+    assert completed is not None and completed.id == queued[0].id and completed.status == "done"
+    assert store.list_extractions(revision.id) == (completed,)
+    assert any(
+        candidate.field_code == "title" and candidate.value == "离线验收样例"
+        for candidate in store.list_field_candidates(completed.id)
+    )
+
+
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
     client, root, _home = live_doclib
     source = root / "report.html"

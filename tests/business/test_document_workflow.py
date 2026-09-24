@@ -97,7 +97,9 @@ def test_submitted_cancel_reports_only_actual_batch_release_and_blocks_revision(
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
     workflow, store, _shared = _workflow(tmp_path, client)
-    submitted = workflow.submit(io.BytesIO(b"<h1>Shared</h1>"), filename="shared.html")
+    submitted = workflow.submit(
+        io.BytesIO(b"<h1>Shared</h1>"), filename="shared.html", template_code="official_document",
+    )
     task_id = submitted.task.id
     client.release_parse_consumer.return_value = _released(task_id, (7, "shared", "pending"))
 
@@ -108,6 +110,7 @@ def test_submitted_cancel_reports_only_actual_batch_release_and_blocks_revision(
         task_id, parse=_parse_info(submitted.document.sha256), producer_version="4.0.6"
     ) == cancelled
     assert store.list_revisions(submitted.document.id) == ()
+    assert store.quality_stats()["extraction_pending"] == 0
 
 
 def test_cancel_retries_unknown_doclib_result_after_restart(tmp_path: Path) -> None:
@@ -291,6 +294,38 @@ def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> 
     assert store.get_document(submitted.document.id) == submitted.document
 
 
+def test_templated_parse_completion_atomically_queues_one_unconfirmed_extraction(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(
+        io.BytesIO(b"<h1>Template</h1>"), filename="template.html", template_code="official_document",
+    )
+    client.get_parse.return_value = _parse_info(submitted.document.sha256)
+
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revisions = store.list_revisions(submitted.document.id)
+    assert len(revisions) == 1
+    runs = store.list_extractions(revisions[0].id)
+    assert len(runs) == 1
+    assert runs[0].status == "queued"
+    assert runs[0].template_code == "official_document" and runs[0].template_version == 1
+    assert store.enqueue_extraction(revisions[0].id).id == runs[0].id
+    assert workflow.refresh(submitted.task.id).status == "done"
+    assert store.list_extractions(revisions[0].id) == runs
+
+
+def test_untemplated_parse_completion_does_not_queue_field_extraction(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>No template</h1>"), filename="plain.html")
+    client.get_parse.return_value = _parse_info(submitted.document.sha256)
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    assert store.list_extractions(revision.id) == ()
+
+
 def test_refresh_does_not_create_revision_after_concurrent_terminal_transition(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
@@ -311,7 +346,9 @@ def test_parallel_refreshes_commit_only_one_completed_revision(tmp_path: Path) -
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
     workflow, store, _shared = _workflow(tmp_path, client)
-    submitted = workflow.submit(io.BytesIO(b"<h1>Parallel finish</h1>"), filename="parallel.html")
+    submitted = workflow.submit(
+        io.BytesIO(b"<h1>Parallel finish</h1>"), filename="parallel.html", template_code="official_document",
+    )
     barrier = Barrier(2)
 
     def completed_parse(_parse_id: int) -> ParseInfo:
@@ -325,7 +362,9 @@ def test_parallel_refreshes_commit_only_one_completed_revision(tmp_path: Path) -
         statuses = {first.result(timeout=10).status, second.result(timeout=10).status}
 
     assert statuses == {"done"}
-    assert len(store.list_revisions(submitted.document.id)) == 1
+    revisions = store.list_revisions(submitted.document.id)
+    assert len(revisions) == 1
+    assert len(store.list_extractions(revisions[0].id)) == 1
 
 
 def test_request_key_replays_one_upload_without_suppressing_intentional_duplicate(tmp_path: Path) -> None:
