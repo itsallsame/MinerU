@@ -913,3 +913,10 @@ Changes: Initial package now uses a verified depth-one bare Git snapshot retaini
 Verification: Six synthetic package tests passed; full Mac business suite 232 passed/1 skipped; Ruff/format and JSON/diff checks passed. Real fork at 8ef0b915 generated an 18 MiB temporary first package, verified/cloned/fscked, with both historical model object IDs absent from the target shallow clone. No target Kylin/NVIDIA deployment claimed.
 Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
 Next: Acquire real Linux amd64/NVIDIA base image, wheelhouse and host models, then transfer and build on isolated Kylin; complete annotated sample and rollback acceptance. Keep goal active.
+
+=== 2026-09-24 Session 98 (fork master delivery and live chain) ===
+Status: In progress; 78/241 passed; source delivery synchronized, target and real-sample gates remain incomplete
+Changes: Fast-forward pushed 110 local commits to the user-designated itsallsame/MinerU fork master after remote/ancestry/diff/dry-run checks. Confirmed remote master equals local a24b782d. No branch, upstream change, user or permission layer.
+Verification: Web 11 Node tests and 8-asset offline build; opt-in real loopback Web/API/Doclib/own-Skill smoke 1 passed using public PDF plus generated Office files; 22 Chromium regressions passed. Initial unprivileged browser-suite attempt was blocked before tests by sandbox localhost bind; authorized retry passed. Mac Flash/CPU only, no four-class labels or isolated Kylin/GPU claim.
+Evidence: dev-docs/evidence/2026-09-24-fork-master-sync-live-smoke.md
+Next: Acquire actual Linux amd64/NVIDIA build inputs and four-class annotated samples, then run offline target artifact/runtime/quality/rollback acceptance. Keep goal active.
