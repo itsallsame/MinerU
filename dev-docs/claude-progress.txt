@@ -842,3 +842,10 @@ Changes: Four-class evaluator now refuses an existing report and uses atomic cre
 Verification: Regression reproduced silent overwrite before fix; targeted 6 passed, full Mac business suite 211 passed/1 skipped, Ruff and diff checks passed. Synthetic contracts only; no real annotated four-class or Kylin/NVIDIA acceptance claim.
 Evidence: dev-docs/evidence/2026-09-24-sample-report-no-clobber.md
 Next: Obtain real annotated four-class samples and target offline artifacts, run measured Mac and isolated Kylin/NVIDIA acceptance; continue P4 gaps. Keep goal active.
+
+=== 2026-09-24 Session 88 (P6 duplicate-value evidence scoring) ===
+Status: In progress; 78/241 passed; P6 real-sample gates remain incomplete
+Changes: Four-class evaluator now uses one-to-one matching that maximizes valid frozen-evidence hits among equal-code/value candidates before assigning remaining value matches. No user/auth/permission layer.
+Verification: New duplicate-candidate regression failed before fix, then passed; additional overlapping-annotation regression passed. Targeted 8 passed, full Mac business suite 213 passed/1 skipped, Ruff and diff checks passed. Synthetic contracts only; no real annotated four-class or Kylin/NVIDIA accuracy claim.
+Evidence: dev-docs/evidence/2026-09-24-sample-evidence-matching.md
+Next: Obtain real annotated four-class samples and target offline artifacts; run measured Mac and isolated Kylin/NVIDIA acceptance. Continue P4 gaps. Keep goal active.

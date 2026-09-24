@@ -174,6 +174,22 @@ def _outline(revision_id: str, get: Callable[[str], Any]) -> list[dict[str, Any]
         next_page = upcoming
 
 
+def _evidence_matches(
+    field: dict[str, Any], candidate: dict[str, Any], snapshots: dict[str, dict[str, Any]], case_id: str,
+) -> bool:
+    evidence_id = candidate.get("evidence_id")
+    snapshot = snapshots.get(evidence_id) if isinstance(evidence_id, str) else None
+    if snapshot is None or not isinstance(snapshot.get("snippet"), str):
+        return False
+    if hashlib.sha256(snapshot["snippet"].encode("utf-8")).hexdigest() != snapshot.get("snippet_sha256"):
+        raise EvaluationError(f"Frozen evidence checksum mismatch in case {case_id}")
+    return (
+        field["value"] in snapshot["snippet"]
+        and ("evidence_quote" not in field or field["evidence_quote"] in snapshot["snippet"])
+        and ("page_no" not in field or snapshot.get("page_no") == field["page_no"])
+    )
+
+
 def evaluate_case(case: dict[str, Any], get: Callable[[str], Any]) -> dict[str, Any]:
     """Score exact candidate values and frozen evidence without returning raw annotations."""
     case_id = case["id"]
@@ -203,36 +219,47 @@ def evaluate_case(case: dict[str, Any], get: Callable[[str], Any]) -> dict[str, 
         if isinstance(item, dict) and isinstance(item.get("id"), str)
         and item.get("revision_id") == revision_id and item.get("document_id") == document_id
     }
-    used: set[int] = set()
-    matched = 0
-    evidence_hits = 0
-    for field in case["expected_fields"]:
-        index = next((index for index, candidate in enumerate(candidates) if index not in used
-                      and isinstance(candidate, dict) and candidate.get("field_code") == field["code"]
-                      and candidate.get("value") == field["value"]), None)
-        if index is None:
+    fields = case["expected_fields"]
+    value_options = [
+        [index for index, candidate in enumerate(candidates)
+         if isinstance(candidate, dict) and candidate.get("field_code") == field["code"]
+         and candidate.get("value") == field["value"]]
+        for field in fields
+    ]
+    evidence_options = [
+        [index for index in options if _evidence_matches(field, candidates[index], snapshots, case_id)]
+        for field, options in zip(fields, value_options)
+    ]
+    evidence_owner: dict[int, int] = {}
+
+    def assign_evidence(field_index: int, visited: set[int]) -> bool:
+        for candidate_index in evidence_options[field_index]:
+            if candidate_index in visited:
+                continue
+            visited.add(candidate_index)
+            previous = evidence_owner.get(candidate_index)
+            if previous is None or assign_evidence(previous, visited):
+                evidence_owner[candidate_index] = field_index
+                return True
+        return False
+
+    for field_index in range(len(fields)):
+        assign_evidence(field_index, set())
+    used = set(evidence_owner)
+    matched_fields = set(evidence_owner.values())
+    for field_index, options in enumerate(value_options):
+        if field_index in matched_fields:
             continue
-        used.add(index)
-        matched += 1
-        candidate = candidates[index]
-        snapshot = snapshots.get(candidate.get("evidence_id"))
-        if snapshot is None or not isinstance(snapshot.get("snippet"), str):
-            continue
-        if hashlib.sha256(snapshot["snippet"].encode("utf-8")).hexdigest() != snapshot.get("snippet_sha256"):
-            raise EvaluationError(f"Frozen evidence checksum mismatch in case {case_id}")
-        if field["value"] not in snapshot["snippet"]:
-            continue
-        if "evidence_quote" in field and field["evidence_quote"] not in snapshot["snippet"]:
-            continue
-        if "page_no" in field and snapshot.get("page_no") != field["page_no"]:
-            continue
-        evidence_hits += 1
+        candidate_index = next((index for index in options if index not in used), None)
+        if candidate_index is not None:
+            used.add(candidate_index)
+            matched_fields.add(field_index)
     report: dict[str, Any] = {
         "id": case_id, "category": case["category"], "tags": case.get("tags", []), "document_id": document_id,
         "revision_id": revision_id, "run_id": run_id,
-        "expected_fields": len(case["expected_fields"]), "matched_fields": matched,
+        "expected_fields": len(fields), "matched_fields": len(matched_fields),
         "candidate_fields": len(candidates), "matched_candidates": len(used),
-        "evidence_hits": evidence_hits,
+        "evidence_hits": len(evidence_owner),
         "open_blocking_issues": sum(1 for issue in extraction["issues"] if isinstance(issue, dict)
                                     and issue.get("severity") == "blocking" and issue.get("status") == "open"),
     }

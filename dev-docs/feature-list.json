@@ -5407,7 +5407,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "四类样本评估器已按一对一最大有效证据匹配修正重复字段/候选的统计，并有合成业务 API 回归；缺少真实四类人工标注样本与麒麟目标机实测，暂不标通过。证据：dev-docs/evidence/2026-09-24-sample-evidence-matching.md"
     },
     {
       "id": "QA-017",

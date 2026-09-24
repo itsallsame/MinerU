@@ -139,6 +139,50 @@ def test_matching_value_does_not_hide_wrong_evidence_page(tmp_path: Path) -> Non
     assert report["evidence_hits"] == 0
 
 
+def test_duplicate_value_uses_candidate_with_valid_frozen_evidence(tmp_path: Path) -> None:
+    module = _module()
+    case = module.load_suite(_suite(tmp_path))[1]
+
+    def duplicate(path: str) -> Any:
+        payload = _get(path)
+        if path.startswith("/extractions/"):
+            payload["candidates"].insert(0, {
+                "field_code": "title", "value": "Gold paper", "evidence_id": "missing-evidence",
+            })
+        return payload
+
+    result = module.evaluate_case(case, duplicate)
+    assert result["matched_fields"] == 1
+    assert result["candidate_fields"] == 2
+    assert result["evidence_hits"] == 1
+
+
+def test_duplicate_fields_maximize_distinct_evidence_matches(tmp_path: Path) -> None:
+    module = _module()
+    case = module.load_suite(_suite(tmp_path))[1]
+    case["expected_fields"][0].pop("page_no")
+    case["expected_fields"].append({"code": "title", "value": "Gold paper", "page_no": 1})
+
+    def duplicate(path: str) -> Any:
+        payload = _get(path)
+        if path.startswith("/extractions/"):
+            payload["candidates"].append({
+                "field_code": "title", "value": "Gold paper", "evidence_id": "ev-paper-page2",
+            })
+        elif path.endswith("/evidence"):
+            snippet = "Gold paper on page two"
+            payload.append({
+                "id": "ev-paper-page2", "revision_id": "rev-paper", "document_id": "doc-paper",
+                "snippet": snippet, "snippet_sha256": hashlib.sha256(snippet.encode()).hexdigest(), "page_no": 2,
+            })
+        return payload
+
+    result = module.evaluate_case(case, duplicate)
+    assert result["matched_fields"] == 2
+    assert result["matched_candidates"] == 2
+    assert result["evidence_hits"] == 2
+
+
 def test_evaluator_reads_real_business_api_contract(tmp_path: Path) -> None:
     module = _module()
     source = tmp_path / "notice.html"
