@@ -737,3 +737,10 @@ Changes: The fork-owned Skill CLI now requires --confirm-write for upload and ex
 Verification: Exact Skill contract command 7 passed; real local opt-in Web/API/Doclib/Skill flow 1 passed; full Mac business suite 187 passed/1 opt-in skipped; Ruff lint and diff check passed. No Kylin/NVIDIA/air-gap or real-sample claim.
 Evidence: dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md
 Next: Continue P5 Skill/Web state consistency and P4 remaining gaps; obtain controlled four-class samples and isolated target environment for P1/P6. Keep goal active.
+
+=== 2026-09-24 Session 73 (P5 Skill phase completion and review) ===
+Status: P5 Skill development phase complete on Mac (22/22 P5, 74/241 total); full Goal remains in progress
+Changes: SKL-022 compares Web-exported and Skill-read full confirmed result for the same run; SKL-020 documents and tests fixed-revision progressive reading; SKL-021 reverified the live Skill flow. Phase review found and fixed non-private address/DNS resolution acceptance, and updated stale plan text. No user/auth/permission layer added.
+Verification: Skill contract 9 passed, full business 189 passed/1 opt-in skipped, real Web/API/Doclib/Skill 1 passed, upstream unittest 2798 passed/4 skipped; Ruff lint, diff and feature-count checks passed on Mac. Review was manual because no dedicated Codex CLI review tool was available. No Kylin/NVIDIA/air-gap/real four-class sample claim.
+Evidence: dev-docs/evidence/2026-09-24-p5-skill-phase-review.md and the SKL-020/021/022 evidence files.
+Next: P4 remaining UX/cancellation/structure-edit work, P1 isolated deployment and P6 real annotated sample acceptance. Stop at the P5 phase boundary for user confirmation; keep the full Goal active.
