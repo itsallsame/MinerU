@@ -6,8 +6,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
@@ -184,3 +185,34 @@ def test_evaluator_reads_real_business_api_contract(tmp_path: Path) -> None:
     result = module.evaluate_case(case, get)
     assert result["matched_fields"] == 1 and result["evidence_hits"] == 1
     assert "Synthetic notice" not in json.dumps(result)
+
+
+def test_evaluation_report_never_overwrites_prior_or_concurrent_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    suite_dir = tmp_path / "samples"
+    suite_dir.mkdir()
+    suite = _suite(suite_dir)
+    output = tmp_path / "reports" / "metrics.json"
+    monkeypatch.setattr(module, "BusinessReader", lambda _url: SimpleNamespace(get=_get))
+    monkeypatch.setattr(sys, "argv", [
+        "evaluate_business_samples.py", "--suite", str(suite), "--base-url", "http://127.0.0.1:8088",
+        "--environment", "Mac synthetic contract", "--output", str(output),
+    ])
+    assert module.main() == 0
+    first = output.read_bytes()
+    assert module.main() == 1
+    assert output.read_bytes() == first
+    assert not list(output.parent.glob(".metrics.json.*"))
+
+    output.unlink()
+
+    def concurrent_writer(_source: Path, target: Path) -> None:
+        target.write_bytes(b"another evaluator")
+        raise FileExistsError(target)
+
+    monkeypatch.setattr(module.os, "link", concurrent_writer)
+    assert module.main() == 1
+    assert output.read_bytes() == b"another evaluator"
+    assert not list(output.parent.glob(".metrics.json.*"))

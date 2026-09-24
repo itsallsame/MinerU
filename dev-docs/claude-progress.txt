@@ -835,3 +835,10 @@ Changes: Runtime preflight now rejects effective Doclib compaction, model/manife
 Verification: Five negative cases exposed the old gap before fix; final runtime suite 39 passed, Compose/runtime targeted 51 passed/1 skipped under restricted Docker access, full Mac business suite 210 passed/1 skipped with Docker access, Ruff and diff checks passed. No real Kylin/GPU or long-term evidence-retention claim.
 Evidence: dev-docs/evidence/2026-09-24-runtime-persistence-retention.md
 Next: Validate these environment/mount contracts and model loading on isolated Kylin; continue P4 and annotated-sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 87 (P6 sample report no-clobber) ===
+Status: In progress; 78/241 passed; P6 real-sample gates remain incomplete
+Changes: Four-class evaluator now refuses an existing report and uses atomic create-only publication, preserving prior or concurrent results. Updated the operator instructions to use a unique report path per run. No user/auth/permission layer.
+Verification: Regression reproduced silent overwrite before fix; targeted 6 passed, full Mac business suite 211 passed/1 skipped, Ruff and diff checks passed. Synthetic contracts only; no real annotated four-class or Kylin/NVIDIA acceptance claim.
+Evidence: dev-docs/evidence/2026-09-24-sample-report-no-clobber.md
+Next: Obtain real annotated four-class samples and target offline artifacts, run measured Mac and isolated Kylin/NVIDIA acceptance; continue P4 gaps. Keep goal active.

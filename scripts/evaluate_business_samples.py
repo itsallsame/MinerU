@@ -6,8 +6,10 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import os
 import re
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
@@ -272,6 +274,29 @@ def evaluate_suite(cases: list[dict[str, Any]], get: Callable[[str], Any], envir
             "note": "Exact-match machine candidate metrics; not human-confirmed accuracy or production acceptance."}
 
 
+def _write_new_report(output: Path, report: dict[str, Any]) -> None:
+    """Publish a complete report only if this path has never been used."""
+    if output.exists() or output.is_symlink():
+        raise EvaluationError("Evaluation report already exists; choose a new output path")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=output.parent, prefix=f".{output.name}.", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, output)
+        except FileExistsError as exc:
+            raise EvaluationError("Evaluation report already exists; choose a new output path") from exc
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -284,12 +309,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         cases = load_suite(args.suite)
-        report = evaluate_suite(cases, BusinessReader(args.base_url).get,
-                                _required_string(args.environment, "environment"))
         if args.output.resolve().is_relative_to(args.suite.parent.resolve()):
             raise EvaluationError("Report must be outside the sample directory")
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if args.output.exists() or args.output.is_symlink():
+            raise EvaluationError("Evaluation report already exists; choose a new output path")
+        report = evaluate_suite(cases, BusinessReader(args.base_url).get,
+                                _required_string(args.environment, "environment"))
+        _write_new_report(args.output, report)
     except (EvaluationError, OSError) as exc:
         print(f"Sample evaluation failed: {exc}", file=sys.stderr)
         return 1
