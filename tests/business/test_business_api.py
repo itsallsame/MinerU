@@ -137,6 +137,48 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
     assert client.get("/api/business/documents/unknown").status_code == 404
 
 
+def test_upload_idempotency_key_replays_same_intent_and_rejects_conflict(tmp_path: Path) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    store = BusinessStore(tmp_path / "business.sqlite3")
+    store.initialize()
+    doclib = Mock(spec=DoclibInterface)
+
+    def submit_to_doclib(request: ParseRequest) -> ParseResponse:
+        digest = hashlib.sha256(Path(request.path).read_bytes()).hexdigest()
+        return ParseResponse(sha256=digest, short_id=digest[:12], tier="flash", page_range="1",
+                             status="pending", created_parse_ids=[7])
+
+    doclib.ensure_parse.side_effect = submit_to_doclib
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024), store=store,
+        gateway=DoclibGateway(doclib, shared_root=shared), doclib=doclib, producer_version="4.0.6",
+    )
+    client = TestClient(create_app(
+        workflow=workflow, store=store,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+
+    def upload(content: bytes, key: str) -> object:
+        return client.post("/api/business/documents", headers={"Idempotency-Key": key},
+                           files={"file": ("report.html", content, "text/html")})
+
+    first = upload(b"<h1>Lantern</h1>", "first-upload-request-key")
+    replay = upload(b"<h1>Lantern</h1>", "first-upload-request-key")
+    assert first.status_code == replay.status_code == 202
+    assert first.json() == replay.json()
+    assert doclib.ensure_parse.call_count == 1
+    assert len(list(shared.iterdir())) == 1
+    assert upload(b"<h1>Changed</h1>", "first-upload-request-key").status_code == 409
+    assert upload(b"<h1>Lantern</h1>", "short").status_code == 422
+    distinct = upload(b"<h1>Lantern</h1>", "second-upload-request-key")
+    assert distinct.status_code == 202
+    assert distinct.json()["document"]["id"] != first.json()["document"]["id"]
+    assert doclib.ensure_parse.call_count == 2
+    assert len(list(shared.iterdir())) == 2
+
+
 def test_open_api_rejects_invalid_tier_and_accepts_selected_template(tmp_path: Path) -> None:
     shared = tmp_path / "shared"
     shared.mkdir()

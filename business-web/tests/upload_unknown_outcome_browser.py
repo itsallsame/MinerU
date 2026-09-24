@@ -10,6 +10,7 @@ from playwright.sync_api import sync_playwright
 
 def main(base_url: str) -> None:
     upload_calls = 0
+    request_keys: list[str] = []
 
     def api(route: object) -> None:
         nonlocal upload_calls
@@ -25,12 +26,15 @@ def main(base_url: str) -> None:
             payload = {"items": [], "total": 0, "limit": 20, "offset": 0}
         elif path == "/documents" and request.method == "POST":
             upload_calls += 1
+            request_keys.append(request.headers.get("idempotency-key", ""))
             if upload_calls == 1:
                 route.abort("failed")
             elif upload_calls == 2:
                 route.fulfill(status=202, content_type="application/json", body="{broken")
-            else:
+            elif upload_calls == 3:
                 route.fulfill(status=202, content_type="application/json", body="{}")
+            else:
+                route.fulfill(status=202, content_type="application/json", body='{"task":{"status":"submitted"}}')
             return
         else:
             raise AssertionError(f"Unexpected API call: {request.method} {path}")
@@ -58,6 +62,14 @@ def main(base_url: str) -> None:
             assert "missing-task.pdf · 上传已受理，但任务状态未返回" in feedback
             assert feedback.count("先刷新文档列表核对") == 2
             assert upload_calls == 3, "The UI must not automatically repeat an uncertain upload"
+            assert all(len(key) == 32 for key in request_keys)
+            assert len(set(request_keys)) == 3
+            page.locator("#upload-feedback .feedback-item").first.get_by_role(
+                "button", name="使用同一请求键重试",
+            ).click()
+            page.get_by_text("lost-response.pdf · 已受理 · 解析中").wait_for()
+            assert upload_calls == 4
+            assert request_keys[3] == request_keys[0]
             assert not errors, errors
             print("Playwright unknown upload outcome passed: no false rejection or automatic retransmission")
         finally:

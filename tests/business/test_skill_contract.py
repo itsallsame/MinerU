@@ -162,7 +162,25 @@ def test_skill_write_commands_require_explicit_acknowledgement() -> None:
         script.parser().parse_args(["upload", str(source), "--tier", "flash", "--confirm-write"]), client,
     )
     assert uploaded["task"]["status"] == "submitted"
-    client.upload.assert_called_once_with(source, tier="flash", template=None)
+    assert len(uploaded["request_key"]) == 32
+    client.upload.assert_called_once_with(source, tier="flash", template=None, request_key=uploaded["request_key"])
+
+    client.upload.reset_mock()
+    explicit = script.run(script.parser().parse_args([
+        "upload", str(source), "--tier", "flash", "--request-key", "replay-upload-request-key",
+        "--confirm-write",
+    ]), client)
+    assert explicit["request_key"] == "replay-upload-request-key"
+    client.upload.assert_called_once_with(source, tier="flash", template=None,
+                                          request_key="replay-upload-request-key")
+
+    client.upload.side_effect = script.BusinessAPIError("Upload outcome unknown")
+    with pytest.raises(script.BusinessAPIError) as uncertain:
+        script.run(script.parser().parse_args([
+            "upload", str(source), "--request-key", "replay-upload-request-key", "--confirm-write",
+        ]), client)
+    assert uncertain.value.request_key == "replay-upload-request-key"
+    client.upload.side_effect = None
 
     client.request.return_value = {"id": "run-1"}
     extracted = script.run(script.parser().parse_args(["extract", "revision-1", "--confirm-write"]), client)
@@ -259,8 +277,13 @@ def test_skill_upload_preflights_limits_and_streams_only_to_business_api(tmp_pat
     assert b'name="tier"' in connection.body.getvalue()
     assert b"standard" in connection.body.getvalue()
     assert b"official_document" in connection.body.getvalue()
+    assert len(dict(connection.headers)["Idempotency-Key"]) == 32
     content_length = int(dict(connection.headers)["Content-Length"])
     assert content_length == len(connection.body.getvalue())
+
+    with pytest.raises(script.BusinessAPIError, match="Invalid upload idempotency key"):
+        client.upload(file, tier="standard", template=None, request_key="")
+    assert len(connection.calls) == 2
 
     html = tmp_path / "notice.html"
     html.write_text("<h1>title</h1>")
@@ -336,9 +359,12 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     client._connect = lambda: _ASGIConnection(TestClient(app))
     file = tmp_path / "notice.html"
     file.write_bytes(b"<h1>Notice</h1>")
-    submitted = client.upload(file, tier=None, template="official_document")
+    submitted = client.upload(file, tier=None, template="official_document", request_key="skill-upload-request-key")
     assert submitted["task"]["status"] == "submitted"
     assert submitted["document"]["template_code"] == "official_document"
+    replay = client.upload(file, tier=None, template="official_document", request_key="skill-upload-request-key")
+    assert replay == submitted
+    assert doclib.ensure_parse.call_count == 1
     digest = submitted["document"]["sha256"]
     doclib.get_parse.return_value = ParseInfo(
         id=7, sha256=digest, short_id=digest[:12], tier="flash", page_range="1",

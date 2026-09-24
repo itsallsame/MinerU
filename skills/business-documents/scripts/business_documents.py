@@ -8,6 +8,7 @@ import ipaddress
 import json
 import mimetypes
 import os
+import re
 import socket
 import sys
 import uuid
@@ -19,6 +20,7 @@ from urllib.parse import quote, urlencode, urlsplit
 ALLOWED_API_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
     "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7",
 ))
+REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
 def _approved_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -26,9 +28,10 @@ def _approved_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) ->
 
 
 class BusinessAPIError(Exception):
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(self, message: str, *, status: int | None = None, request_key: str | None = None) -> None:
         super().__init__(message)
         self.status = status
+        self.request_key = request_key
 
 
 class BusinessClient:
@@ -99,7 +102,12 @@ class BusinessClient:
         finally:
             connection.close()
 
-    def upload(self, filename: Path, *, tier: str | None, template: str | None) -> Any:
+    def upload(
+        self, filename: Path, *, tier: str | None, template: str | None, request_key: str | None = None,
+    ) -> Any:
+        key = uuid.uuid4().hex if request_key is None else request_key
+        if REQUEST_KEY_RE.fullmatch(key) is None:
+            raise BusinessAPIError("Invalid upload idempotency key")
         if not filename.is_file():
             raise BusinessAPIError("Upload source must be an existing regular file")
         capabilities = self.request("GET", "/capabilities")
@@ -133,14 +141,25 @@ class BusinessClient:
                 connection.putheader("Accept", "application/json")
                 connection.putheader("Content-Type", f"multipart/form-data; boundary={boundary}")
                 connection.putheader("Content-Length", str(len(prefix) + size + len(suffix)))
+                connection.putheader("Idempotency-Key", key)
                 connection.endheaders()
                 connection.send(prefix)
                 while chunk := source.read(1024 * 1024):
                     connection.send(chunk)
                 connection.send(suffix)
                 return self._read_response(connection)
+            except BusinessAPIError as exc:
+                if exc.status is not None and 200 <= exc.status < 300:
+                    raise BusinessAPIError(
+                        "Upload response unreadable; outcome unknown, retry only with the same request key",
+                        status=exc.status, request_key=key,
+                    ) from exc
+                raise
             except OSError as exc:
-                raise BusinessAPIError(f"Business API unavailable during upload: {exc}") from exc
+                raise BusinessAPIError(
+                    "Business API unavailable during upload; outcome unknown, retry only with the same request key",
+                    request_key=key,
+                ) from exc
             finally:
                 connection.close()
 
@@ -175,6 +194,7 @@ def parser() -> argparse.ArgumentParser:
     upload.add_argument("file", type=Path)
     upload.add_argument("--tier", choices=("flash", "basic", "standard", "advanced"))
     upload.add_argument("--template")
+    upload.add_argument("--request-key", help="Reuse this key when retrying an uncertain upload")
     upload.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested upload")
     search = commands.add_parser("search")
     search.add_argument("query")
@@ -216,7 +236,13 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "upload":
         if not args.confirm_write:
             raise BusinessAPIError("Upload requires --confirm-write after explicit user approval")
-        return client.upload(args.file, tier=args.tier, template=args.template)
+        request_key = uuid.uuid4().hex if args.request_key is None else args.request_key
+        try:
+            result = client.upload(args.file, tier=args.tier, template=args.template, request_key=request_key)
+        except BusinessAPIError as exc:
+            exc.request_key = request_key
+            raise
+        return {**result, "request_key": request_key} if isinstance(result, dict) else result
     if command == "overview":
         return client.overview(args.document_id)
     if command == "search":
@@ -269,7 +295,10 @@ def main(argv: list[str] | None = None) -> int:
             raise BusinessAPIError("MINERU_BUSINESS_API_URL or --base-url is required")
         result = run(args, BusinessClient(args.base_url))
     except BusinessAPIError as exc:
-        print(json.dumps({"error": str(exc), "status": exc.status}, ensure_ascii=False), file=sys.stderr)
+        failure = {"error": str(exc), "status": exc.status}
+        if exc.request_key is not None:
+            failure["request_key"] = exc.request_key
+        print(json.dumps(failure, ensure_ascii=False), file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

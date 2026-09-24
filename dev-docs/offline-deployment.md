@@ -22,7 +22,7 @@
 8. 在物理断网情况下启动容器，然后运行 `python3 -m scripts.verify_business_runtime --release /受控发布目录/release.json --artifact-report /独立验收目录/当前版本/artifact-verification.json --model-dir /模型目录 --model-manifest /模型目录外/model-manifest.json --business-bind 127.0.0.1 --business-port 8088 --output /独立验收目录/当前版本/runtime-preflight.json`。如果第 7 步改变了 `MINERU_BUSINESS_BIND_ADDRESS` 或端口，这里必须使用同一值；可用 `--compose-file` 指定非默认 Compose 文件。运行态命令先校验第 6 步的成功报告与当前发布清单字节哈希、源码、镜像 ID 和模型清单哈希一致，不接受缺失、失败或旧版报告，然后检查实际容器与所选镜像 ID、只读根文件系统、精确的模型/数据挂载清单及宿主路径互不重叠、单一内部网络、仅业务端口对外、离线环境变量、业务 API、内部 Doclib 状态、Docker GPU 请求、容器内 CUDA 与宿主 `nvidia-smi`。业务容器只允许业务数据和共享原件两个挂载，worker 只允许 Doclib 数据、共享原件、只读模型与只读清单四个挂载；额外 bind/volume 即使不在约定路径也视为异常。还必须确认容器实际环境变量把 Doclib、模型、清单、业务数据库、上传目录和 Web 根目录指向上述已核验挂载，并保持 `MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0`，否则旧解析批次与证据引用可能失效。只允许私网或回环业务绑定，Doclib 不得发布宿主端口。失败返回非零且不写成功报告；报告不含模型路径或业务正文。同名运行态报告不可覆盖。此检查不证明物理断网、权重能被 vLLM 完整加载或解析质量。
 9. 继续验收模型加载、真实 PDF/图片和四类标注样本、服务重启、备份与回退。第 6 步只证明制品一致，第 8 步只证明启动时配置和基础 GPU/服务可用性，两者均不能替代端到端解析与目标机性能测试。目前只有 Mac 模拟单测，尚无麒麟/NVIDIA 现场结果。
 
-回退时须保留上一版的发布清单、基础/代码镜像、wheelhouse、模型目录和模型清单；先核对清单哈希，再切回上一版镜像与模型挂载并复测。业务数据库的 schema 回退策略将在 P3 持久化设计时确定，不能仅凭替换镜像宣称可回滚。
+回退时须保留上一版的发布清单、基础/代码镜像、wheelhouse、模型目录和模型清单；先核对清单哈希，再切回上一版镜像与模型挂载并复测。当前业务数据库 schema 为 8，上传请求键持久化在同事务的 `ingest_requests` 表；旧 schema 7 不做隐式迁移，原文件会保留但新服务拒绝启动。回退代码镜像不得直接挂载不兼容数据库，须按已核验的匹配版本备份/恢复方案处理；目前目标机数据库回退演练未完成，不能仅凭替换镜像宣称可回滚。
 
 ## 当前已知限制
 

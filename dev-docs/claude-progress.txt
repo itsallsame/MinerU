@@ -856,3 +856,10 @@ Changes: Upload transport uncertainty, malformed accepted JSON and accepted resp
 Verification: New Chromium regressions failed before fixes and passed after; Web 11 Node tests, offline build and 21 Chromium regressions passed. No end-to-end exactly-once guarantee or target-machine claim.
 Evidence: dev-docs/evidence/2026-09-24-upload-unknown-outcome.md
 Next: Continue FE-047 remaining async paths and FE-046 accessibility; complete P1 target artifacts and P6 real-sample acceptance. Keep goal active.
+
+=== 2026-09-24 Session 90 (same-request upload idempotency across Web and Skill) ===
+Status: In progress; 78/241 passed; target-machine and real-sample gates remain incomplete
+Changes: Business schema 8 adds transactional ingest request keys. Same key/intention replays original document/task without a second Doclib submission; a new key with identical bytes remains a distinct business document. Web uses random per-file keys and manual same-key retry; own Skill emits keys and accepts --request-key. No user/auth/permission layer or old-data migration.
+Verification: Regression exposed missing workflow key support before fix. Targeted business 36 passed; full Mac business 217 passed/1 skipped; Web 11 Node tests, offline build, 21 Chromium regressions and Ruff passed. Concurrency, cross-Store replay, HTTP 409/422 and Skill real API replay covered. No isolated Kylin/NVIDIA or real annotated sample claim.
+Evidence: dev-docs/evidence/2026-09-24-upload-request-idempotency.md
+Next: Audit rollback/backup with schema 8 on target, then continue P4 and P6 gates. Keep goal active.

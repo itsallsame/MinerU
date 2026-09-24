@@ -43,11 +43,16 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
+_REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
 class BusinessStoreError(ValueError):
     """A business invariant or expected record was not satisfied."""
+
+
+class UploadRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for a different upload intent."""
 
 
 def _now_ms() -> int:
@@ -94,7 +99,7 @@ class BusinessStore:
                 if tables != {
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
-                    "issue_resolutions", "confirmed_results", "audit_events",
+                    "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -137,6 +142,16 @@ class BusinessStore:
                         updated_at_ms INTEGER NOT NULL
                     );
                     CREATE INDEX tasks_document_created ON tasks(document_id, created_at_ms);
+                    CREATE TABLE ingest_requests (
+                        request_key TEXT PRIMARY KEY,
+                        document_id TEXT NOT NULL UNIQUE REFERENCES documents(id) ON DELETE RESTRICT,
+                        task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id) ON DELETE RESTRICT,
+                        original_name TEXT NOT NULL,
+                        sha256 TEXT NOT NULL,
+                        size INTEGER NOT NULL CHECK(size > 0),
+                        requested_tier TEXT,
+                        template_code TEXT
+                    );
                     CREATE TABLE revisions (
                         id TEXT PRIMARY KEY,
                         document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE RESTRICT,
@@ -277,7 +292,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 7")
+                database.execute("PRAGMA user_version = 8")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -866,8 +881,48 @@ class BusinessStore:
         template_code: str | None = None,
     ) -> tuple[BusinessDocument, IngestTask]:
         """Persist a document and recoverable initial task in one transaction."""
+        document, task, _created = self._create_document_with_task(
+            upload, original_name=original_name, requested_tier=requested_tier,
+            template_code=template_code, request_key=None,
+        )
+        return document, task
+
+    def create_or_reuse_document_with_task(
+        self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None,
+        template_code: str | None, request_key: str,
+    ) -> tuple[BusinessDocument, IngestTask, bool]:
+        """Use one durable request key for one upload intent, never content-wide deduplication."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid upload idempotency key")
+        return self._create_document_with_task(
+            upload, original_name=original_name, requested_tier=requested_tier,
+            template_code=template_code, request_key=request_key,
+        )
+
+    def _create_document_with_task(
+        self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None,
+        template_code: str | None, request_key: str | None,
+    ) -> tuple[BusinessDocument, IngestTask, bool]:
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            if request_key is not None:
+                previous = database.execute(
+                    "SELECT * FROM ingest_requests WHERE request_key=?", (request_key,)
+                ).fetchone()
+                if previous is not None:
+                    if (
+                        previous["original_name"] != original_name or previous["sha256"] != upload.sha256
+                        or previous["size"] != upload.size or previous["requested_tier"] != requested_tier
+                        or previous["template_code"] != template_code
+                    ):
+                        raise UploadRequestConflict("Idempotency key already belongs to a different upload")
+                    document_row = database.execute(
+                        "SELECT * FROM documents WHERE id=?", (previous["document_id"],)
+                    ).fetchone()
+                    task_row = database.execute("SELECT * FROM tasks WHERE id=?", (previous["task_id"],)).fetchone()
+                    if document_row is None or task_row is None:
+                        raise BusinessStoreError("Idempotent upload record is incomplete")
+                    return BusinessDocument(**dict(document_row)), self._task_from_row(task_row), False
             template_version = self._resolve_template_version(database, template_code)
             document = self._new_document(
                 upload, original_name=original_name, template_code=template_code, template_version=template_version
@@ -889,7 +944,13 @@ class BusinessStore:
                 "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (task.id, task.document_id, task.requested_tier, task.actual_tier, task.status, "[]", None, now, now),
             )
-        return document, task
+            if request_key is not None:
+                database.execute(
+                    "INSERT INTO ingest_requests VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (request_key, document.id, task.id, original_name, upload.sha256, upload.size,
+                     requested_tier, template_code),
+                )
+        return document, task, True
 
     @staticmethod
     def _resolve_template_version(database: sqlite3.Connection, code: str | None) -> int | None:

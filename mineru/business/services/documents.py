@@ -64,19 +64,30 @@ class DocumentWorkflow:
         self._producer_version = producer_version
 
     def submit(
-        self, source: BinaryIO, *, filename: str, tier: Tier | None = None, template_code: str | None = None
+        self, source: BinaryIO, *, filename: str, tier: Tier | None = None, template_code: str | None = None,
+        request_key: str | None = None,
     ) -> DocumentSubmission:
         """Accept a source, persist its identity, then request local parsing."""
         resolve_parse_tier(filename, tier)
         uploaded = self._uploads.store(source, filename=filename)
+        original_name = Path(filename.replace("\\", "/")).name
         try:
-            document, task = self._store.create_document_with_task(
-                uploaded, original_name=Path(filename.replace("\\", "/")).name, requested_tier=tier,
-                template_code=template_code,
-            )
+            if request_key is None:
+                document, task = self._store.create_document_with_task(
+                    uploaded, original_name=original_name, requested_tier=tier, template_code=template_code,
+                )
+                created = True
+            else:
+                document, task, created = self._store.create_or_reuse_document_with_task(
+                    uploaded, original_name=original_name, requested_tier=tier, template_code=template_code,
+                    request_key=request_key,
+                )
         except Exception:
             self._uploads.discard_unregistered(uploaded)
             raise
+        if not created:
+            self._uploads.discard_unregistered(uploaded)
+            return DocumentSubmission(document=document, task=task)
         task = self._submit_existing(task, source_path=uploaded.path, expected_sha256=document.sha256)
         return DocumentSubmission(document=document, task=task)
 

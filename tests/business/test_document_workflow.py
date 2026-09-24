@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import io
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from unittest.mock import Mock
 
 import pytest
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
-from mineru.business.services import DocumentWorkflow, DocumentWorkflowError
+from mineru.business.services import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
 from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, ParseResponse
 from mineru.errors import ServerNotRunningError
@@ -90,6 +92,62 @@ def test_submission_and_refresh_survive_new_service_instance(tmp_path: Path) -> 
     with pytest.raises(DocumentWorkflowError, match="not found"):
         resumed.refresh("unknown")
     assert store.get_document(submitted.document.id) == submitted.document
+
+
+def test_request_key_replays_one_upload_without_suppressing_intentional_duplicate(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, shared = _workflow(tmp_path, client)
+    source = b"<h1>Same bytes</h1>"
+    first = workflow.submit(io.BytesIO(source), filename="report.html", request_key="first-upload-request-key")
+    reopened = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024),
+        store=BusinessStore(tmp_path / "business" / "business.sqlite3"),
+        gateway=DoclibGateway(client, shared_root=shared), doclib=client, producer_version="4.0.6",
+    )
+    replay = reopened.submit(io.BytesIO(source), filename="report.html", request_key="first-upload-request-key")
+    assert replay == first
+    assert client.ensure_parse.call_count == 1
+    assert len(list(shared.iterdir())) == 1
+    assert store.list_documents(limit=20, offset=0)[1] == 1
+
+    new_intent = workflow.submit(io.BytesIO(source), filename="report.html", request_key="second-upload-request-key")
+    assert new_intent.document.id != first.document.id
+    assert client.ensure_parse.call_count == 2
+    assert store.list_documents(limit=20, offset=0)[1] == 2
+
+    with pytest.raises(ValueError, match="Idempotency key"):
+        workflow.submit(io.BytesIO(b"<h1>Different bytes</h1>"), filename="report.html",
+                        request_key="first-upload-request-key")
+    with pytest.raises(ValueError, match="Idempotency key"):
+        workflow.submit(io.BytesIO(source), filename="different.html", request_key="first-upload-request-key")
+    with pytest.raises(ValueError, match="Idempotency key"):
+        workflow.submit(io.BytesIO(source), filename="report.html", template_code="official_document",
+                        request_key="first-upload-request-key")
+    assert len(list(shared.iterdir())) == 2
+    assert client.ensure_parse.call_count == 2
+
+
+def test_parallel_replay_cannot_create_second_document(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, shared = _workflow(tmp_path, client)
+    barrier = Barrier(2)
+
+    def submit() -> DocumentSubmission:
+        barrier.wait()
+        return workflow.submit(io.BytesIO(b"<h1>Parallel</h1>"), filename="report.html",
+                               request_key="parallel-upload-request-key")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(submit)
+        second = pool.submit(submit)
+        results = (first.result(), second.result())
+    assert len({result.document.id for result in results}) == 1
+    assert len({result.task.id for result in results}) == 1
+    assert store.list_documents(limit=20, offset=0)[1] == 1
+    assert len(list(shared.iterdir())) == 1
+    assert client.ensure_parse.call_count == 1
 
 
 def test_pdf_all_pages_become_one_logical_revision_across_parse_batches(tmp_path: Path) -> None:

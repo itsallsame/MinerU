@@ -99,12 +99,14 @@ export const businessApi = {
   audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),
   task: (id) => request(`/tasks/${encodeURIComponent(id)}`),
   retry: (id) => request(`/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" }),
-  upload: (file, { tier, templateCode } = {}) => {
+  upload: (file, { tier, templateCode, requestKey } = {}) => {
     const body = new FormData();
     body.append("file", file, file.name);
     if (tier) body.append("tier", tier);
     if (templateCode) body.append("template_code", templateCode);
-    return request("/documents", { method: "POST", body });
+    return request("/documents", {
+      method: "POST", body, headers: requestKey ? { "Idempotency-Key": requestKey } : {},
+    });
   },
   sourceUrl: (id) => `${base}/documents/${encodeURIComponent(id)}/source`,
   sourceAvailable: (id) => request(`/documents/${encodeURIComponent(id)}/source`, { method: "HEAD" }, false),

@@ -225,6 +225,57 @@ function feedback(file, message, kind = "") {
   return node;
 }
 
+function newUploadRequestKey() {
+  if (!globalThis.crypto?.getRandomValues) throw new Error("浏览器无法生成安全上传请求键，请更换浏览器后重试。");
+  return [...crypto.getRandomValues(new Uint8Array(16))]
+    .map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function showAcceptedUpload(node, file, result) {
+  node.textContent = result?.task?.status
+    ? `${file.name} · 已受理 · ${taskLabel(result.task.status)}`
+    : `${file.name} · 上传已受理，但任务状态未返回；请刷新文档列表核对。`;
+  node.className = `feedback-item ${result?.task?.status ? "success" : "warning"}`;
+}
+
+function isUnknownUploadError(error) {
+  return error?.status === 0 || error instanceof SyntaxError;
+}
+
+function showUnknownUpload(node, file, { tier, templateCode, requestKey }) {
+  node.className = "feedback-item warning";
+  node.replaceChildren(document.createTextNode(
+    `${file.name} · 上传结果未确认；可能已受理。先刷新文档列表核对，勿用新请求重复上传。`,
+  ));
+  const retry = element("button", "secondary-button", "使用同一请求键重试");
+  retry.type = "button";
+  retry.dataset.uploadRetry = "true";
+  retry.disabled = state.uploading;
+  retry.addEventListener("click", async () => {
+    if (state.uploading) return;
+    state.uploading = true;
+    updateFileSelection();
+    retry.disabled = true;
+    node.textContent = `${file.name} · 正在重试同一次上传请求…`;
+    try {
+      const result = await businessApi.upload(file, { tier, templateCode, requestKey });
+      showAcceptedUpload(node, file, result);
+      await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
+    } catch (error) {
+      if (isUnknownUploadError(error)) showUnknownUpload(node, file, { tier, templateCode, requestKey });
+      else {
+        node.textContent = `${file.name} · ${error.message}`;
+        node.className = "feedback-item error";
+      }
+    } finally {
+      state.uploading = false;
+      updateFileSelection();
+      byId("upload-feedback").querySelectorAll("[data-upload-retry]").forEach((button) => { button.disabled = false; });
+    }
+  });
+  node.append(" ", retry);
+}
+
 function populateTemplateSelects() {
   const upload = byId("upload-template");
   const filter = byId("template-filter");
@@ -768,28 +819,27 @@ async function submitFiles(event) {
       continue;
     }
     const resultNode = feedback(file, "正在上传…");
+    let requestKey;
+    let tier;
     try {
-      const tier = tierForFile(file, capabilities, selectedTier);
-      const result = await businessApi.upload(file, { tier, templateCode });
+      tier = tierForFile(file, capabilities, selectedTier);
+      requestKey = newUploadRequestKey();
+      const result = await businessApi.upload(file, { tier, templateCode, requestKey });
       accepted += 1;
-      if (result?.task?.status) {
-        resultNode.textContent = `${file.name} · 已受理 · ${taskLabel(result.task.status)}`;
-        resultNode.className = "feedback-item success";
-      } else {
-        resultNode.textContent = `${file.name} · 上传已受理，但任务状态未返回；请刷新文档列表核对。`;
-        resultNode.className = "feedback-item warning";
-      }
+      showAcceptedUpload(resultNode, file, result);
     } catch (error) {
-      const unknownOutcome = error?.status === 0 || error instanceof SyntaxError;
-      resultNode.textContent = unknownOutcome
-        ? `${file.name} · 上传结果未确认；可能已受理。先刷新文档列表核对，勿直接重复上传。`
-        : `${file.name} · ${error.message}`;
-      resultNode.className = `feedback-item ${unknownOutcome ? "warning" : "error"}`;
+      if (requestKey && isUnknownUploadError(error)) {
+        showUnknownUpload(resultNode, file, { tier, templateCode, requestKey });
+      } else {
+        resultNode.textContent = `${file.name} · ${error.message}`;
+        resultNode.className = "feedback-item error";
+      }
     }
   }
   state.uploading = false;
   byId("files").value = "";
   updateFileSelection();
+  byId("upload-feedback").querySelectorAll("[data-upload-retry]").forEach((button) => { button.disabled = false; });
   if (accepted) {
     if (state.listRequest === listRequest) state.page = 0;
     await refreshDocuments();

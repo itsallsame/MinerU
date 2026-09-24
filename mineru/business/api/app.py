@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
@@ -63,7 +63,7 @@ from ..services import (
     BusinessStructurePage,
     StructureBlock,
 )
-from ..store import BusinessStore, BusinessStoreError
+from ..store import BusinessStore, BusinessStoreError, UploadRequestConflict
 from .body_limit import UploadBodyLimit
 
 
@@ -890,14 +890,19 @@ def create_app(
     def submit_document(
         file: Annotated[UploadFile, File()], tier: Annotated[Tier | None, Form()] = None,
         template_code: Annotated[str | None, Form()] = None,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> SubmissionView:
         if not file.filename:
             raise HTTPException(status_code=422, detail="File name is required")
         try:
-            result = workflow.submit(file.file, filename=file.filename, tier=tier, template_code=template_code)
+            result = workflow.submit(
+                file.file, filename=file.filename, tier=tier, template_code=template_code, request_key=request_key,
+            )
         except UploadError as exc:
             status_code = 413 if "exceeds" in str(exc) else 422
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        except UploadRequestConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except DocumentWorkflowError as exc:
