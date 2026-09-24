@@ -28,6 +28,7 @@ def main(base_url: str) -> None:
     ]
     uploaded: list[bytes] = []
     retry_calls = 0
+    list_fail = False
 
     def api(route: object) -> None:
         nonlocal retry_calls
@@ -41,6 +42,9 @@ def main(base_url: str) -> None:
             payload = [{"code": "my_report", "name": "我的报告", "version": 1, "enabled": True,
                         "built_in": False, "fields": [], "created_at_ms": now}]
         elif path == "/documents" and request.method == "GET":
+            if list_fail:
+                route.fulfill(status=503, content_type="application/json", body='{"detail":"list_unavailable"}')
+                return
             payload = {"items": [{"document": doc, "task": task} for doc, task in zip(documents, tasks)],
                        "total": 3, "limit": 20, "offset": 0}
         elif path == "/documents" and request.method == "POST":
@@ -140,8 +144,20 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="提交待处理任务").click()
             page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
             assert retry_calls == 3
+
+            tasks[0] = {**tasks[0], "status": "failed", "error_code": "doclib_submission_failed"}
+            page.get_by_role("button", name="刷新列表").click()
+            page.get_by_role("button", name="查看 failed.pdf，失败").click()
+            list_fail = True
+            page.get_by_role("button", name="重新提交任务").click()
+            page.get_by_text("任务已重新提交，但文档列表读取失败：list_unavailable").wait_for()
+            assert retry_calls == 4
+            list_fail = False
+            page.get_by_role("button", name="重新连接并刷新").click()
+            page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
+            assert retry_calls == 4
             assert not errors, errors
-            print("Playwright upload/retry passed: stable batch, failure guidance, uploaded recovery and stale-error guard")
+            print("Playwright upload/retry passed: stable batch, failure guidance, accepted retry/read failure and stale-error guard")
         finally:
             browser.close()
 

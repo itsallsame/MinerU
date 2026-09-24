@@ -39,6 +39,7 @@ def main(base_url: str) -> None:
     calls: list[str] = []
     writes: list[str] = []
     locator = f"doc:{documents[0]['sha256'][:7]}/tier:flash/page:1/block:1"
+    revisions_fail = False
 
     def api(route: object) -> None:
         path = route.request.url.split("/api/business", 1)[1].split("?", 1)[0]
@@ -61,6 +62,9 @@ def main(base_url: str) -> None:
                 "offset": 0,
             }
         elif path in (f"/documents/{document['id']}/revisions" for document in documents):
+            if path == f"/documents/{documents[0]['id']}/revisions" and revisions_fail:
+                route.fulfill(status=503, content_type="application/json", body='{"detail":"revisions_unavailable"}')
+                return
             payload = []
         elif path.endswith("/source"):
             route.fulfill(status=200, content_type="application/pdf", body=b"%PDF-1.4\n")
@@ -150,8 +154,16 @@ def main(base_url: str) -> None:
             page.wait_for_timeout(100)
             assert "/revisions/rev-a/content" not in calls
             assert page.locator("#detail-content h2").inner_text() == "second.pdf"
+
+            revisions_fail = True
+            page.get_by_role("button", name="检索", exact=True).click()
+            page.get_by_role("button", name="查找块级候选依据").click()
+            page.get_by_role("button", name="冻结此块原文").click()
+            page.get_by_text("原文已冻结，但修订记录不可用：revisions_unavailable").wait_for()
+            assert writes == ["/revisions/rev-a/evidence"] * 2
+            assert page.get_by_role("button", name="冻结此块原文").is_disabled()
             assert not errors, errors
-            print("Playwright search action races passed: accepted freeze does not navigate back; stale read is skipped")
+            print("Playwright search action races passed: accepted freeze survives stale navigation and revision read failure")
         finally:
             browser.close()
 

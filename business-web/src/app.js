@@ -341,7 +341,7 @@ function renderDocuments() {
   byId("page-label").textContent = `第 ${state.page + 1} 页`;
 }
 
-async function refreshDocuments() {
+async function refreshDocuments({ acceptedWriteMessage = "" } = {}) {
   const requestNumber = ++state.listRequest;
   try {
     const page = await businessApi.documents({
@@ -376,7 +376,7 @@ async function refreshDocuments() {
   } catch (error) {
     if (requestNumber !== state.listRequest) return false;
     setConnection(false, "业务服务不可用");
-    showError(error.message);
+    showError(acceptedWriteMessage ? `${acceptedWriteMessage}，但文档列表读取失败：${error.message}` : error.message);
     state.capabilities = null;
     byId("capability-note").textContent = "文档库不可用，上传已暂停；重新连接后会再次读取服务能力。";
     updateFileSelection();
@@ -474,7 +474,9 @@ function renderDetail() {
       try {
         await businessApi.retry(task.id);
         if (selectionRequest === state.selectionRequest) clearError();
-        await refreshDocuments();
+        const acceptedWriteMessage = task.status === "uploaded" ? "任务已提交" : "任务已重新提交";
+        await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
+          ? acceptedWriteMessage : "" });
       } catch (error) {
         if (selectionRequest === state.selectionRequest) showError(`重试失败：${error.message}`);
         retry.disabled = false;
@@ -667,15 +669,9 @@ async function searchDocuments(event, retryQuery = null) {
               freeze.disabled = true;
               const selectionRequest = state.selectionRequest;
               const searchRequest = state.searchRequest;
+              let evidence;
               try {
-                const evidence = await businessApi.captureEvidence(hit.revision_id, match.locator);
-                if (selectionRequest !== state.selectionRequest || searchRequest !== state.searchRequest) {
-                  if (result.isConnected) result.append(element("p", "review-hint", "原文已冻结到原解析修订；当前文档保持不变。"));
-                  return;
-                }
-                await selectDocument(hit.document.id, hit.document, {
-                  revisionId: hit.revision_id, evidenceId: evidence.id,
-                });
+                evidence = await businessApi.captureEvidence(hit.revision_id, match.locator);
               } catch (error) {
                 if (selectionRequest !== state.selectionRequest || searchRequest !== state.searchRequest) {
                   freeze.disabled = false;
@@ -683,6 +679,23 @@ async function searchDocuments(event, retryQuery = null) {
                 }
                 result.append(element("p", "error-banner", `证据冻结失败：${error.message}`));
                 freeze.disabled = false;
+                return;
+              }
+              if (selectionRequest !== state.selectionRequest || searchRequest !== state.searchRequest) {
+                if (result.isConnected) result.append(element("p", "review-hint", "原文已冻结到原解析修订；当前文档保持不变。"));
+                return;
+              }
+              try {
+                await selectDocument(hit.document.id, hit.document, {
+                  revisionId: hit.revision_id, evidenceId: evidence.id,
+                });
+                if (state.selectedId === hit.document.id && state.revisionsError && result.isConnected) {
+                  result.append(element("p", "error-banner", `原文已冻结，但${state.revisionsError}`));
+                }
+              } catch (error) {
+                if (state.selectedId === hit.document.id && result.isConnected) {
+                  result.append(element("p", "error-banner", `原文已冻结，但打开文档失败：${error.message}`));
+                }
               }
             });
             result.append(read, freeze);

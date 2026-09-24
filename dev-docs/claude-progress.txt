@@ -807,3 +807,10 @@ Changes: Shared accepted-write/read-refresh handling across candidate acceptance
 Verification: New browser regression failed before fix, then passed all four decision/issue cases. Web 11 Node tests, offline build and 20 Chromium regressions passed. Mac synthetic API only; no annotated sample or isolated Kylin/NVIDIA claim.
 Evidence: dev-docs/evidence/2026-09-24-review-decision-issue-write-ack.md
 Next: Audit FE-047 search freeze and task retry write/read boundaries plus FE-046 accessibility; obtain P1/P6 target artifacts and real samples. Keep goal active.
+
+=== 2026-09-24 Session 83 (FE-047 search freeze and task retry boundaries) ===
+Status: In progress; 78/241 passed; FE-047 remains incomplete
+Changes: Split search-result evidence POST from follow-up document navigation so an accepted freeze cannot be mislabeled failed. Task retry/submission now keeps accepted-write wording if document-list refresh fails. No user/auth/permission layer added.
+Verification: Search-freeze regression failed before fix. Web 11 Node tests, offline build and 20 Chromium regressions passed, including accepted-write/GET-503 recovery and stale-navigation behavior. Mac synthetic API only; no real annotated sample or isolated Kylin/NVIDIA claim.
+Evidence: dev-docs/evidence/2026-09-24-search-freeze-task-retry-ack.md
+Next: Continue FE-047 remaining async-path audit, FE-046 accessibility and P1/P6 real-target/sample gates. Keep goal active.
