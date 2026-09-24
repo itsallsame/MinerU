@@ -162,6 +162,14 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
+  async function refreshAfterReviewWrite(runId, isCurrent, acknowledgement) {
+    if (!isCurrent()) return;
+    await loadRun(runId);
+    if (isCurrent() && state.runLoadFailed) {
+      state.error = `${acknowledgement}，但${state.error}`;
+    }
+  }
+
   async function selectRevision(revisionId, targetRunId = null) {
     const generation = ++state.generation;
     state.contextVersion += 1;
@@ -767,7 +775,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         row.append(button("接受候选", () => perform(async (isCurrent) => {
           const runId = state.runId;
           await businessApi.decideField(runId, field.code, candidate.value, candidate.evidence_id);
-          if (isCurrent()) await loadRun(runId);
+          await refreshAfterReviewWrite(runId, isCurrent, "复核决定已保存");
         }), state.busy));
         card.append(row);
       }
@@ -805,7 +813,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         perform(async (isCurrent) => {
           const runId = state.runId;
           await businessApi.decideField(runId, field.code, value.value, evidence.value, reason.value || null);
-          if (isCurrent()) await loadRun(runId);
+          await refreshAfterReviewWrite(runId, isCurrent, "复核决定已保存");
         });
       });
       card.append(form);
@@ -845,7 +853,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
             perform(async (isCurrent) => {
               const runId = state.runId;
               await businessApi.resolveIssue(issue.id, "ignored", reason.value);
-              if (isCurrent()) await loadRun(runId);
+              await refreshAfterReviewWrite(runId, isCurrent, "问题处理已保存");
             });
           });
           form.append(ignore);
@@ -855,7 +863,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
           perform(async (isCurrent) => {
             const runId = state.runId;
             await businessApi.resolveIssue(issue.id, "resolved", reason.value);
-            if (isCurrent()) await loadRun(runId);
+            await refreshAfterReviewWrite(runId, isCurrent, "问题处理已保存");
           });
         });
         card.append(form);
@@ -879,11 +887,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     box.append(button("确认并生成不可变成果版本", () => perform(async (isCurrent) => {
       const runId = state.runId;
       const confirmed = await businessApi.confirm(runId);
-      if (!isCurrent()) return;
-      await loadRun(runId);
-      if (isCurrent() && state.runLoadFailed) {
-        state.error = `成果 v${confirmed.version} 已确认，但${state.error}`;
-      }
+      await refreshAfterReviewWrite(runId, isCurrent, `成果 v${confirmed.version} 已确认`);
     }), state.busy || !!blockers.length));
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {

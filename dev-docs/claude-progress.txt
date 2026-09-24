@@ -800,3 +800,10 @@ Changes: Preserved explicit success acknowledgement after result confirmation an
 Verification: Confirmed-result regression failed before the fix, then passed. Web 11 Node tests, offline build and 19 Chromium regressions passed, including result and evidence POST-201/GET-503 recovery. Mac synthetic API only; no annotated real-sample or Kylin/NVIDIA claim.
 Evidence: dev-docs/evidence/2026-09-24-review-immutable-write-ack.md
 Next: Audit remaining FE-047 decision/issue write-read boundaries, then FE-046 accessibility; P1/P6 target and sample gates remain. Keep goal active.
+
+=== 2026-09-24 Session 82 (FE-047 decision/issue write-read boundaries) ===
+Status: In progress; 78/241 passed; FE-047 remains incomplete
+Changes: Shared accepted-write/read-refresh handling across candidate acceptance, manual decision, issue resolution, reasoned ignore and result confirmation. Successful POST followed by failed GET now explicitly acknowledges the write and offers read-only retry. Open system remains without users or permissions.
+Verification: New browser regression failed before fix, then passed all four decision/issue cases. Web 11 Node tests, offline build and 20 Chromium regressions passed. Mac synthetic API only; no annotated sample or isolated Kylin/NVIDIA claim.
+Evidence: dev-docs/evidence/2026-09-24-review-decision-issue-write-ack.md
+Next: Audit FE-047 search freeze and task retry write/read boundaries plus FE-046 accessibility; obtain P1/P6 target artifacts and real samples. Keep goal active.
