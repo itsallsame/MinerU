@@ -60,6 +60,13 @@ def _now_ms() -> int:
     return time.time_ns() // 1_000_000
 
 
+def _verify_evidence_checksum(snippet: str, expected_sha256: str) -> None:
+    if not isinstance(snippet, str) or not isinstance(expected_sha256, str) or (
+        hashlib.sha256(snippet.encode("utf-8")).hexdigest() != expected_sha256
+    ):
+        raise BusinessStoreError("Frozen evidence checksum mismatch")
+
+
 class BusinessStore:
     """Single-node business DB. Connections and transactions are per operation."""
 
@@ -534,7 +541,7 @@ class BusinessStore:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute(
                 "SELECT x.status, x.claim_token, x.lease_until_ms, x.template_code, x.template_version, "
-                "x.revision_id, e.snippet, e.revision_id AS "
+                "x.revision_id, e.snippet, e.snippet_sha256, e.revision_id AS "
                 "evidence_revision_id FROM extraction_runs x JOIN evidence e ON e.id=? WHERE x.id=?",
                 (evidence_id, run_id),
             ).fetchone()
@@ -543,6 +550,7 @@ class BusinessStore:
                 or row["lease_until_ms"] <= _now_ms() or row["evidence_revision_id"] != row["revision_id"]
             ):
                 raise BusinessStoreError("Candidate requires active claim and evidence from the same revision")
+            _verify_evidence_checksum(row["snippet"], row["snippet_sha256"])
             fields_row = database.execute(
                 "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
                 (row["template_code"], row["template_version"]),
@@ -681,11 +689,12 @@ class BusinessStore:
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute(
-                "SELECT x.*, e.revision_id AS evidence_revision_id FROM extraction_runs x "
+                "SELECT x.*, e.revision_id AS evidence_revision_id, e.snippet, e.snippet_sha256 FROM extraction_runs x "
                 "JOIN evidence e ON e.id=? WHERE x.id=?", (evidence_id, run_id),
             ).fetchone()
             if row is None or row["status"] != "done" or row["evidence_revision_id"] != row["revision_id"]:
                 raise BusinessStoreError("Review requires a completed run and evidence from the same revision")
+            _verify_evidence_checksum(row["snippet"], row["snippet_sha256"])
             fields_row = database.execute(
                 "SELECT fields_json FROM template_versions WHERE code=? AND version=?",
                 (row["template_code"], row["template_version"]),
@@ -799,6 +808,13 @@ class BusinessStore:
             if fields_row is None:
                 raise BusinessStoreError("Frozen template version is missing")
             latest = self._latest_decisions(database, run_id)
+            for decision in latest.values():
+                evidence = database.execute(
+                    "SELECT revision_id, snippet, snippet_sha256 FROM evidence WHERE id=?", (decision.evidence_id,)
+                ).fetchone()
+                if evidence is None or evidence["revision_id"] != run["revision_id"]:
+                    raise BusinessStoreError("Confirmed field evidence does not belong to the run revision")
+                _verify_evidence_checksum(evidence["snippet"], evidence["snippet_sha256"])
             missing = [
                 field["code"] for field in json.loads(fields_row["fields_json"])
                 if field["required"] and field["code"] not in latest
@@ -1483,6 +1499,14 @@ class BusinessStore:
             )
         return evidence
 
+    @staticmethod
+    def _evidence_from_row(row: sqlite3.Row) -> EvidenceSnapshot:
+        payload = dict(row)
+        _verify_evidence_checksum(payload["snippet"], payload["snippet_sha256"])
+        bbox_json = payload.pop("bbox_json")
+        payload["bbox"] = tuple(json.loads(bbox_json)) if bbox_json is not None else None
+        return EvidenceSnapshot(**payload)
+
     def get_evidence(self, evidence_id: str) -> EvidenceSnapshot | None:
         with closing(self._connect()) as database:
             row = database.execute(
@@ -1491,10 +1515,7 @@ class BusinessStore:
             ).fetchone()
         if row is None:
             return None
-        payload = dict(row)
-        bbox_json = payload.pop("bbox_json")
-        payload["bbox"] = tuple(json.loads(bbox_json)) if bbox_json is not None else None
-        return EvidenceSnapshot(**payload)
+        return self._evidence_from_row(row)
 
     def list_evidence(self, revision_id: str) -> tuple[EvidenceSnapshot, ...]:
         with closing(self._connect()) as database:
@@ -1503,13 +1524,7 @@ class BusinessStore:
                 "WHERE e.revision_id=? ORDER BY e.created_at_ms DESC, e.id DESC",
                 (revision_id,),
             ).fetchall()
-        result = []
-        for row in rows:
-            payload = dict(row)
-            bbox_json = payload.pop("bbox_json")
-            payload["bbox"] = tuple(json.loads(bbox_json)) if bbox_json is not None else None
-            result.append(EvidenceSnapshot(**payload))
-        return tuple(result)
+        return tuple(self._evidence_from_row(row) for row in rows)
 
 
 __all__ = ["BusinessStore", "BusinessStoreError"]

@@ -993,7 +993,10 @@ def create_app(
     def list_evidence(revision_id: str) -> list[EvidenceView]:
         if store.get_revision(revision_id) is None:
             raise HTTPException(status_code=404, detail="Revision not found")
-        return [EvidenceView.from_record(evidence) for evidence in store.list_evidence(revision_id)]
+        try:
+            return [EvidenceView.from_record(evidence) for evidence in store.list_evidence(revision_id)]
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/api/business/revisions/{revision_id}/evidence", response_model=EvidenceView, status_code=201)
     def capture_evidence(revision_id: str, request: EvidenceCaptureRequest) -> EvidenceView:
@@ -1006,7 +1009,10 @@ def create_app(
 
     @app.get("/api/business/evidence/{evidence_id}", response_model=EvidenceInspectionView)
     def inspect_evidence(evidence_id: str) -> EvidenceInspectionView:
-        inspection = evidence_reader.inspect(evidence_id)
+        try:
+            inspection = evidence_reader.inspect(evidence_id)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         if inspection is None:
             raise HTTPException(status_code=404, detail="Evidence not found")
         return EvidenceInspectionView.from_inspection(inspection)

@@ -2705,7 +2705,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "候选字段已引用同一解析修订的冻结证据，原文值须包含于片段；新增片段 SHA-256 在证据读取、候选写入、复核决定与成果确认时核对，损坏则 API 409 或写入拒绝，不把失真片段呈现为有效证据。Mac 篡改回归通过；这不是防管理员同时修改内容与哈希的签名机制。仍缺四类真实样本与目标麒麟/NVIDIA 验收，不标完成。见 dev-docs/evidence/2026-09-24-evidence-integrity-gate.md。"
     },
     {
       "id": "BE-041",

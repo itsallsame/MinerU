@@ -1096,3 +1096,11 @@ Changes: Added conservative two-column header/separator/data-row extraction with
 Verification: Focused extraction/store/backup 64 passed; real local Doclib HTML table integration passed; final Mac business 336 passed/2 skipped/2 dependency warnings. Web Node 13 passed, eight offline assets built, all 24 Chromium regressions passed. Ruff lint, JSON and diff checks passed. Complex/cross-page table accuracy and isolated Kylin/NVIDIA remain unproven.
 Evidence: dev-docs/evidence/2026-09-24-table-row-candidate.md
 Next: Continue P3 evidence/quality work and obtain four-class annotated samples plus target Kylin/NVIDIA access. Keep Goal active.
+
+=== 2026-09-24 Session 122 (frozen evidence integrity gate) ===
+Status: In progress; BE-040 and P3/P6 real-sample/target gates remain open
+Discovery: Frozen evidence stored a SHA-256, but reads and later review/confirmation did not verify it; a separately corrupted snippet could be displayed as valid historical evidence. Same-document cross-revision evidence association also needed a direct regression.
+Changes: Validate snippet checksum on evidence reads, candidate attachment, review decisions and result confirmation. Corrupt evidence list/detail returns a safe 409 without its content; writes fail closed. Added cross-revision same-locator/value rejection proof. No schema/model change and no user/role/permission system; this does not claim administrator-resistant signatures.
+Verification: Focused evidence/extraction/review 52 passed; final Mac business 339 passed/2 skipped/2 dependency warnings. Ruff lint, JSON and diff checks passed. Real four-class samples and isolated Kylin/NVIDIA remain untested.
+Evidence: dev-docs/evidence/2026-09-24-evidence-integrity-gate.md
+Next: Continue P3 quality/review work and obtain four-class annotated samples plus target Kylin/NVIDIA access. Keep Goal active.

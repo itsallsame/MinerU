@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import io
+import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -437,7 +439,7 @@ def test_api_lifespan_worker_processes_queued_run_without_blocking_post(tmp_path
 
 
 def test_store_rejects_candidate_without_same_revision_evidence(tmp_path: Path) -> None:
-    store, _doclib, _extractor, revision_id = _fixture(tmp_path, content="标题：真实标题")
+    store, doclib, _extractor, revision_id = _fixture(tmp_path, content="标题：真实标题")
     store.enqueue_extraction(revision_id)
     run = store.claim_next_extraction()
     assert run is not None and run.claim_token is not None
@@ -445,7 +447,17 @@ def test_store_rejects_candidate_without_same_revision_evidence(tmp_path: Path) 
         store.add_field_candidate(
             run.id, claim_token=run.claim_token, field_code="title", value="伪造", evidence_id="missing"
         )
-    locator = f"doc:{store.get_revision(revision_id).short_id}/tier:flash/page:1"
+    revision = store.get_revision(revision_id)
+    assert revision is not None
+    locator = f"doc:{revision.short_id}/tier:flash/page:1"
+    second_parse = doclib.get_parse.return_value.model_copy(update={"id": 8, "created_at": 3, "updated_at": 4})
+    second_revision = store.add_completed_revision(revision.document_id, parse=second_parse, producer_version="4.0.6")
+    other_evidence = store.capture_evidence(second_revision.id, locator=locator, snippet="标题：真实标题")
+    with pytest.raises(BusinessStoreError, match="same revision"):
+        store.add_field_candidate(
+            run.id, claim_token=run.claim_token, field_code="title", value="真实标题",
+            evidence_id=other_evidence.id,
+        )
     evidence = store.capture_evidence(revision_id, locator=locator, snippet="标题：真实标题")
     with pytest.raises(BusinessStoreError, match="absent"):
         store.add_field_candidate(
@@ -456,3 +468,47 @@ def test_store_rejects_candidate_without_same_revision_evidence(tmp_path: Path) 
             run.id, claim_token=run.claim_token, field_code="not_a_field", value="真实标题",
             evidence_id=evidence.id,
         )
+
+
+def test_corrupted_evidence_cannot_support_candidate_review_or_confirmation(tmp_path: Path) -> None:
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content="标题：真实标题")
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    candidate = store.list_field_candidates(run.id)[0]
+    store.decide_field(
+        run.id, field_code="title", value=candidate.value, evidence_id=candidate.evidence_id, source="api",
+    )
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database, database:
+        database.execute("UPDATE evidence SET snippet=? WHERE id=?", ("伪造正文", candidate.evidence_id))
+    with pytest.raises(BusinessStoreError, match="checksum mismatch"):
+        store.get_evidence(candidate.evidence_id)
+    with pytest.raises(BusinessStoreError, match="checksum mismatch"):
+        store.list_evidence(revision_id)
+    with pytest.raises(BusinessStoreError, match="checksum mismatch"):
+        store.decide_field(
+            run.id, field_code="title", value="人工改写", evidence_id=candidate.evidence_id,
+            source="api", reason="改正",
+        )
+    with pytest.raises(BusinessStoreError, match="checksum mismatch"):
+        store.confirm_result(run.id, source="api")
+    assert store.list_confirmed_results(run.id) == ()
+
+
+def test_corrupted_evidence_cannot_be_attached_to_new_candidate(tmp_path: Path) -> None:
+    store, _doclib, _extractor, revision_id = _fixture(tmp_path, content="标题：真实标题")
+    store.enqueue_extraction(revision_id)
+    run = store.claim_next_extraction()
+    assert run is not None and run.claim_token is not None
+    revision = store.get_revision(revision_id)
+    assert revision is not None
+    evidence = store.capture_evidence(
+        revision_id, locator=f"doc:{revision.short_id}/tier:flash/page:1", snippet="标题：真实标题",
+    )
+    with closing(sqlite3.connect(tmp_path / "business.sqlite3")) as database, database:
+        database.execute("UPDATE evidence SET snippet=? WHERE id=?", ("标题：伪造标题", evidence.id))
+    with pytest.raises(BusinessStoreError, match="checksum mismatch"):
+        store.add_field_candidate(
+            run.id, claim_token=run.claim_token, field_code="title", value="伪造标题", evidence_id=evidence.id,
+        )
+    assert store.list_field_candidates(run.id) == ()

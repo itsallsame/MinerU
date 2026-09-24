@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -72,6 +74,24 @@ def test_evidence_reader_distinguishes_current_match_change_and_outage(tmp_path:
     assert reader.inspect(evidence_id).navigation_status == "unavailable"
     doclib.read_content.side_effect = ServerNotRunningError()
     assert reader.inspect(evidence_id).navigation_status == "unavailable"
+
+
+def test_corrupted_frozen_evidence_is_not_served_as_a_valid_snapshot(tmp_path: Path) -> None:
+    store, doclib, document_id, revision_id, evidence_id = _fixture(tmp_path)
+    client = TestClient(create_app(
+        workflow=Mock(spec=DocumentWorkflow), store=store,
+        evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    ))
+    with closing(sqlite3.connect(tmp_path / "business" / "business.sqlite3")) as database, database:
+        database.execute("UPDATE evidence SET snippet=? WHERE id=?", ("Altered source", evidence_id))
+    detail = client.get(f"/api/business/evidence/{evidence_id}")
+    listed = client.get(f"/api/business/revisions/{revision_id}/evidence")
+    assert detail.status_code == 409 and detail.json()["detail"] == "Frozen evidence checksum mismatch"
+    assert listed.status_code == 409 and listed.json()["detail"] == "Frozen evidence checksum mismatch"
+    assert "Altered source" not in detail.text and "Altered source" not in listed.text
+    assert client.get(f"/api/business/documents/{document_id}/revisions").status_code == 200
+    doclib.read_content.assert_not_called()
 
 
 def test_open_api_exposes_revisions_and_frozen_evidence_without_internal_ids(tmp_path: Path) -> None:
