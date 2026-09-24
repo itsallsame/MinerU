@@ -1948,6 +1948,46 @@ def test_csv_doclib_parse_creates_flash_cache_and_rendered_fts(
     asyncio.run(_run())
 
 
+def test_explicit_parse_ingests_without_queuing_default_flash_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """显式 Standard 请求只排所需批次；后台主动入库仍保留默认 Flash。"""
+
+    class _NoRulesConfig:
+        async def match_rules(self, path: str, rule_type: str) -> list[dict[str, Any]]:
+            return []
+
+    async def _metadata(path: str) -> dict[str, Any]:
+        return {
+            "page_count": 1, "title": None, "author": None, "subject": None,
+            "keywords": None, "is_image_based": 0,
+        }
+
+    monkeypatch.setattr(parse_svc_module, "extract_metadata", _metadata)
+
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        service = ParseService(
+            db=db, fts=FTSManager(db), config_svc=_NoRulesConfig(),
+            data_dir=str(tmp_path / "data"), parse_lock_timeout_sec=1800,
+        )
+        explicit = tmp_path / "explicit.pdf"
+        explicit.write_bytes(b"%PDF-1.7\nexplicit")
+        response = await service.request_parse(str(explicit), tier="standard")
+        rows = await db.fetchall("SELECT id, tier, status FROM parses ORDER BY id")
+        assert response.created_parse_ids == [rows[0]["id"]]
+        assert rows == [{"id": rows[0]["id"], "tier": "standard", "status": "pending"}]
+
+        discovered = tmp_path / "discovered.pdf"
+        discovered.write_bytes(b"%PDF-1.7\nbackground")
+        await service.ingest_file(str(discovered), trigger="background")
+        rows = await db.fetchall("SELECT tier FROM parses ORDER BY id")
+        assert rows == [{"tier": "standard"}, {"tier": "flash"}]
+
+    asyncio.run(_run())
+
+
 def test_tsv_doclib_parse_creates_flash_cache_with_independent_file_type(
     tmp_path: Path,
 ) -> None:
@@ -2254,9 +2294,9 @@ def test_non_pdf_requests_use_one_full_document_batch(
 
         initial = await service.request_parse(str(source))
         assert initial.page_range == "1-12"
-        assert initial.created_parse_ids == []
-        assert len(initial.reused_parse_ids) == 1
-        initial_id = initial.reused_parse_ids[0]
+        assert len(initial.created_parse_ids) == 1
+        assert initial.reused_parse_ids == []
+        initial_id = initial.created_parse_ids[0]
         file_row = await db.fetchone("SELECT sha256 FROM files WHERE path=?", (str(source),))
         assert file_row is not None
         sha256 = file_row["sha256"]

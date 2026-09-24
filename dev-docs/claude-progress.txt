@@ -957,3 +957,11 @@ Changes: Business task completion and revision insertion/reuse now occur in one 
 Verification: 26 targeted business tests and full business suite 246 passed/1 skipped; Ruff lint and diff checks passed. Tests cover invalid batch rollback, competing terminal status, and parallel refresh. No real target GPU or Doclib cancellation test was claimed.
 Evidence: dev-docs/evidence/2026-09-24-atomic-task-completion.md
 Next: Design/implement Doclib request-consumer leases and atomic queued-only cancellation, then expose truthful business and Web/Skill semantics; continue target Kylin/NVIDIA and real-sample gates. Keep goal active.
+
+=== 2026-09-24 Session 104 (FE-016 prerequisite: explicit queue separation) ===
+Status: In progress; FE-016 remains false until shared-consumer cancellation is implemented and verified
+Discovery: First explicit request ingested a new source by automatically queuing default Flash before selecting the requested tier. A Standard request could therefore leave an unrelated Flash batch in the queue.
+Changes: The explicit request's synchronous ingestion now registers source/doc metadata and filename search without scheduling an initial Flash; the request then chooses its own batch. Background ingestion continues to queue its default batch. Expanded the future Doclib consumer-claim, queued-only cancellation and cross-database recovery design; no user/auth/permission management introduced.
+Verification: Doclib cache semantics 211 passed; full Mac business 246 passed/1 skipped; full official unit 2806 passed/4 skipped. Ruff source lint/format and diff checks passed. No claim that concurrent background ingestion is covered by this separation or that cancellation is implemented.
+Evidence: dev-docs/evidence/2026-09-24-explicit-parse-queue-separation.md
+Next: Implement atomic Doclib request-consumer claims and queued-only release, then business cancellation and truthful Web/Skill states. Obtain real isolated Kylin/NVIDIA artifacts and four-class labeled samples for target acceptance. Keep goal active.

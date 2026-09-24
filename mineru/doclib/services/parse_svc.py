@@ -269,6 +269,7 @@ class ParseService:
         *,
         ensure_ingested: bool = False,
         allow_images: bool = False,
+        queue_initial_parse: bool = True,
     ) -> FileRefreshResult:
         """Refresh one source path against the files table.
 
@@ -292,7 +293,9 @@ class ParseService:
 
         result = await self._refresh_existing_file_with_stat(path, ext, stat, existing, watch_id)
         if ensure_ingested and result.needs_ingest:
-            row = await self.ingest_file(path, watch_id=watch_id, allow_images=allow_images)
+            row = await self.ingest_file(
+                path, watch_id=watch_id, allow_images=allow_images, queue_initial_parse=queue_initial_parse
+            )
             return FileRefreshResult(file=_file_info(row), status=result.status)
         return result
 
@@ -437,13 +440,16 @@ class ParseService:
         *,
         trigger: str = "parse",
         allow_images: bool = False,
+        queue_initial_parse: bool = True,
     ) -> FileRow | None:
         """Ingest a discovered file: SHA-256 + metadata + trigger default parse."""
         path = normalize_doclib_path(path)
         start_ms = _now_ms()
         status = "succeeded"
         try:
-            return await self._ingest_file(path, watch_id=watch_id, allow_images=allow_images)
+            return await self._ingest_file(
+                path, watch_id=watch_id, allow_images=allow_images, queue_initial_parse=queue_initial_parse
+            )
         except PermissionError as exc:
             status = "failed"
             await self._mark_file_error(path, "file_permission_denied", str(exc))
@@ -464,7 +470,9 @@ class ParseService:
             (error_code, error_msg[:500], now, path),
         )
 
-    async def _ingest_file(self, path: str, watch_id: int | None = None, *, allow_images: bool = False) -> FileRow | None:
+    async def _ingest_file(
+        self, path: str, watch_id: int | None = None, *, allow_images: bool = False, queue_initial_parse: bool = True
+    ) -> FileRow | None:
         """Ingest implementation without telemetry wrapper."""
         ext = Path(path).suffix.lower().lstrip(".")
         if ext not in INGESTIBLE_EXTENSIONS or (ext in IMAGE_EXTENSIONS and not allow_images) or is_office_temp_lock_file(path):
@@ -627,6 +635,14 @@ class ParseService:
             )
             return cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
 
+        # Explicit requests choose their tier later; discovery/background ingestion still schedules the default.
+        if not queue_initial_parse:
+            await self.db.execute(
+                "UPDATE files SET sha256=?, locked_at=NULL, updated_at=? WHERE path=?",
+                (sha256, now, path),
+            )
+            return cast(FileRow | None, await self.db.fetchone("SELECT * FROM files WHERE path=?", (path,)))
+
         # determine tier and page_range for initial parse
         tier: Tier = "flash"
         privacy = "local"
@@ -679,7 +695,7 @@ class ParseService:
         """Handle a parse request from CLI.  Returns info for status polling."""
         page_range = normalize_page_range_input(page_range) or None
         # ensure the path is current before trusting files.sha256
-        refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True)
+        refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True, queue_initial_parse=False)
         if refreshed.status == "unsupported":
             ext = Path(path).suffix.lower() or Path(path).name
             raise InvalidRequestError("file_type_unsupported", _unsupported_file_type_message(ext), "path")
