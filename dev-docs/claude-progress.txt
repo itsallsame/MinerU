@@ -1168,3 +1168,11 @@ Changes: Recorded source commit 19895d7014143e4547c095819af4a80798607202 and fre
 Verification: Upstream tests 2832 passed/4 skipped/2 dependency warnings; business tests 351 passed/2 skipped/2 dependency warnings; Web unit tests 13 passed and eight offline assets built; Playwright offline Chromium 24 passed. All commands exited 0 on Mac. No real-sample accuracy or Kylin/NVIDIA proof.
 Evidence: dev-docs/evidence/2026-09-24-current-master-regression.md
 Next: Obtain real annotated four-class samples and target machine; rerun against the selected offline release and archive bound evidence. Keep Goal active.
+
+=== 2026-09-24 Session 131 (sample outline pagination fail-closed) ===
+Status: In progress; QA-035 and four-class real-sample/Kylin/NVIDIA gates remain open
+Discovery: Optional heading evaluation counted scanned pages but accepted boolean/negative counts and zero-progress continuations; a broken API could evade the 1000-page limit and keep fetching.
+Changes: Reject invalid counts and continuations, require progress before requesting another page, and independently cap outline requests at 1000. Documented the cap and failure semantics; no business service, model, schema or auth/user/role/permission change.
+Verification: Focused sample evaluator 18 passed; full Mac business 357 passed/2 skipped/2 dependency warnings; Ruff lint passed. Formatter check reports pre-existing formatting deviations across the two files and was not used to rewrite them wholesale. Real four-class sample and target machine tests remain absent.
+Evidence: dev-docs/evidence/2026-09-24-sample-outline-pagination-guard.md
+Next: Obtain annotated real samples and Kylin/NVIDIA access, then run bound evaluation on a stable offline release. Keep Goal active.

@@ -26,6 +26,7 @@ TAGS = frozenset({"handwritten", "cross_page_table", "seal_watermark"})
 TIERS = frozenset({"flash", "basic", "standard", "advanced"})
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+MAX_OUTLINE_REQUESTS = 1000
 
 
 class EvaluationError(RuntimeError):
@@ -217,21 +218,28 @@ def _outline(revision_id: str, get: Callable[[str], Any]) -> list[dict[str, Any]
     items: list[dict[str, Any]] = []
     next_page: int | None = None
     scanned = 0
+    requests = 0
     while True:
+        if requests >= MAX_OUTLINE_REQUESTS:
+            raise EvaluationError("Outline exceeds evaluation request limit")
+        requests += 1
         suffix = f"?start_page={next_page}" if next_page is not None else ""
         page = get(f"/revisions/{quote(revision_id, safe='')}/outline{suffix}")
         if not isinstance(page, dict) or page.get("revision_id") != revision_id:
             raise EvaluationError("Outline response identity mismatch")
-        if not isinstance(page.get("items"), list) or not isinstance(page.get("scanned_pages"), int):
+        page_count = page.get("scanned_pages")
+        if (not isinstance(page.get("items"), list) or not isinstance(page_count, int)
+                or isinstance(page_count, bool) or page_count < 0):
             raise EvaluationError("Invalid outline response")
         items.extend(page["items"])
-        scanned += page["scanned_pages"]
+        scanned += page_count
         if scanned > 1000:
             raise EvaluationError("Outline exceeds evaluation page limit")
         upcoming = page.get("next_page")
         if upcoming is None:
             return items
-        if not isinstance(upcoming, int) or (next_page is not None and upcoming <= next_page):
+        if (page_count == 0 or not isinstance(upcoming, int) or isinstance(upcoming, bool)
+                or upcoming < 1 or (next_page is not None and upcoming <= next_page)):
             raise EvaluationError("Invalid outline continuation")
         next_page = upcoming
 

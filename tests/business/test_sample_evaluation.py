@@ -154,6 +154,45 @@ def test_suite_report_exposes_mixed_service_revision_versions(tmp_path: Path) ->
     assert paper["tier"] == "advanced" and paper["producer_version"] == "4.0.7"
 
 
+@pytest.mark.parametrize(
+    ("scanned_pages", "next_page", "message"),
+    [
+        (-1, 2, "Invalid outline response"),
+        (True, 2, "Invalid outline response"),
+        (0, 2, "Invalid outline continuation"),
+        (1, True, "Invalid outline continuation"),
+        (1, -1, "Invalid outline continuation"),
+    ],
+)
+def test_outline_rejects_invalid_page_progress(
+    scanned_pages: int, next_page: int, message: str,
+) -> None:
+    module = _module()
+
+    def get(_path: str) -> Any:
+        return {"revision_id": "rev-paper", "items": [],
+                "scanned_pages": scanned_pages, "next_page": next_page}
+
+    with pytest.raises(module.EvaluationError, match=message):
+        module._outline("rev-paper", get)
+
+
+def test_outline_request_limit_stops_misreported_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    monkeypatch.setattr(module, "MAX_OUTLINE_REQUESTS", 3)
+    calls = 0
+
+    def get(_path: str) -> Any:
+        nonlocal calls
+        calls += 1
+        return {"revision_id": "rev-paper", "items": [],
+                "scanned_pages": 1, "next_page": calls + 1}
+
+    with pytest.raises(module.EvaluationError, match="request limit"):
+        module._outline("rev-paper", get)
+    assert calls == 3
+
+
 def test_suite_rejects_missing_class_and_tampered_source(tmp_path: Path) -> None:
     module = _module()
     suite = _suite(tmp_path)

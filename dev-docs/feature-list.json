@@ -5844,7 +5844,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "四类样本评估器现要求目标验收报告关联同一离线发布的 release.json、制品核验报告和运行态报告哈希链；Mac 开发无完整发布时只能显式 --allow-unbound，不能作为生产结果。当前仅合成契约测试，真实四类样本、麒麟 x86_64/NVIDIA 现场报告及最终已知限制清单未完成。见 dev-docs/evidence/2026-09-24-sample-release-chain.md。"
+      "notes": "四类样本评估器要求目标报告关联同一离线发布的 release.json、制品核验和运行态报告哈希链；Mac 开发无完整发布时只能显式 --allow-unbound。可选标题的目录续读现拒绝无进展/错误页数，并独立限制请求次数，防止异常响应造成评估不终止。当前仅合成契约测试，真实四类样本、麒麟 x86_64/NVIDIA 现场报告及最终已知限制清单未完成。见 dev-docs/evidence/2026-09-24-sample-release-chain.md、dev-docs/evidence/2026-09-24-sample-outline-pagination-guard.md。"
     }
   ]
 }
