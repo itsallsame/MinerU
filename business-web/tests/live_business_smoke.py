@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-def main(base_url: str, sample: Path, office_files: list[Path]) -> None:
+def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: Path) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -67,6 +67,7 @@ def main(base_url: str, sample: Path, office_files: list[Path]) -> None:
                         page.get_by_role("button", name="下载 JSON").click()
                     exported = json.loads(Path(receipt.value.path()).read_text(encoding="utf-8"))
                     assert any(field["value"] == marker for field in exported["fields"])
+                    result_receipt.write_text(json.dumps(exported, ensure_ascii=False), encoding="utf-8")
                     page.reload(wait_until="networkidle")
                     page.get_by_role("button", name=f"查看 {office.name}，已解析").click()
                     page.get_by_text("确认成果 v1", exact=True).wait_for(timeout=30000)
@@ -77,4 +78,4 @@ def main(base_url: str, sample: Path, office_files: list[Path]) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], Path(sys.argv[2]), [Path(path) for path in sys.argv[3:]])
+    main(sys.argv[1], Path(sys.argv[2]), [Path(path) for path in sys.argv[3:-1]], Path(sys.argv[-1]))

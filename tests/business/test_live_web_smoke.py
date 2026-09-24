@@ -213,6 +213,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                 )
             try:
                 _wait_for_api(api, origin, api_log)
+                web_result_receipt = home / "web-confirmed-result.json"
                 subprocess.run(
                     [
                         "python3",
@@ -220,10 +221,18 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                         origin,
                         str(SAMPLE),
                         *(str(path) for path in office_files),
+                        str(web_result_receipt),
                     ],
                     check=True,
                     timeout=150,
                 )
+                web_result = json.loads(web_result_receipt.read_text(encoding="utf-8"))
+                skill_results = _skill(origin, "results", web_result["run_id"])
+                assert isinstance(skill_results, dict)
+                assert skill_results["state"] == "confirmed"
+                assert skill_results["items"][0] == web_result
+                skill_result = _skill(origin, "result", web_result["id"])
+                assert skill_result == {"state": "confirmed", "result": web_result}
                 _verify_live_skill(origin)
             finally:
                 _stop(api)

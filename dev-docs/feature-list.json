@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 71,
+  "completed_features": 72,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -5037,9 +5037,9 @@
         "实现：Skill与前端结果一致性验证",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "Mac opt-in 真实 Web/API/Doclib 测试中，Web 人工确认并下载的同一成果 JSON 与自有 Skill 的 results/result 完整对象相等；定向 Skill 契约 7 通过。四类真实样本与麒麟环境未验收。证据：dev-docs/evidence/2026-09-24-skill-web-result-parity.md"
     },
     {
       "id": "QA-001",
