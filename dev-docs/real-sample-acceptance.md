@@ -12,9 +12,9 @@
 | --- | --- |
 | `id` | 无敏感内容的唯一样本编号；会出现在脱敏指标报告 |
 | `category` | `official_document`、`paper`、`research_report`、`newspaper` 之一；四类必须齐全 |
-| `source`、`sha256` | 相对 `suite.json` 所在目录的原文路径和该原文小写 SHA-256；评估前逐文件复核 |
-| `document_id`、`revision_id`、`run_id` | 在同一开放业务 API 上完成上传、解析和提取后，明确记录要评估的业务 ID；工具不会上传或启动任务 |
-| `expected_fields` | 非空人工标注数组；每项含 `code`、精确 `value`，可加 `evidence_quote` 与 `page_no` 校验证据位置 |
+| `source`、`sha256` | 相对 `suite.json` 所在目录的真实原文路径和该原文小写 SHA-256；不能经符号链接引用，所有 case 的原文字节哈希必须不同，避免重复样本抬高指标；评估前逐文件复核 |
+| `document_id`、`revision_id`、`run_id` | 在同一开放业务 API 上完成上传、解析和提取后，明确记录要评估的业务 ID；每个 case 必须是不同业务文档，防止重复计数；工具不会上传或启动任务 |
+| `expected_fields` | 非空人工标注数组；每项含 `code`、精确 `value`，可加 `evidence_quote` 与正整数 `page_no` 校验证据位置；布尔值不是页码 |
 | `expected_headings` | 可选的人工标题数组；每项含 `title`、`level`（1–6）、`page_no`；给出时扫描完整历史修订目录 |
 | `tags` | 可选：`handwritten`、`cross_page_table`、`seal_watermark`；用于专项分组，不代表已覆盖该场景 |
 

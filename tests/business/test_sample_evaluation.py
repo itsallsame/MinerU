@@ -114,6 +114,40 @@ def test_suite_rejects_missing_class_and_tampered_source(tmp_path: Path) -> None
         module.load_suite(suite)
 
 
+def test_suite_rejects_duplicate_business_document_and_boolean_field_page(tmp_path: Path) -> None:
+    module = _module()
+    suite = _suite(tmp_path)
+    payload = json.loads(suite.read_text())
+    payload["cases"][1]["document_id"] = payload["cases"][0]["document_id"]
+    suite.write_text(json.dumps(payload))
+    with pytest.raises(module.EvaluationError, match="distinct business document"):
+        module.load_suite(suite)
+
+    payload = json.loads(_suite(tmp_path).read_text())
+    payload["cases"][1]["source"] = payload["cases"][0]["source"]
+    payload["cases"][1]["sha256"] = payload["cases"][0]["sha256"]
+    suite.write_text(json.dumps(payload))
+    with pytest.raises(module.EvaluationError, match="distinct source file"):
+        module.load_suite(suite)
+
+    payload = json.loads(_suite(tmp_path).read_text())
+    payload["cases"][0]["expected_fields"][0]["page_no"] = True
+    suite.write_text(json.dumps(payload))
+    with pytest.raises(module.EvaluationError, match="Invalid field page"):
+        module.load_suite(suite)
+
+
+def test_suite_rejects_symlinked_source_inside_sample_directory(tmp_path: Path) -> None:
+    module = _module()
+    suite = _suite(tmp_path)
+    payload = json.loads(suite.read_text())
+    (tmp_path / "source-link.txt").symlink_to(tmp_path / "paper.txt")
+    payload["cases"][1]["source"] = "source-link.txt"
+    suite.write_text(json.dumps(payload))
+    with pytest.raises(module.EvaluationError, match="Source unavailable"):
+        module.load_suite(suite)
+
+
 def test_evaluation_rejects_wrong_business_identity_and_public_origin(tmp_path: Path) -> None:
     module = _module()
     case = module.load_suite(_suite(tmp_path))[0]

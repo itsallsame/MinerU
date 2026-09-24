@@ -1120,3 +1120,11 @@ Changes: Added a synthetic model-only release test: new host model directory, ch
 Verification: Focused release test 1 passed; final Mac business suite 343 passed/2 skipped/2 dependency warnings. Ruff lint/format, JSON and diff checks passed. No real Kylin amd64/NVIDIA, weight-load or four-class sample acceptance is claimed.
 Evidence: dev-docs/evidence/2026-09-24-model-only-release.md
 Next: Obtain real weights and target machine for INF-027 and P6; continue business quality work in the meantime. Keep Goal active.
+
+=== 2026-09-24 Session 125 (real-sample suite input integrity) ===
+Status: In progress; four-class real annotations and target Kylin/NVIDIA gates remain open
+Discovery: The read-only four-class evaluator allowed repeated business document IDs and source bytes under distinct case IDs, which could inflate reported accuracy. JSON boolean field page numbers were accepted as integers, and source symlinks were checked only after resolution.
+Changes: Require distinct business document IDs and distinct source SHA-256 across cases; reject boolean field pages and symlinked source path components. Updated the external sample instructions and recorded the test boundary. No auth/user/role/permission layer or model change.
+Verification: Evaluator tests 10 passed; full Mac business suite 345 passed/2 skipped/2 dependency warnings; Ruff lint and diff checks passed. All cases are synthetic, not four-class real acceptance.
+Evidence: dev-docs/evidence/2026-09-24-sample-suite-deduplication.md
+Next: Obtain real de-identified annotated samples for P6; run the same read-only evaluator on Mac and isolated Kylin/NVIDIA after the model and images are available. Keep Goal active.

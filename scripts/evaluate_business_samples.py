@@ -52,6 +52,8 @@ def load_suite(path: Path) -> list[dict[str, Any]]:
     if len(cases) < 4 or len(cases) > 500:
         raise EvaluationError("Suite must contain 4-500 cases")
     seen_ids: set[str] = set()
+    seen_document_ids: set[str] = set()
+    seen_source_hashes: set[str] = set()
     classes: set[str] = set()
     root = path.parent.resolve()
     for case in cases:
@@ -65,16 +67,26 @@ def load_suite(path: Path) -> list[dict[str, Any]]:
         if not isinstance(category, str) or category not in CLASSES:
             raise EvaluationError(f"Unsupported category in case {case_id}")
         classes.add(category)
-        for key in ("document_id", "revision_id", "run_id"):
+        document_id = _required_string(case.get("document_id"), f"{case_id}.document_id")
+        if document_id in seen_document_ids:
+            raise EvaluationError("Each case must refer to a distinct business document")
+        seen_document_ids.add(document_id)
+        for key in ("revision_id", "run_id"):
             _required_string(case.get(key), f"{case_id}.{key}")
         expected_sha = case.get("sha256")
         if not isinstance(expected_sha, str) or SHA256_RE.fullmatch(expected_sha) is None:
             raise EvaluationError(f"Invalid SHA-256 in case {case_id}")
+        if expected_sha in seen_source_hashes:
+            raise EvaluationError("Each case must refer to a distinct source file")
+        seen_source_hashes.add(expected_sha)
         relative = Path(_required_string(case.get("source"), f"{case_id}.source"))
         if relative.is_absolute() or ".." in relative.parts:
             raise EvaluationError(f"Source must be relative to the suite in case {case_id}")
-        source = (root / relative).resolve()
-        if not source.is_relative_to(root) or not source.is_file() or source.is_symlink():
+        source_path = root / relative
+        source = source_path.resolve()
+        if (not source.is_relative_to(root) or not source.is_file()
+                or any(root.joinpath(*relative.parts[:index]).is_symlink()
+                       for index in range(1, len(relative.parts) + 1))):
             raise EvaluationError(f"Source unavailable in case {case_id}")
         if _source_sha256(source) != expected_sha:
             raise EvaluationError(f"Source SHA-256 mismatch in case {case_id}")
@@ -88,7 +100,8 @@ def load_suite(path: Path) -> list[dict[str, Any]]:
             _required_string(field.get("value"), f"{case_id}.field.value")
             if "evidence_quote" in field:
                 _required_string(field["evidence_quote"], f"{case_id}.field.evidence_quote")
-            if "page_no" in field and (not isinstance(field["page_no"], int) or field["page_no"] < 1):
+            if "page_no" in field and (not isinstance(field["page_no"], int)
+                                       or isinstance(field["page_no"], bool) or field["page_no"] < 1):
                 raise EvaluationError(f"Invalid field page in case {case_id}")
         headings = case.get("expected_headings")
         if headings is not None:
