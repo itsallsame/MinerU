@@ -884,3 +884,10 @@ Changes: Added open GET lookup of durable upload request key to current document
 Verification: Backend contract 6 passed; full Mac business suite 224 passed/1 skipped; Web 11 Node tests, offline build and 22 Chromium regressions passed. Synthetic browser test covered accepted/lost response versus 404 lookup, no auto POST, same-key manual retry, and 503 uncertainty. Ruff lint and diff check passed. Real network and Kylin/NVIDIA not claimed.
 Evidence: dev-docs/evidence/2026-09-24-upload-request-idempotency.md
 Next: Continue P4 asynchronous and accessibility gaps; obtain real four-class samples and target offline artifacts for P1/P6. Keep goal active.
+
+=== 2026-09-24 Session 94 (own Skill upload-request lookup) ===
+Status: In progress; 78/241 passed; P5 enhancement verified on Mac, target gates remain incomplete
+Changes: Added read-only upload-request command to fork-owned Skill using the same open business API as Web. 404 is a time-local unresolved state, not rejection; upload HTTP 408/5xx preserves the original request key as an unknown outcome. Updated Skill guidance without user/auth/permission or official Skill fallback.
+Verification: Skill targeted 11 passed; full Mac business 226 passed/1 skipped; Ruff and skill structure validation passed. Real ASGI upload→lookup→task change covered; no isolated Kylin/NVIDIA or production-network failure claim.
+Evidence: dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md
+Next: Continue P4/P6 and prepare target offline artifacts; run the Web/API/Skill recovery path on isolated Kylin when available. Keep goal active.

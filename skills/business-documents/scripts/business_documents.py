@@ -149,9 +149,9 @@ class BusinessClient:
                 connection.send(suffix)
                 return self._read_response(connection)
             except BusinessAPIError as exc:
-                if exc.status is not None and 200 <= exc.status < 300:
+                if exc.status is not None and (200 <= exc.status < 300 or exc.status == 408 or exc.status >= 500):
                     raise BusinessAPIError(
-                        "Upload response unreadable; outcome unknown, retry only with the same request key",
+                        "Upload outcome unknown; check the request key before any retry",
                         status=exc.status, request_key=key,
                     ) from exc
                 raise
@@ -196,6 +196,9 @@ def parser() -> argparse.ArgumentParser:
     upload.add_argument("--template")
     upload.add_argument("--request-key", help="Reuse this key when retrying an uncertain upload")
     upload.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested upload")
+    commands.add_parser("upload-request").add_argument(
+        "request_key", help="Check one prior upload key without resending a file",
+    )
     search = commands.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
@@ -243,6 +246,21 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
             exc.request_key = request_key
             raise
         return {**result, "request_key": request_key} if isinstance(result, dict) else result
+    if command == "upload-request":
+        if REQUEST_KEY_RE.fullmatch(args.request_key) is None:
+            raise BusinessAPIError("Invalid upload idempotency key")
+        try:
+            result = client.request("GET", f"/upload-requests/{quote(args.request_key, safe='')}")
+        except BusinessAPIError as exc:
+            if exc.status == 404:
+                return {"request_key": args.request_key, "state": "not_recorded_at_lookup"}
+            raise
+        if (
+            not isinstance(result, dict) or not isinstance(result.get("document"), dict)
+            or not isinstance(result.get("task"), dict)
+        ):
+            raise BusinessAPIError("Business API returned an incomplete upload request", status=200)
+        return {**result, "request_key": args.request_key, "state": "accepted"}
     if command == "overview":
         return client.overview(args.document_id)
     if command == "search":

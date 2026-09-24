@@ -188,6 +188,35 @@ def test_skill_write_commands_require_explicit_acknowledgement() -> None:
     client.request.assert_called_once_with("POST", "/revisions/revision-1/extractions")
 
 
+def test_skill_upload_request_lookup_is_read_only_and_404_is_not_rejection() -> None:
+    script = _script()
+    client = Mock()
+    key = "prior-upload-request-key"
+    args = script.parser().parse_args(["upload-request", key])
+    client.request.return_value = {"document": {"id": "doc-1"}, "task": {"id": "task-1", "status": "submitted"}}
+    found = script.run(args, client)
+    assert found == {
+        "request_key": key, "state": "accepted",
+        "document": {"id": "doc-1"}, "task": {"id": "task-1", "status": "submitted"},
+    }
+    client.request.assert_called_once_with("GET", f"/upload-requests/{key}")
+    client.upload.assert_not_called()
+
+    client.request.side_effect = script.BusinessAPIError("Upload request not found", status=404)
+    assert script.run(args, client) == {"request_key": key, "state": "not_recorded_at_lookup"}
+    client.request.side_effect = script.BusinessAPIError("Unavailable", status=503)
+    with pytest.raises(script.BusinessAPIError) as unavailable:
+        script.run(args, client)
+    assert unavailable.value.status == 503
+    client.request.reset_mock(side_effect=True)
+    with pytest.raises(script.BusinessAPIError, match="Invalid upload idempotency key"):
+        script.run(script.parser().parse_args(["upload-request", "short"]), client)
+    client.request.assert_not_called()
+    client.request.return_value = {"task": {"status": "submitted"}}
+    with pytest.raises(script.BusinessAPIError, match="incomplete upload request"):
+        script.run(args, client)
+
+
 def test_skill_progressive_read_uses_one_revision_and_server_continuations() -> None:
     script = _script()
     locator = "doc:returned-short/tier:flash/page:26/block:2"
@@ -292,6 +321,26 @@ def test_skill_upload_preflights_limits_and_streams_only_to_business_api(tmp_pat
     assert len(connection.calls) == 3  # Only the capabilities preflight was sent.
 
 
+def test_skill_upload_503_keeps_request_key_and_reports_unknown_outcome(tmp_path: Path) -> None:
+    script = _script()
+    file = tmp_path / "notice.html"
+    file.write_bytes(b"<h1>Notice</h1>")
+    connection = _Connection({
+        ("GET", "/api/business/capabilities"): _Response({
+            "parseable_extensions": ["html"], "tiered_extensions": [], "tiers": ["flash"],
+            "max_upload_bytes": 1024,
+        }),
+        ("POST", "/api/business/documents"): _Response({"detail": "gateway unavailable"}, status=503),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown") as unknown:
+        client.upload(file, tier=None, template=None, request_key="same-upload-request-key")
+    assert unknown.value.status == 503
+    assert unknown.value.request_key == "same-upload-request-key"
+    assert connection.calls == [("GET", "/api/business/capabilities"), ("POST", "/api/business/documents")]
+
+
 def test_skill_reports_business_error_without_success_guess() -> None:
     script = _script()
     connection = _Connection({("GET", "/api/business/tasks/missing"): _Response({"detail": "Task not found"}, status=404)})
@@ -362,6 +411,10 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     submitted = client.upload(file, tier=None, template="official_document", request_key="skill-upload-request-key")
     assert submitted["task"]["status"] == "submitted"
     assert submitted["document"]["template_code"] == "official_document"
+    lookup = script.run(script.parser().parse_args(["upload-request", "skill-upload-request-key"]), client)
+    assert lookup["state"] == "accepted"
+    assert lookup["document"] == submitted["document"]
+    assert lookup["task"] == submitted["task"]
     replay = client.upload(file, tier=None, template="official_document", request_key="skill-upload-request-key")
     assert replay == submitted
     assert doclib.ensure_parse.call_count == 1
@@ -372,6 +425,8 @@ def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) ->
     )
     task = client.request("GET", f"/tasks/{submitted['task']['id']}")
     assert task["status"] == "done"
+    done_lookup = script.run(script.parser().parse_args(["upload-request", "skill-upload-request-key"]), client)
+    assert done_lookup["task"]["status"] == "done"
     overview = client.overview(submitted["document"]["id"])
     assert overview["revision"]["tier"] == "flash"
     assert overview["draft"] is None
