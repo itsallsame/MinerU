@@ -73,7 +73,12 @@ class FieldExtraction:
             native_title_field = next(
                 (field for field in template.fields if field.code == "title" and field.type == "text"), None
             )
+            abstract_field = next(
+                (field for field in template.fields if field.code == "abstract" and field.type == "text"), None
+            )
             explicit_title_found = False
+            explicit_abstract_found = False
+            first_page_content: str | None = None
             for page_no in page_numbers:
                 self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
                 locator = page_ref(revision.short_id, revision.tier, page_no)
@@ -88,12 +93,15 @@ class FieldExtraction:
                     or page.request_scope.locator != locator
                 ):
                     return self._fail(run, "historical_content_incomplete")
+                if page_no == 1:
+                    first_page_content = page.content
                 matches = [
                     (field.code, value)
                     for field in template.fields
                     for value in _label_values(page.content, field)
                 ]
                 explicit_title_found |= any(code == "title" for code, _value in matches)
+                explicit_abstract_found |= any(code == "abstract" for code, _value in matches)
                 if not matches:
                     continue
                 self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
@@ -107,6 +115,17 @@ class FieldExtraction:
                 parse_id = revision.parse_id_for_page(1)
                 assert parse_id is not None
                 self._add_native_title_candidates(run, revision_id=revision_id, parse_id=parse_id, revision=revision)
+            if abstract_field is not None and not explicit_abstract_found and first_page_content is not None:
+                values = _abstract_heading_values(first_page_content)
+                if values:
+                    self._store.renew_extraction_lease(run.id, claim_token=run.claim_token)
+                    locator = page_ref(revision.short_id, revision.tier, 1)
+                    evidence = self._evidence_writer.capture(revision_id, locator=locator)
+                    for value in values:
+                        self._store.add_field_candidate(
+                            run.id, claim_token=run.claim_token, field_code="abstract", value=value,
+                            evidence_id=evidence.id, method="section_heading",
+                        )
             return self._store.finish_extraction(
                 run.id, claim_token=run.claim_token, complete_coverage=complete_coverage
             )
@@ -184,6 +203,33 @@ def _native_title_value(content: str) -> str | None:
     if not value or len(value) > 200 or value.startswith("!["):
         return None
     return value
+
+
+def _abstract_heading_values(content: str) -> tuple[str, ...]:
+    """Take one complete plain paragraph after an exact abstract heading."""
+    heading = re.compile(r"#{1,6}[ \t]+(?:摘要|Abstract)[ \t]*", re.IGNORECASE)
+    lines = content.split("\n")
+    values: list[str] = []
+    for index, line in enumerate(lines):
+        if heading.fullmatch(line.rstrip("\r")) is None:
+            continue
+        position = index + 1
+        if position >= len(lines) or lines[position].strip():
+            continue
+        while position < len(lines) and not lines[position].strip():
+            position += 1
+        paragraph: list[str] = []
+        while position < len(lines) and lines[position].strip():
+            fragment = lines[position]
+            if fragment.lstrip().startswith(("#", "<", "![", "|", "- ", "* ", ">")):
+                paragraph = []
+                break
+            paragraph.append(fragment)
+            position += 1
+        value = "\n".join(paragraph).strip()
+        if value and len(value) <= 2000 and value not in values:
+            values.append(value)
+    return tuple(values)
 
 
 __all__ = ["FieldExtraction"]

@@ -301,6 +301,37 @@ def test_real_doclib_native_heading_proposes_unconfirmed_title_candidate(
     assert "年度原生标题" in store.get_evidence(candidates[0].evidence_id).snippet
 
 
+def test_real_doclib_abstract_heading_proposes_unconfirmed_candidate(
+    live_doclib: tuple[DoclibClient, Path, Path]
+) -> None:
+    doclib, root, _home = live_doclib
+    upload_root = root / "abstract-uploads"
+    upload_root.mkdir()
+    store = BusinessStore(root / "abstract-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=ImmutableUploadStore(upload_root, max_bytes=2048), store=store,
+        gateway=DoclibGateway(doclib, shared_root=upload_root), doclib=doclib, producer_version="4.0.6",
+    )
+    submitted = workflow.submit(
+        io.BytesIO("<html><body><h1>示例论文</h1><h2>摘要</h2><p>本文研究离线文档解析。</p><h2>引言</h2></body></html>".encode()),
+        filename="paper.html", template_code="paper",
+    )
+    _wait_for_parse(doclib, list(submitted.task.parse_ids))
+    assert workflow.refresh(submitted.task.id).status == "done"
+    revision = store.list_revisions(submitted.document.id)[0]
+    extraction = FieldExtraction(
+        store=store, doclib=doclib, evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+    )
+    completed = extraction.process_next()
+    assert completed is not None and completed.status == "done"
+    candidates = store.list_field_candidates(completed.id)
+    assert ("abstract", "本文研究离线文档解析。", "section_heading") in [
+        (item.field_code, item.value, item.method) for item in candidates
+    ], doclib.read_parse_content(submitted.task.parse_ids[0],
+                                 f"doc:{revision.short_id}/tier:flash/page:1", limit=30000).content
+
+
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
     client, root, _home = live_doclib
     source = root / "report.html"

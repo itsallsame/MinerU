@@ -1056,3 +1056,11 @@ Changes: Display a safe, human-readable candidate method and explicit unconfirme
 Verification: Web Node 13 passed; offline build produced 8 assets; all 24 Chromium regressions passed, including source-label visibility and existing review flow. JSON and diff checks passed. No target Kylin or four-class quality claim.
 Evidence: dev-docs/evidence/2026-09-24-candidate-provenance-web.md
 Next: Continue P3 field/quality work and obtain four-class annotated samples plus isolated Kylin/NVIDIA target access.
+
+=== 2026-09-24 Session 117 (evidence-bound abstract section candidate) ===
+Status: In progress; BE-037 and P3/P6 remain open pending four-class annotated and Kylin/NVIDIA acceptance
+Discovery: Real Doclib HTML Flash emits `## 摘要` followed by a separate plain paragraph; the prior colon-label-only extractor missed this common paper/report shape.
+Changes: Added conservative `section_heading` candidates for the first page's exact 摘要/Abstract Markdown heading when no explicit abstract label appears in the selected revision. The first complete plain paragraph is frozen from the historical parse and remains unconfirmed. Business schema and offline backup moved to 12; old schema 11 is refused without migration. The Web now names the method without inventing confidence or identity/permission logic.
+Verification: Focused extraction/store/backup/live Doclib tests 47 passed; full Mac business 312 passed/2 skipped/2 dependency warnings. Web Node 13 passed, eight offline assets built, all 24 Chromium regressions passed. Ruff lint, JSON and diff checks passed. Real sample accuracy and target isolated Kylin/NVIDIA are still unproven.
+Evidence: dev-docs/evidence/2026-09-24-abstract-heading-candidate.md
+Next: Continue P3 author/date/keyword and quality work; obtain annotated four-class samples and target Kylin/NVIDIA access. Keep Goal active.

@@ -2630,7 +2630,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "已有显式‘摘要：值’标签规则，并新增第一页精确‘摘要’/‘Abstract’ Markdown 章节标题后首个纯文本段落的 section_heading 候选；绑定历史修订冻结证据，始终未确认。真实本地 Doclib HTML 链路及 Mac 回归通过。尚缺四类标注样本和麒麟/NVIDIA 实测，不标完成。见 dev-docs/evidence/2026-09-24-abstract-heading-candidate.md。"
     },
     {
       "id": "BE-038",

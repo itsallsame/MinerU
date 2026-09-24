@@ -171,6 +171,30 @@ def test_native_title_never_uses_preview_or_incomplete_content(
     assert store.list_field_candidates(run.id) == ()
 
 
+@pytest.mark.parametrize("content,expected", [
+    ("<!-- page 1 -->\n\n## 摘要\n\n本文研究离线解析。\n\n## 引言", ("本文研究离线解析。", "section_heading")),
+    (
+        "<!-- page 1 -->\n\n## Abstract\n\nFirst line.\nSecond line.\n\n## Intro",
+        ("First line.\nSecond line.", "section_heading"),
+    ),
+    ("<!-- page 1 -->\n\n摘要：显式摘要\n\n## 摘要\n\n章节摘要", ("显式摘要", "label_rule")),
+    ("<!-- page 1 -->\n\n## 摘要\n\n## 引言", None),
+    ("<!-- page 1 -->\n\n## 摘要\n\n<a id=\"html-12345678\"></a>\n## 引言", None),
+])
+def test_abstract_heading_candidate_is_conservative_and_source_bound(
+    tmp_path: Path, content: str, expected: tuple[str, str] | None,
+) -> None:
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content=content, template_code="paper")
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    abstract_candidates = [item for item in store.list_field_candidates(run.id) if item.field_code == "abstract"]
+    assert [(item.value, item.method) for item in abstract_candidates] == ([expected] if expected else [])
+    if expected:
+        evidence = store.get_evidence(abstract_candidates[0].evidence_id)
+        assert evidence.revision_id == revision_id and expected[0] in evidence.snippet
+
+
 def test_multi_batch_revision_extracts_each_page_from_its_historical_batch(tmp_path: Path) -> None:
     store = BusinessStore(tmp_path / "business.sqlite3")
     store.initialize()

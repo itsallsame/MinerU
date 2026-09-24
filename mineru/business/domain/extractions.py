@@ -7,7 +7,7 @@ from typing import Literal
 
 ExtractionStatus = Literal["queued", "running", "done", "failed"]
 IssueCode = Literal["required_missing", "conflicting_candidates", "coverage_incomplete"]
-CandidateMethod = Literal["label_rule", "native_doc_title"]
+CandidateMethod = Literal["label_rule", "native_doc_title", "section_heading"]
 
 
 @dataclass(frozen=True)
