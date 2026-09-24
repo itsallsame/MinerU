@@ -67,6 +67,16 @@ def main(base_url: str) -> None:
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.route("**/api/business/**", route_api)
             page.goto(base_url, wait_until="networkidle")
+            page.keyboard.press("Tab")
+            assert page.evaluate("document.activeElement?.classList.contains('skip-link')")
+            page.keyboard.press("Enter")
+            assert page.evaluate("location.hash === '#main'")
+            assert page.evaluate("document.activeElement?.id === 'main'"), "skip link did not move focus to main"
+            assert page.evaluate("getComputedStyle(document.activeElement).outlineStyle !== 'none'"), (
+                "skip-link target has no visible focus indicator"
+            )
+            page.keyboard.press("Tab")
+            assert page.evaluate("document.activeElement?.id === 'refresh'"), "Tab did not enter main content"
             card = page.get_by_role("button", name="查看 report.pdf，已解析")
             card.wait_for()
             card.focus()
@@ -76,7 +86,7 @@ def main(base_url: str) -> None:
             assert card.evaluate("node => document.activeElement === node"), "document selection lost keyboard focus"
             assert card.evaluate("node => getComputedStyle(node).outlineStyle !== 'none'")
             assert not errors, errors
-            print("Playwright keyboard focus passed: selected document remains focused after rerender")
+            print("Playwright keyboard focus passed: skip link enters main and selected document keeps focus")
         finally:
             browser.close()
 

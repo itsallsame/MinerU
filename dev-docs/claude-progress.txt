@@ -744,3 +744,10 @@ Changes: SKL-022 compares Web-exported and Skill-read full confirmed result for 
 Verification: Skill contract 9 passed, full business 189 passed/1 opt-in skipped, real Web/API/Doclib/Skill 1 passed, upstream unittest 2798 passed/4 skipped; Ruff lint, diff and feature-count checks passed on Mac. Review was manual because no dedicated Codex CLI review tool was available. No Kylin/NVIDIA/air-gap/real four-class sample claim.
 Evidence: dev-docs/evidence/2026-09-24-p5-skill-phase-review.md and the SKL-020/021/022 evidence files.
 Next: P4 remaining UX/cancellation/structure-edit work, P1 isolated deployment and P6 real annotated sample acceptance. Stop at the P5 phase boundary for user confirmation; keep the full Goal active.
+
+=== 2026-09-24 Session 74 (FE-046 skip-link focus) ===
+Status: In progress; 74/241 passed; FE-046 remains incomplete
+Changes: Reproduced and fixed the Web skip link that changed #main without moving keyboard focus. The main landmark is now programmatically focusable; Chromium asserts focused target, visible outline and the next Tab entering main content. No user/permission layer changed.
+Verification: Initial browser run failed on the new focus assertion; final Web 11 Node tests/8-asset build and 19 Chromium regressions passed, including extra outline/Tab checks. Mac synthetic API only; no screen-reader or Kylin claim.
+Evidence: dev-docs/evidence/2026-09-24-skip-link-focus.md
+Next: Continue FE-046 full keyboard/screen-reader audit, FE-047 error recovery, and the Doclib-aware cancellation/structure-edit scopes; P1/P6 target gates remain. Keep goal active.
