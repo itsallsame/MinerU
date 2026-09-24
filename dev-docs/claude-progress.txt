@@ -863,3 +863,10 @@ Changes: Business schema 8 adds transactional ingest request keys. Same key/inte
 Verification: Regression exposed missing workflow key support before fix. Targeted business 36 passed; full Mac business 217 passed/1 skipped; Web 11 Node tests, offline build, 21 Chromium regressions and Ruff passed. Concurrency, cross-Store replay, HTTP 409/422 and Skill real API replay covered. No isolated Kylin/NVIDIA or real annotated sample claim.
 Evidence: dev-docs/evidence/2026-09-24-upload-request-idempotency.md
 Next: Audit rollback/backup with schema 8 on target, then continue P4 and P6 gates. Keep goal active.
+
+=== 2026-09-24 Session 91 (offline state backup and open-system constraint) ===
+Status: In progress; 78/241 passed; QA-033/QA-034 remain incomplete pending target rehearsal
+Changes: Added stop-checked, complete-marker-verified, no-overwrite backup and new-directory restore for schema 8 business SQLite, Doclib state and shared originals. Documented matching release/model artifacts for rollback. Reconfirmed the user's open-system constraint: no accounts, login, roles or permission management; host/network/media controls are operational boundaries only.
+Verification: Six synthetic backup/restore tests, full Mac business suite 223 passed/1 skipped and Ruff passed. No Kylin/NVIDIA/air-gap or real-data recovery claim.
+Evidence: dev-docs/evidence/2026-09-24-offline-state-backup.md
+Next: Rehearse backup, restore and release rollback with actual artifacts on isolated Kylin; continue P4 and P6 gates. Keep goal active.

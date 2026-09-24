@@ -1,0 +1,9 @@
+# 离线业务状态备份与恢复：Mac 合成验证
+
+本轮为 schema 8 增加 `scripts/business_state_backup.py`，覆盖业务 SQLite、Doclib 持久目录及共享原件目录。模型权重、清单、代码镜像和 wheelhouse 仍是独立发布制品；备份保留 `release.json` 字节及散列，以便现场核对回退版本。业务 Web/API/Skill 仍是开放系统，没有账号、登录、角色或权限管理。
+
+工具仅在所选 Compose 项目的 `business-api`、`doclib-worker` 均停止后复制。输入目录不得重叠，拒绝符号链接、硬链接及特殊文件；业务库须为 schema 8 且 `quick_check` 成功。新备份逐文件比较大小与 SHA-256，最后写入完成标记。恢复前重新校验，只允许写入三个不存在的目标目录，不覆盖旧数据。不可解析的 Docker 状态、损坏或未完成备份均失败关闭。使用及现场限制见 `dev-docs/offline-state-backup.md`。
+
+验证：定向 6 个合成测试通过，覆盖成功备份/校验/新目录恢复、恢复后的请求键重放、旧 schema 拒绝、现存目录拒绝、篡改/不完整清单拒绝、符号链接和 Compose 状态检查；完整 Mac 业务测试 223 通过、1 跳过；Ruff 通过。
+
+边界：这是 Mac 上的合成目录和 SQLite 演练，未在实际麒麟 x86_64 + NVIDIA、物理断网、真实模型/镜像、真实文档及宿主挂载权限下验证；所选 Compose 项目以外的写进程需人工排除。清单不是数字签名。QA-033 与 QA-034 均保持未完成。

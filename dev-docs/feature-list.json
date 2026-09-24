@@ -5798,7 +5798,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "已提供停服后 schema 8 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具，Mac 合成回归通过；目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md"
     },
     {
       "id": "QA-034",
@@ -5821,7 +5821,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "已形成配套版本回退流程：恢复到新挂载目录并匹配原发布制品、模型与清单；只有 Mac 合成恢复，无目标麒麟机器上的镜像/模型回退演练，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md"
     },
     {
       "id": "QA-035",
