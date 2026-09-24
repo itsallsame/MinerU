@@ -5,7 +5,7 @@
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
   "total_features": 241,
-  "completed_features": 72,
+  "completed_features": 73,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
     "test": ".venv/bin/python -m pytest tests/unittest",
@@ -4993,9 +4993,9 @@
         "实现：Skill长文档渐进读取示例",
         "验证：.venv/bin/python -m pytest tests/business/test_skill_contract.py"
       ],
-      "passes": false,
-      "completed_at": null,
-      "notes": ""
+      "passes": true,
+      "completed_at": "2026-09-24",
+      "notes": "自有 Skill 补充固定历史修订的 outline/search-blocks/read 渐进续读示例；定向契约 8 通过，覆盖服务返回 next_page/locator 的续读与未确认状态。真实长文档性能和麒麟未验收。证据：dev-docs/evidence/2026-09-24-skill-progressive-reading.md"
     },
     {
       "id": "SKL-021",

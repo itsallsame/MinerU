@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from urllib.parse import quote
 from unittest.mock import Mock
 
 import pytest
@@ -150,6 +151,46 @@ def test_skill_write_commands_require_explicit_acknowledgement() -> None:
     extracted = script.run(script.parser().parse_args(["extract", "revision-1", "--confirm-write"]), client)
     assert extracted["id"] == "run-1"
     client.request.assert_called_once_with("POST", "/revisions/revision-1/extractions")
+
+
+def test_skill_progressive_read_uses_one_revision_and_server_continuations() -> None:
+    script = _script()
+    locator = "doc:returned-short/tier:flash/page:26/block:2"
+    next_locator = "doc:returned-short/tier:flash/page:27"
+    responses = {
+        ("GET", "/api/business/documents/doc-1/revisions"): _Response([{"id": "rev-1", "short_id": "returned-short"}]),
+        ("GET", "/api/business/revisions/rev-1/outline"): _Response({"items": [], "next_page": 26}),
+        ("GET", "/api/business/revisions/rev-1/outline?start_page=26"): _Response({"items": [], "next_page": None}),
+        ("GET", "/api/business/revisions/rev-1/search-blocks?query=risk"): _Response({
+            "items": [{"locator": locator, "state": "historical_parse_unconfirmed"}], "next_page": 26,
+        }),
+        ("GET", "/api/business/revisions/rev-1/search-blocks?query=risk&start_page=26"): _Response({
+            "items": [], "next_page": None,
+        }),
+        ("GET", f"/api/business/revisions/rev-1/content?locator={quote(locator, safe='')}&limit=12000"): _Response({
+            "content": "Risk passage", "next_locator": next_locator, "state": "historical_parse_unconfirmed",
+        }),
+    }
+    connection = _Connection(responses)
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+
+    revisions = script.run(script.parser().parse_args(["revisions", "doc-1"]), client)
+    assert revisions[0]["id"] == "rev-1"
+    first = script.run(script.parser().parse_args(["outline", "rev-1"]), client)
+    assert first["next_page"] == 26
+    second = script.run(script.parser().parse_args(["outline", "rev-1", "--start-page", "26"]), client)
+    assert second["next_page"] is None
+    matches = script.run(script.parser().parse_args(["search-blocks", "rev-1", "risk"]), client)
+    assert matches["items"][0]["locator"] == locator
+    continued = script.run(
+        script.parser().parse_args(["search-blocks", "rev-1", "risk", "--start-page", "26"]), client,
+    )
+    assert continued["next_page"] is None
+    read = script.run(script.parser().parse_args(["read", "rev-1", locator]), client)
+    assert read["next_locator"] == next_locator
+    assert read["state"] == "historical_parse_unconfirmed"
+    assert all(method == "GET" and path.startswith("/api/business/") for method, path in connection.calls)
 
 
 def test_skill_overview_separates_unconfirmed_candidates_from_confirmed_result() -> None:
