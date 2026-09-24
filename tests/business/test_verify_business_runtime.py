@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
+import json
 from pathlib import Path
+import sys
 
 import pytest
 
-from scripts.verify_business_runtime import _validated_bind, check_runtime
+from scripts import verify_business_runtime
+from scripts.verify_business_runtime import _validated_bind, check_artifact_report, check_runtime
 
 
 def _deployment(tmp_path: Path) -> dict[str, object]:
@@ -87,6 +91,7 @@ def _deployment(tmp_path: Path) -> dict[str, object]:
             "schema": 3,
             "platform": "linux/amd64",
             "source_revision": "a" * 40,
+            "base_image_id": "sha256:base",
             "worker_image_id": "sha256:worker",
             "business_image_id": "sha256:business",
             "model": {"manifest_sha256": "manifest-hash"},
@@ -116,6 +121,58 @@ def test_runtime_preflight_accepts_isolated_local_deployment(tmp_path: Path) -> 
     assert report["result"] == "runtime_preflight_passed"
     assert report["worker_cuda_device_count"] == 1
     assert "models" not in str(report)
+
+
+def test_runtime_requires_matching_successful_artifact_report(tmp_path: Path) -> None:
+    release = _deployment(tmp_path)["release"]
+    release_bytes = json.dumps(release).encode()
+    report = {
+        "schema": 1,
+        "result": "artifact_integrity_passed",
+        "release_manifest_sha256": hashlib.sha256(release_bytes).hexdigest(),
+        "source_revision": release["source_revision"],
+        "platform": release["platform"],
+        "worker_image_id": release["worker_image_id"],
+        "business_image_id": release["business_image_id"],
+        "base_image_id": release["base_image_id"],
+        "model_manifest_sha256": release["model"]["manifest_sha256"],
+        "model_files_verified": 2,
+        "wheelhouse_files_verified": 3,
+        "web_assets_verified": 4,
+    }
+    check_artifact_report(report, release, release_bytes)
+    for key, value in [
+        ("result", "skipped"),
+        ("release_manifest_sha256", "0" * 64),
+        ("worker_image_id", "sha256:other"),
+        ("model_files_verified", 0),
+    ]:
+        changed = {**report, key: value}
+        with pytest.raises(ValueError, match="Artifact verification report"):
+            check_artifact_report(changed, release, release_bytes)
+
+
+def test_runtime_cli_rejects_stale_artifact_report_before_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    release = _deployment(tmp_path)["release"]
+    release_path = tmp_path / "release.json"
+    release_path.write_text(json.dumps(release))
+    artifact_report = tmp_path / "artifact-verification.json"
+    artifact_report.write_text(json.dumps({"schema": 1, "result": "artifact_integrity_passed"}))
+    output = tmp_path / "runtime.json"
+    monkeypatch.setattr(verify_business_runtime, "_command", lambda *_: pytest.fail("Docker was called"))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "verify_business_runtime.py", "--release", str(release_path),
+            "--artifact-report", str(artifact_report),
+            "--model-dir", str(tmp_path / "models"),
+            "--model-manifest", str(tmp_path / "model-manifest.json"),
+            "--business-bind", "127.0.0.1", "--output", str(output),
+        ],
+    )
+    assert verify_business_runtime.main() == 1
+    assert not output.exists()
 
 
 @pytest.mark.parametrize(

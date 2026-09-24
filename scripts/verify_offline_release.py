@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -61,6 +60,7 @@ def verify_release(
     return {
         "schema": 1,
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+        "release_manifest_sha256": release_manifest._sha256(release_path),
         "source_revision": selected["source_revision"],
         "platform": selected["platform"],
         "worker_image_id": selected["worker_image_id"],
@@ -111,6 +111,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.output is not None:
+            if args.output.exists() or args.output.is_symlink():
+                raise ValueError("Artifact verification report already exists; choose a new output path")
             output = args.output.resolve()
             protected = [args.wheelhouse.resolve(), args.model_dir.resolve(), args.web_dist.resolve()]
             protected_files = {args.release.resolve(), args.model_manifest.resolve()}
@@ -132,10 +134,7 @@ def main() -> int:
         if args.source_tree is not None:
             _verify_source_tree(args.source_tree, report["source_revision"])
         if args.output is not None:
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            temporary = args.output.with_suffix(args.output.suffix + ".tmp")
-            temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            os.replace(temporary, args.output)
+            release_manifest._write_new_release(args.output, report)
         print("Offline release artifacts verified; runtime and GPU acceptance remain separate")
     except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"Offline release verification error: {exc}", file=sys.stderr)

@@ -7,6 +7,7 @@ This does not upload documents, prove physical air-gapping or assess model quali
 from __future__ import annotations
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import subprocess
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from scripts import release_manifest
 from scripts.verify_host_layout import check_host_separation
 
 
@@ -28,6 +30,30 @@ def _validated_bind(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address
     if address.is_unspecified or not (address.is_loopback or address.is_private):
         raise ValueError("Business API bind address must be private or loopback")
     return address
+
+
+def check_artifact_report(report: dict[str, Any], release: dict[str, Any], release_bytes: bytes) -> None:
+    """Bind runtime acceptance to a prior, successful check of this exact release."""
+    if not isinstance(release, dict) or not isinstance(release.get("model"), dict):
+        raise ValueError("Selected release manifest is invalid")
+    expected = {
+        "release_manifest_sha256": hashlib.sha256(release_bytes).hexdigest(),
+        "source_revision": release.get("source_revision"),
+        "platform": release.get("platform"),
+        "worker_image_id": release.get("worker_image_id"),
+        "business_image_id": release.get("business_image_id"),
+        "base_image_id": release.get("base_image_id"),
+        "model_manifest_sha256": release.get("model", {}).get("manifest_sha256"),
+    }
+    if not isinstance(report, dict) or report.get("schema") != 1 or report.get("result") != "artifact_integrity_passed":
+        raise ValueError("Artifact verification report is missing a successful result")
+    if any(report.get(key) != value or value is None for key, value in expected.items()):
+        raise ValueError("Artifact verification report differs from the selected release")
+    if any(
+        not isinstance(report.get(key), int) or isinstance(report[key], bool) or report[key] < 1
+        for key in ("model_files_verified", "wheelhouse_files_verified", "web_assets_verified")
+    ):
+        raise ValueError("Artifact verification report has no verified artifact inventory")
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -231,6 +257,7 @@ print(json.dumps({'available': bool(torch.cuda.is_available()), 'count': int(tor
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--release", type=Path, required=True)
+    parser.add_argument("--artifact-report", type=Path, required=True)
     parser.add_argument("--compose-file", type=Path, default=Path("docker/compose.business.yaml"))
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--model-manifest", type=Path, required=True)
@@ -240,14 +267,22 @@ def main() -> int:
     args = parser.parse_args()
     try:
         address = _validated_bind(args.business_bind)
-        if args.output.exists():
+        if args.output.exists() or args.output.is_symlink():
             raise ValueError("Runtime report already exists; choose a new output path")
         if args.output.resolve().is_relative_to(args.model_dir.resolve()) or args.output.resolve() in {
             args.release.resolve(),
             args.model_manifest.resolve(),
+            args.artifact_report.resolve(),
         }:
             raise ValueError("Runtime report must be outside model and release artifacts")
-        release = json.loads(args.release.read_text(encoding="utf-8"))
+        if not args.release.is_file() or args.release.is_symlink():
+            raise ValueError("Selected release manifest is missing or is a symlink")
+        if not args.artifact_report.is_file() or args.artifact_report.is_symlink():
+            raise ValueError("Artifact verification report is missing or is a symlink")
+        release_bytes = args.release.read_bytes()
+        release = json.loads(release_bytes)
+        artifact_bytes = args.artifact_report.read_bytes()
+        check_artifact_report(json.loads(artifact_bytes), release, release_bytes)
         service_ids = {
             service: _command("docker", "compose", "-f", str(args.compose_file), "ps", "-q", service)
             for service in ("business-api", "doclib-worker")
@@ -290,10 +325,8 @@ def main() -> int:
             cuda=cuda,
             host_gpu_lines=host_gpu_lines,
         )
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        temporary = args.output.with_suffix(args.output.suffix + ".tmp")
-        temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        temporary.replace(args.output)
+        report["artifact_report_sha256"] = hashlib.sha256(artifact_bytes).hexdigest()
+        release_manifest._write_new_release(args.output, report)
         print("Business runtime preflight passed; physical isolation and real parsing remain separate gates")
     except (
         OSError,

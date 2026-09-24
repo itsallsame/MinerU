@@ -765,3 +765,10 @@ Changes: Distinguished successful template create/disable writes from a failing 
 Verification: Web 11 Node tests, 8-asset build and 19 Chromium regressions passed, including create/disable write-success plus list-503 and delayed write-selection races. Mac synthetic API only; no Kylin/GPU or annotated-source claim.
 Evidence: dev-docs/evidence/2026-09-24-template-write-refresh-boundary.md
 Next: Continue FE-047 async boundary audit and FE-046 accessibility audit; P1/P6 isolated-target and real-sample gates remain. Keep goal active.
+
+=== 2026-09-24 Session 77 (P1 artifact-to-runtime acceptance chain) ===
+Status: In progress; 74/241 passed; P1 target-machine gates remain incomplete
+Changes: Made imported-artifact verification reports immutable and bound them to the exact release.json byte hash. Runtime preflight now requires that successful report, checks release/image/model identities before contacting Docker, and records its digest. Updated offline deployment commands. No user/auth/permission layer or model-in-image change.
+Verification: Targeted 39 passed; full business 191 passed/1 skipped with local socket permission; Ruff and diff checks passed. Restricted first full run failed on Doclib socket permission only. Local Docker inventory has only arm64 mineru:4.0.2, so no real amd64 build/target claim.
+Evidence: dev-docs/evidence/2026-09-24-offline-artifact-runtime-chain.md
+Next: Acquire/import real linux/amd64 NVIDIA base image, Linux wheelhouse and model on isolated Kylin; execute artifact/runtime chain and four-class annotated acceptance. Continue P4 gaps. Keep goal active.

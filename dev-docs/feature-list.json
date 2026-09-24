@@ -781,7 +781,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Mac 模拟制品 SHA-256 核验与发布清单/制品报告/运行态报告哈希串联已实现，制品报告改为原子只创建一次；尚无麒麟 linux/amd64 NVIDIA 现场镜像、wheelhouse、模型和断网验收，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-artifact-runtime-chain.md"
     },
     {
       "id": "INF-023",

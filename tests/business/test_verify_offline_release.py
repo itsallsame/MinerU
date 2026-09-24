@@ -94,6 +94,7 @@ def test_imported_release_artifacts_match_selected_record(tmp_path: Path) -> Non
     assert result["wheelhouse_files_verified"] == 2
     assert result["web_assets_verified"] == 1
     assert result["worker_image_id"] == WORKER_ID
+    assert result["release_manifest_sha256"] == _hash(artifacts["release_path"].read_bytes())
 
 
 @pytest.mark.parametrize(
@@ -162,6 +163,9 @@ def test_verify_cli_writes_report_only_after_all_checks(tmp_path: Path, monkeypa
     report = json.loads(output.read_text())
     assert report["result"] == "artifact_integrity_passed"
     assert "weights.bin" not in output.read_text()
+    original = output.read_bytes()
+    assert verify_offline_release.main() == 1
+    assert output.read_bytes() == original
     (artifacts["model_dir"] / "weights.bin").write_bytes(b"wrong")
     output.unlink()
     assert verify_offline_release.main() == 1
