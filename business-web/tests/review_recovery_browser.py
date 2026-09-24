@@ -29,19 +29,28 @@ def main(base_url: str) -> None:
         "template_version": 1, "status": "done", "error_code": None,
         "created_at_ms": now, "updated_at_ms": now,
     }
-    failures = {"revisions": True, "extractions": True, "run": True, "evidence": False}
+    next_run = {**run, "id": "run-2", "status": "queued", "created_at_ms": now + 1}
+    failures = {"revisions": True, "extractions": True, "run": True, "run2": False, "evidence": False}
     evidence_failures = {"count": 0}
+    extraction_writes = {"count": 0}
 
     def route_api(route: object) -> None:
         path = route.request.url.split("/api/business", 1)[1].split("?", 1)[0]
         if path == f"/documents/{document['id']}/revisions" and failures["revisions"]:
             route.fulfill(status=503, content_type="application/json", body='{"detail":"revisions_unavailable"}')
             return
+        if path == "/revisions/rev-1/extractions" and route.request.method == "POST":
+            extraction_writes["count"] += 1
+            route.fulfill(status=201, content_type="application/json", body=json.dumps(next_run))
+            return
         if path == "/revisions/rev-1/extractions" and failures["extractions"]:
             route.fulfill(status=503, content_type="application/json", body='{"detail":"runs_unavailable"}')
             return
         if path == "/extractions/run-1" and failures["run"]:
             route.fulfill(status=503, content_type="application/json", body='{"detail":"run_unavailable"}')
+            return
+        if path == "/extractions/run-2" and failures["run2"]:
+            route.fulfill(status=503, content_type="application/json", body='{"detail":"new_run_unavailable"}')
             return
         if path == "/revisions/rev-1/evidence" and failures["evidence"]:
             evidence_failures["count"] += 1
@@ -58,12 +67,15 @@ def main(base_url: str) -> None:
         elif path == f"/documents/{document['id']}/revisions":
             payload = [revision]
         elif path == "/revisions/rev-1/extractions":
-            payload = [run]
+            payload = [next_run, run] if extraction_writes["count"] else [run]
         elif path == "/revisions/rev-1/evidence":
             payload = []
         elif path == "/extractions/run-1":
             payload = {"run": run, "candidates": [], "issues": []}
-        elif path in ("/extractions/run-1/decisions", "/extractions/run-1/results", "/extractions/run-1/audit"):
+        elif path == "/extractions/run-2":
+            payload = {"run": next_run, "candidates": [], "issues": []}
+        elif path in ("/extractions/run-1/decisions", "/extractions/run-1/results", "/extractions/run-1/audit",
+                      "/extractions/run-2/decisions", "/extractions/run-2/results", "/extractions/run-2/audit"):
             payload = []
         elif path == "/templates/official_document":
             payload = {"code": "official_document", "name": "公文", "version": 1,
@@ -120,8 +132,34 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="重试读取证据列表").click()
             page.get_by_role("heading", name="字段候选与人工决定").wait_for()
             assert page.get_by_text("证据列表读取失败：evidence_unavailable").count() == 0
+
+            failures["extractions"] = True
+            page.get_by_role("button", name="重新生成字段候选").click()
+            page.get_by_text("字段提取已提交，但解析修订读取失败：runs_unavailable").wait_for(timeout=5000)
+            assert extraction_writes["count"] == 1
+            assert page.get_by_role("button", name="重新生成字段候选").count() == 0
+            failures["extractions"] = False
+            page.get_by_role("button", name="重试读取解析修订").click()
+            page.get_by_text("字段提取正在后台执行", exact=False).wait_for()
+            assert extraction_writes["count"] == 1
+
+            page.close()
+            extraction_writes["count"] = 0
+            failures["run2"] = True
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/api/business/**", route_api)
+            page.goto(base_url, wait_until="networkidle")
+            page.get_by_role("button", name="查看 notice.pdf，已解析").click()
+            page.get_by_role("button", name="重新生成字段候选").click()
+            page.get_by_text("字段提取已提交，但复核数据读取失败：new_run_unavailable").wait_for()
+            assert extraction_writes["count"] == 1
+            failures["run2"] = False
+            page.get_by_role("button", name="重试读取提取运行").click()
+            page.get_by_text("字段提取正在后台执行", exact=False).wait_for()
+            assert extraction_writes["count"] == 1
             assert not errors, errors
-            print("Playwright review recovery passed: revision list, parse revision, extraction run and evidence retries")
+            print("Playwright review recovery passed: revision/run/evidence retries and both acknowledged extraction write boundaries")
         finally:
             browser.close()
 

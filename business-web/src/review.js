@@ -271,13 +271,27 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       const revisionId = state.revisionId;
       const created = await businessApi.enqueueExtraction(revisionId);
       if (!isCurrent()) return;
-      const [runs, evidence] = await Promise.all([
-        businessApi.extractions(revisionId), businessApi.revisionEvidence(revisionId),
-      ]);
-      if (!isCurrent()) return;
-      state.runs = runs;
-      state.evidence = evidence;
+      state.runId = created.id;
+      state.targetRunId = created.id;
+      state.runs = [created, ...state.runs.filter((run) => run.id !== created.id)];
+      state.extraction = null;
+      try {
+        const [runs, evidence] = await Promise.all([
+          businessApi.extractions(revisionId), businessApi.revisionEvidence(revisionId),
+        ]);
+        if (!isCurrent()) return;
+        state.runs = runs.some((run) => run.id === created.id) ? runs : [created, ...runs];
+        state.evidence = evidence;
+      } catch (error) {
+        if (!isCurrent()) return;
+        state.revisionLoadFailed = true;
+        state.error = `字段提取已提交，但解析修订读取失败：${error.message}`;
+        return;
+      }
       await loadRun(created.id);
+      if (isCurrent() && state.runLoadFailed) {
+        state.error = `字段提取已提交，但${state.error}`;
+      }
     });
   }
 
