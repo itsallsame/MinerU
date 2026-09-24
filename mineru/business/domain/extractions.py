@@ -7,6 +7,7 @@ from typing import Literal
 
 ExtractionStatus = Literal["queued", "running", "done", "failed"]
 IssueCode = Literal["required_missing", "conflicting_candidates", "coverage_incomplete"]
+CandidateMethod = Literal["label_rule", "native_doc_title"]
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ class FieldCandidate:
     field_code: str
     value: str
     evidence_id: str
-    method: Literal["label_rule"]
+    method: CandidateMethod
     created_at_ms: int
 
 
@@ -46,4 +47,4 @@ class QualityIssue:
     created_at_ms: int
 
 
-__all__ = ["ExtractionRun", "ExtractionStatus", "FieldCandidate", "IssueCode", "QualityIssue"]
+__all__ = ["CandidateMethod", "ExtractionRun", "ExtractionStatus", "FieldCandidate", "IssueCode", "QualityIssue"]

@@ -252,7 +252,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 10")
+        database.execute("PRAGMA user_version = 11")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()
@@ -301,6 +301,18 @@ def test_previous_cancel_schema_is_preserved_without_implicit_migration(tmp_path
         database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
         database.execute("INSERT INTO old_business_data VALUES ('preserve')")
     with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 9"):
+        BusinessStore(database_path).initialize()
+    with closing(sqlite3.connect(database_path)) as database:
+        assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"
+
+
+def test_previous_candidate_schema_is_preserved_without_implicit_migration(tmp_path: Path) -> None:
+    database_path = tmp_path / "old-candidates.sqlite3"
+    with closing(sqlite3.connect(database_path)) as database, database:
+        database.execute("PRAGMA user_version = 10")
+        database.execute("CREATE TABLE old_business_data (marker TEXT NOT NULL)")
+        database.execute("INSERT INTO old_business_data VALUES ('preserve')")
+    with pytest.raises(BusinessStoreError, match="Unsupported business schema version: 10"):
         BusinessStore(database_path).initialize()
     with closing(sqlite3.connect(database_path)) as database:
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"

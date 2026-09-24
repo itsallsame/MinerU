@@ -24,6 +24,7 @@ from ..domain import (
     AuditRecord,
     BUILTIN_TEMPLATES,
     BusinessDocument,
+    CandidateMethod,
     ConfirmedField,
     ConfirmedResult,
     EvidenceSnapshot,
@@ -43,7 +44,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 11
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -226,7 +227,7 @@ class BusinessStore:
                         field_code TEXT NOT NULL,
                         value TEXT NOT NULL,
                         evidence_id TEXT NOT NULL REFERENCES evidence(id) ON DELETE RESTRICT,
-                        method TEXT NOT NULL CHECK(method = 'label_rule'),
+                        method TEXT NOT NULL CHECK(method IN ('label_rule', 'native_doc_title')),
                         created_at_ms INTEGER NOT NULL,
                         UNIQUE(run_id, field_code, value, evidence_id)
                     );
@@ -298,7 +299,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 10")
+                database.execute("PRAGMA user_version = 11")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -519,11 +520,14 @@ class BusinessStore:
         return tuple(ExtractionRun(**dict(row)) for row in rows)
 
     def add_field_candidate(
-        self, run_id: str, *, claim_token: str, field_code: str, value: str, evidence_id: str
+        self, run_id: str, *, claim_token: str, field_code: str, value: str, evidence_id: str,
+        method: CandidateMethod = "label_rule",
     ) -> FieldCandidate:
         """Only a frozen snippet from this run's revision can support a candidate."""
         if not value.strip() or len(value) > 2000:
             raise BusinessStoreError("Candidate value must be 1-2000 characters")
+        if method not in ("label_rule", "native_doc_title"):
+            raise BusinessStoreError("Unsupported candidate method")
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             row = database.execute(
@@ -549,7 +553,7 @@ class BusinessStore:
                 raise BusinessStoreError("Candidate value is absent from frozen source evidence")
             candidate = FieldCandidate(
                 id=uuid.uuid4().hex, run_id=run_id, field_code=field_code,
-                value=value, evidence_id=evidence_id, method="label_rule", created_at_ms=_now_ms(),
+                value=value, evidence_id=evidence_id, method=method, created_at_ms=_now_ms(),
             )
             database.execute(
                 "INSERT INTO field_candidates VALUES (?, ?, ?, ?, ?, ?, ?)",

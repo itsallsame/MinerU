@@ -1033,3 +1033,10 @@ Changes: On ambiguous retry responses the Web reads the current task by ID befor
 Verification: Web Node 12 passed, eight offline assets built, 24 synthetic Chromium regressions passed including accepted-but-lost response and failed status probe. JSON and diff checks passed. No real network fault or target Kylin browser claim.
 Evidence: dev-docs/evidence/2026-09-24-task-retry-unknown-outcome.md
 Next: Continue P3/P4 product gaps; obtain target Kylin/NVIDIA access and four-class labeled samples for P6. Keep Goal active.
+
+=== 2026-09-24 Session 114 (native historical title candidate) ===
+Status: In progress; BE-032 remains false pending real annotated samples and target Kylin/NVIDIA acceptance
+Changes: Added a conservative `native_doc_title` candidate only when no explicit title label is found across the selected revision. It is sourced from full page-1 historical Doclib block content with exact identity, path and locator checks, and a frozen evidence snapshot; no structure preview, invented confidence or automatic confirmation. Business SQLite and offline backup moved to schema 11; old schema 10 is explicitly refused without migration. Reaffirmed the open-system requirement: no login, users, roles, permissions or tenants.
+Verification: Targeted extraction/backup/store tests 38 passed; full Mac business 302 passed/2 skipped/2 dependency warnings. New schema-10 rejection test added after the full suite began and separately rerun. Ruff lint and diff check passed. No real four-class quality, isolated Kylin/NVIDIA or offline artifact claim.
+Evidence: dev-docs/evidence/2026-09-24-native-title-candidate.md
+Next: Continue P3/P4 product gaps; obtain target Kylin/NVIDIA and four-class annotated samples, keeping the Goal active.

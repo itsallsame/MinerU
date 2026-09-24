@@ -2505,7 +2505,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "已加入来源绑定的保守标题候选：先查显式‘标题：值’，若全扫描页无此标签，则从第一页历史 parse 的原生 doc_title 块完整内容提出 machine_unconfirmed 候选；不取预览、不造置信度、无跨修订复用。Mac 定向及完整业务回归通过。真实四类标注样本与麒麟/NVIDIA 尚未验证，保持未通过。见 dev-docs/evidence/2026-09-24-native-title-candidate.md。"
     },
     {
       "id": "BE-033",

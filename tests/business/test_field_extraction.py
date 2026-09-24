@@ -16,7 +16,8 @@ from mineru.business.domain import TemplateField
 from mineru.business.services import EvidenceReader, EvidenceWriter, ExtractionWorker, FieldExtraction
 from mineru.business.store import BusinessStore, BusinessStoreError
 from mineru.doclib import DoclibInterface, ParseInfo
-from mineru.doclib.types import ContentRequestScope, DocContentResponse
+from mineru.doclib.locators import block_ref
+from mineru.doclib.types import ContentRequestScope, DocContentResponse, ParseBlockSummary, ParseStructureResponse
 
 
 def _fixture(
@@ -46,6 +47,9 @@ def _fixture(
         sha256=upload.sha256, short_id=upload.sha256[:12], tier="flash", content=content,
         request_scope=ContentRequestScope(locator=locator),
     )
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=upload.sha256, short_id=upload.sha256[:12], tier="flash", page_no=1, blocks=[],
+    )
     writer = EvidenceWriter(store=store, doclib=doclib)
     return store, doclib, FieldExtraction(store=store, doclib=doclib, evidence_writer=writer), revision.id
 
@@ -72,6 +76,98 @@ def test_explicit_labels_create_unconfirmed_candidates_and_missing_issue(tmp_pat
         assert candidate.method == "label_rule"
         assert not hasattr(candidate, "confirmed")
     doclib.read_parse_content.assert_any_call(7, store.get_evidence(candidates[0].evidence_id).locator, limit=30000)
+    doclib.read_parse_structure.assert_not_called()
+
+
+def test_native_document_title_proposes_block_bound_unconfirmed_candidate(tmp_path: Path) -> None:
+    store, doclib, extractor, revision_id = _fixture(tmp_path, content="<!-- page 1 -->\n\n正文内容")
+    revision = store.get_revision(revision_id)
+    assert revision is not None
+    title_locator = block_ref(revision.short_id, revision.tier, 1, 1)
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=revision.sha256, short_id=revision.short_id, tier=revision.tier, page_no=1,
+        blocks=[ParseBlockSummary(
+            type="doc_title", block_no=1, locator=title_locator, path=[0],
+            preview="预览可能截断，不可作为候选", bbox=(1, 2, 3, 4),
+        )],
+    )
+    page_response = doclib.read_parse_content.return_value
+    title_response = page_response.model_copy(update={
+        "content": "<!-- page 1 -->\n\n# 年度工作报告",
+        "request_scope": ContentRequestScope(locator=title_locator),
+    })
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: (
+        title_response if locator == title_locator else page_response
+    )
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    candidates = store.list_field_candidates(run.id)
+    assert [(item.field_code, item.value, item.method) for item in candidates] == [
+        ("title", "年度工作报告", "native_doc_title")
+    ]
+    assert store.get_evidence(candidates[0].evidence_id).locator == title_locator
+    assert store.list_quality_issues(run.id) == ()
+    doclib.read_parse_content.assert_any_call(7, title_locator, limit=2000)
+    doclib.read_parse_content.assert_any_call(7, title_locator, limit=30000)
+
+
+@pytest.mark.parametrize("bad_structure", ["identity", "path", "locator"])
+def test_native_title_rejects_mismatched_historical_structure(tmp_path: Path, bad_structure: str) -> None:
+    store, doclib, extractor, revision_id = _fixture(tmp_path, content="<!-- page 1 -->\n\n正文")
+    revision = store.get_revision(revision_id)
+    assert revision is not None
+    title_locator = block_ref(revision.short_id, revision.tier, 1, 1)
+    block = ParseBlockSummary(type="doc_title", block_no=1, locator=title_locator, path=[0], preview="标题")
+    structure = ParseStructureResponse(
+        sha256=revision.sha256, short_id=revision.short_id, tier=revision.tier, page_no=1, blocks=[block],
+    )
+    if bad_structure == "identity":
+        structure = structure.model_copy(update={"sha256": "0" * 64})
+    elif bad_structure == "path":
+        structure = structure.model_copy(update={"blocks": [block.model_copy(update={"path": [1]})]})
+    else:
+        structure = structure.model_copy(update={
+            "blocks": [block.model_copy(update={"locator": block_ref(revision.short_id, revision.tier, 1, 2)})],
+        })
+    doclib.read_parse_structure.return_value = structure
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "failed"
+    assert run.error_code == "historical_content_unavailable"
+    assert store.list_field_candidates(run.id) == ()
+
+
+@pytest.mark.parametrize("block_text,truncated", [
+    ("<!-- page 1 -->\n\n# 标题\n第二行", False),
+    ("<!-- page 1 -->\n\n# 标题", True),
+])
+def test_native_title_never_uses_preview_or_incomplete_content(
+    tmp_path: Path, block_text: str, truncated: bool,
+) -> None:
+    store, doclib, extractor, revision_id = _fixture(tmp_path, content="<!-- page 1 -->\n\n正文")
+    revision = store.get_revision(revision_id)
+    assert revision is not None
+    title_locator = block_ref(revision.short_id, revision.tier, 1, 1)
+    doclib.read_parse_structure.return_value = ParseStructureResponse(
+        sha256=revision.sha256, short_id=revision.short_id, tier=revision.tier, page_no=1,
+        blocks=[ParseBlockSummary(
+            type="doc_title", block_no=1, locator=title_locator, path=[0], preview="预览标题",
+        )],
+    )
+    page_response = doclib.read_parse_content.return_value
+    block_response = page_response.model_copy(update={
+        "content": block_text, "truncated": truncated,
+        "request_scope": ContentRequestScope(locator=title_locator),
+    })
+    doclib.read_parse_content.side_effect = lambda parse_id, locator, *, limit: (
+        block_response if locator == title_locator else page_response
+    )
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None
+    assert run.status == ("failed" if truncated else "done")
+    assert store.list_field_candidates(run.id) == ()
 
 
 def test_multi_batch_revision_extracts_each_page_from_its_historical_batch(tmp_path: Path) -> None:
