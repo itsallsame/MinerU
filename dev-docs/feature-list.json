@@ -4489,7 +4489,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。新增提取完成后证据列表读取失败的明确未知状态和原地重试，防止伪空结果。其他异步反馈和完整错误恢复仍待检查。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-search-action-context.md、dev-docs/evidence/2026-09-23-review-template-write-races.md、dev-docs/evidence/2026-09-23-upload-navigation-races.md、dev-docs/evidence/2026-09-24-revision-diff-race.md、dev-docs/evidence/2026-09-24-review-evidence-recovery.md"
+      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。新增提取完成后证据列表失败的明确未知状态和原地重试，以及模板写入成功但列表刷新失败时的正确成功确认与本地列表同步。其他异步反馈和完整错误恢复仍待检查。证据：dev-docs/evidence/2026-09-23-web-service-recovery.md、dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-search-action-context.md、dev-docs/evidence/2026-09-23-review-template-write-races.md、dev-docs/evidence/2026-09-23-upload-navigation-races.md、dev-docs/evidence/2026-09-24-revision-diff-race.md、dev-docs/evidence/2026-09-24-review-evidence-recovery.md、dev-docs/evidence/2026-09-24-template-write-refresh-boundary.md"
     },
     {
       "id": "FE-048",

@@ -6,7 +6,7 @@ import json
 import sys
 import time
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 
 def main(base_url: str) -> None:
@@ -30,6 +30,7 @@ def main(base_url: str) -> None:
         "created_at_ms": now, "updated_at_ms": now,
     }
     failures = {"revisions": True, "extractions": True, "run": True, "evidence": False}
+    evidence_failures = {"count": 0}
 
     def route_api(route: object) -> None:
         path = route.request.url.split("/api/business", 1)[1].split("?", 1)[0]
@@ -43,6 +44,7 @@ def main(base_url: str) -> None:
             route.fulfill(status=503, content_type="application/json", body='{"detail":"run_unavailable"}')
             return
         if path == "/revisions/rev-1/evidence" and failures["evidence"]:
+            evidence_failures["count"] += 1
             route.fulfill(status=503, content_type="application/json", body='{"detail":"evidence_unavailable"}')
             return
         if path == "/capabilities":
@@ -109,11 +111,14 @@ def main(base_url: str) -> None:
             page.get_by_text("证据列表读取失败：evidence_unavailable").wait_for(timeout=10000)
             assert page.get_by_text("冻结证据列表尚未成功读取；证据及字段关联状态未知。").count() == 1
             assert page.get_by_role("heading", name="字段候选与人工决定").count() == 0
-            page.get_by_role("button", name="重试读取证据列表").click()
+            with page.expect_response(lambda response: "/revisions/rev-1/evidence" in response.url and response.status == 503):
+                page.get_by_role("button", name="重试读取证据列表").click()
+            expect(page.get_by_role("button", name="重试读取证据列表")).to_be_enabled()
+            assert evidence_failures["count"] == 2
             page.get_by_text("证据列表读取失败：evidence_unavailable").wait_for()
             failures["evidence"] = False
             page.get_by_role("button", name="重试读取证据列表").click()
-            page.get_by_text("候选字段", exact=False).wait_for()
+            page.get_by_role("heading", name="字段候选与人工决定").wait_for()
             assert page.get_by_text("证据列表读取失败：evidence_unavailable").count() == 0
             assert not errors, errors
             print("Playwright review recovery passed: revision list, parse revision, extraction run and evidence retries")

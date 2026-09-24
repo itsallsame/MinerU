@@ -61,7 +61,12 @@ const review = createReviewWorkbench(byId("workbench"), {
   },
 });
 const templateManager = createTemplateManager(byId("template-manager-content"), {
-  onChanged: async () => {
+  onChanged: async (updated) => {
+    state.templates = [...state.templates.filter((item) => item.code !== updated.code), updated];
+    populateTemplateSelects();
+    templateManager.setTemplates(state.templates);
+    renderDocuments();
+    renderDetail();
     state.templates = await businessApi.templates();
     populateTemplateSelects();
     templateManager.setTemplates(state.templates);

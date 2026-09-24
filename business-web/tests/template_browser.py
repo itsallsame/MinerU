@@ -18,6 +18,7 @@ def main(base_url: str) -> None:
     }
     templates = [builtin]
     writes: list[tuple[str, dict[str, object]]] = []
+    refresh_failures = {"enabled": False}
 
     def fulfill(route: object, payload: object, status: int = 200) -> None:
         route.fulfill(status=status, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
@@ -34,7 +35,10 @@ def main(base_url: str) -> None:
         elif path == "/documents" and request.method == "GET":
             fulfill(route, {"items": [], "total": 0, "limit": 20, "offset": 0})
         elif path == "/templates" and request.method == "GET":
-            fulfill(route, templates)
+            if refresh_failures["enabled"]:
+                fulfill(route, {"detail": "templates_unavailable"}, 503)
+            else:
+                fulfill(route, templates)
         elif path == "/templates" and request.method == "POST":
             payload = json.loads(request.post_data)
             writes.append(("create", payload))
@@ -88,22 +92,26 @@ def main(base_url: str) -> None:
             second.locator('[name="field-label"]').fill("日期")
             second.locator('[name="field-type"]').select_option("date")
             second.get_by_role("button", name="上移").click()
+            refresh_failures["enabled"] = True
             editor.get_by_role("button", name="创建模板").click()
-            page.get_by_text("我的报告 第 1 版已保存。").wait_for()
-            assert page.get_by_role("status").get_by_text("我的报告 第 1 版已保存。").count() == 1
+            page.get_by_text("我的报告 第 1 版已保存。模板列表刷新失败", exact=False).wait_for()
+            assert page.get_by_role("alert").count() == 0
             assert [field["code"] for field in writes[0][1]["fields"]] == ["written_date", "title"]
             assert writes[0][1]["fields"][1]["required"] is True
             assert page.locator("#upload-template option[value='my_report']").count() == 1
 
+            refresh_failures["enabled"] = False
             page.locator('.template-editor [name="template-name"]').fill("我的报告新版")
             page.get_by_role("button", name="保存新版本").click()
             page.get_by_text("我的报告新版 第 2 版已保存。").wait_for()
             assert writes[1][0] == "update" and writes[1][1]["name"] == "我的报告新版"
+            refresh_failures["enabled"] = True
             page.get_by_role("button", name="停用此自定义模板").click()
-            page.get_by_text("我的报告新版 已停用；历史版本仍可读取。").wait_for()
+            page.get_by_text("我的报告新版 已停用；历史版本仍可读取。模板列表刷新失败", exact=False).wait_for()
             assert writes[2][0] == "disable"
             assert page.locator("#upload-template option[value='my_report']").is_disabled()
             assert page.locator(".template-editor").count() == 0
+            assert page.get_by_role("alert").count() == 0
             assert not errors, errors
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")

@@ -54,6 +54,15 @@ export function createTemplateManager(root, { onChanged }) {
   let error = "";
   let viewVersion = 0;
 
+  async function refreshAfterWrite(updated) {
+    try {
+      await onChanged(updated);
+      return "";
+    } catch (cause) {
+      return `模板列表刷新失败：${cause.message}；已按写入响应更新，可稍后刷新页面核对。`;
+    }
+  }
+
   function fieldRow(field = { code: "", label: "", type: "text", required: false }) {
     const row = element("div", "template-field-row");
     row.append(input("字段代码", field.code, "field-code"), input("显示名称", field.label, "field-label"));
@@ -172,9 +181,9 @@ export function createTemplateManager(root, { onChanged }) {
           selectedCode = updated.code;
           creating = false;
         }
-        await onChanged();
+        const refreshWarning = await refreshAfterWrite(updated);
         if (savedViewVersion === viewVersion) {
-          message = `${updated.name} 第 ${updated.version} 版已保存。`;
+          message = `${updated.name} 第 ${updated.version} 版已保存。${refreshWarning}`;
           error = "";
         }
       } catch (cause) {
@@ -191,10 +200,10 @@ export function createTemplateManager(root, { onChanged }) {
         busy = true;
         const savedViewVersion = viewVersion;
         try {
-          await businessApi.disableTemplate(selected.code);
-          await onChanged();
+          const updated = await businessApi.disableTemplate(selected.code);
+          const refreshWarning = await refreshAfterWrite(updated);
           if (savedViewVersion === viewVersion) {
-            message = `${selected.name} 已停用；历史版本仍可读取。`;
+            message = `${selected.name} 已停用；历史版本仍可读取。${refreshWarning}`;
             error = "";
           }
         } catch (cause) {

@@ -758,3 +758,10 @@ Changes: Fixed a review-panel false-empty state when extraction completes but th
 Verification: Browser regression reproduced missing retry before fix; final Web 11 Node tests, 8-asset offline build and 19 Chromium regressions passed, including repeated evidence failure then recovery. Mac synthetic API only; no Kylin/GPU or real annotated sample claim.
 Evidence: dev-docs/evidence/2026-09-24-review-evidence-recovery.md
 Next: Continue FE-047 remaining async paths, FE-046 screen-reader audit, and P1/P6 target validation. Keep goal active.
+
+=== 2026-09-24 Session 76 (FE-047 template write/refresh boundary) ===
+Status: In progress; 74/241 passed; FE-047 remains incomplete
+Changes: Distinguished successful template create/disable writes from a failing follow-up list refresh; write responses immediately update local template/upload metadata and show a separate warning on refresh failure. Stabilized the preceding evidence-retry browser test using its actual HTTP response. No auth/user/permission layer added.
+Verification: Web 11 Node tests, 8-asset build and 19 Chromium regressions passed, including create/disable write-success plus list-503 and delayed write-selection races. Mac synthetic API only; no Kylin/GPU or annotated-source claim.
+Evidence: dev-docs/evidence/2026-09-24-template-write-refresh-boundary.md
+Next: Continue FE-047 async boundary audit and FE-046 accessibility audit; P1/P6 isolated-target and real-sample gates remain. Keep goal active.
