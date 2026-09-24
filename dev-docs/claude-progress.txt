@@ -1009,3 +1009,11 @@ Changes: For templated documents, task completion, parse revision and first queu
 Verification: Full Mac business 279 passed/1 skipped; live Doclib HTML upload→parse→automatic run→title candidate with evidence passed. Web Node 12 passed, 8 offline assets built, 23 offline Chromium regressions passed; own Skill quick validation passed. Ruff, JSON and diff checks passed. The first browser command used the project Python without Playwright and failed at import; rerun with installed system Python passed.
 Evidence: dev-docs/evidence/2026-09-24-automatic-field-extraction.md
 Next: Continue P3 quality/field extraction gaps and P4 experience while obtaining target amd64 NVIDIA base/wheelhouse, isolated Kylin and four-class labeled samples. Keep goal active.
+
+=== 2026-09-24 Session 111 (pinned offline model preparation) ===
+Status: In progress; target Kylin/NVIDIA and real-model gates remain open
+Changes: Added a connected-preparation-machine command to fetch the exact Hugging Face commits for the Torch small models and full vLLM model, reject mutable revisions/missing or extra files, write a source lock and generate a separate SHA-256 model manifest. Documented immutable model/version paths and retained the open-system boundary: no login, users, roles or permission management; Web and own Skill use the same open business API.
+Verification: Mac fake-provider and offline-configuration tests 23 passed/1 skipped; full business suite 290 passed/1 skipped/2 existing dependency warnings after local Unix/TCP loopback test permission. Ruff lint/format and diff checks passed. Initial sandboxed full suite only failed to bind local sockets; it was rerun with the established local permission path.
+Limits: No real weights downloaded, no Linux amd64 connected preparation host, no isolated Kylin/NVIDIA model load or four-class labeled-sample acceptance. Current Mac disk space is insufficient for safe real-weight staging. Keep P1/P6 and Goal active.
+Evidence: dev-docs/evidence/2026-09-24-pinned-model-preparation.md
+Next: Obtain approved exact model SHAs, target-compatible amd64 base/wheelhouse and isolated Kylin hardware for actual artifact and runtime validation; continue product work without adding identity/permission layers.
