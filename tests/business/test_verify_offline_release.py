@@ -97,6 +97,13 @@ def test_imported_release_artifacts_match_selected_record(tmp_path: Path) -> Non
     assert result["release_manifest_sha256"] == _hash(artifacts["release_path"].read_bytes())
 
 
+def test_imported_release_rejects_wheelhouse_file_excluded_from_build_context(tmp_path: Path) -> None:
+    artifacts = _release(tmp_path)
+    (artifacts["wheelhouse"] / "transfer-notes.txt").write_text("not copied by Docker")
+    with pytest.raises(ValueError, match="Wheelhouse contains files excluded from Docker build context"):
+        verify_offline_release.verify_release(**artifacts)
+
+
 @pytest.mark.parametrize(
     "changed, expected",
     [

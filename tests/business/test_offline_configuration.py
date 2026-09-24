@@ -196,6 +196,7 @@ def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Pa
         "wheelhouse/requirements.lock": "lock",
         "wheelhouse/probe.whl": "wheel",
         "wheelhouse/private.txt": "excluded",
+        "wheelhouse/nested/old.whl": "excluded",
         "models-v2/weights.onnx": "private-weight",
         "new-customer-data/private.txt": "private-document",
         "business-data/private.sqlite3": "private-database",
@@ -219,7 +220,8 @@ def test_docker_build_context_sends_only_code_and_offline_artifacts(tmp_path: Pa
         assert (output / "payload" / name).is_file(), name
     for name in ("mineru/accidental-model.safetensors", "mineru/private.sqlite3", "mineru/.env.local",
                  "scripts/other.py",
-                 "business-web/src/private.js", "wheelhouse/private.txt", "models-v2/weights.onnx",
+                 "business-web/src/private.js", "wheelhouse/private.txt", "wheelhouse/nested/old.whl",
+                 "models-v2/weights.onnx",
                  "new-customer-data/private.txt", "business-data/private.sqlite3", "secret.env"):
         assert not (output / "payload" / name).exists(), name
 

@@ -167,6 +167,26 @@ def test_release_record_rejects_incomplete_artifacts(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize("extra", ["notes.txt", "nested/old.whl", ".download.tmp"])
+def test_release_record_rejects_wheelhouse_files_excluded_from_docker_context(
+    tmp_path: Path, extra: str,
+) -> None:
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    extra_file = wheelhouse / extra
+    extra_file.parent.mkdir(parents=True, exist_ok=True)
+    extra_file.write_bytes(b"not in Docker build context")
+    with pytest.raises(ValueError, match="Wheelhouse contains files excluded from Docker build context"):
+        release_manifest.build_release_record(
+            revision=REVISION,
+            worker=_image(IMAGE_ID, revision=REVISION),
+            business=_image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
+            base=_image(BASE_ID),
+            wheelhouse=wheelhouse,
+            model_manifest=model_manifest,
+            web_dist=web_dist,
+        )
+
+
 def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
     output = tmp_path / "release.json"

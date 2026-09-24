@@ -124,11 +124,13 @@ def build_release_record(
         raise ValueError("Worker and business images must have distinct IDs")
     if not wheelhouse.is_dir() or wheelhouse.is_symlink():
         raise ValueError("Wheelhouse directory is missing or is a symlink")
-    wheel_files = sorted(path for path in wheelhouse.rglob("*") if path.is_file())
+    wheel_files = sorted(wheelhouse.iterdir())
+    if any(path.is_symlink() for path in wheel_files):
+        raise ValueError("Wheelhouse must not contain symlinks")
+    if any(not path.is_file() or (path.name != "requirements.lock" and path.suffix != ".whl") for path in wheel_files):
+        raise ValueError("Wheelhouse contains files excluded from Docker build context")
     if not wheel_files or not (wheelhouse / "requirements.lock").is_file():
         raise ValueError("Wheelhouse must contain requirements.lock and wheels")
-    if any(path.is_symlink() for path in wheelhouse.rglob("*")):
-        raise ValueError("Wheelhouse must not contain symlinks")
     if not any(path.suffix == ".whl" for path in wheel_files):
         raise ValueError("Wheelhouse has no wheel files")
     if not model_manifest.is_file() or model_manifest.is_symlink():

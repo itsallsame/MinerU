@@ -814,3 +814,10 @@ Changes: Split search-result evidence POST from follow-up document navigation so
 Verification: Search-freeze regression failed before fix. Web 11 Node tests, offline build and 20 Chromium regressions passed, including accepted-write/GET-503 recovery and stale-navigation behavior. Mac synthetic API only; no real annotated sample or isolated Kylin/NVIDIA claim.
 Evidence: dev-docs/evidence/2026-09-24-search-freeze-task-retry-ack.md
 Next: Continue FE-047 remaining async-path audit, FE-046 accessibility and P1/P6 real-target/sample gates. Keep goal active.
+
+=== 2026-09-24 Session 84 (P1 wheelhouse/context identity) ===
+Status: In progress; 78/241 passed; P1 target-machine gates remain incomplete
+Changes: Release creation and imported-artifact verification now reject wheelhouse files or subdirectories excluded by the Docker build-context allowlist, preventing a false match between recorded and actual build inputs. No model files moved into images; no user/auth/permission layer added.
+Verification: Three new release-record negative cases failed before fix and pass after; imported-artifact negative case passes. Targeted release/verify 21 passed, exact Docker-backed offline configuration 12 passed with nested-wheel exclusion, final full Mac business suite 197 passed/1 skipped, Ruff and diff checks passed. No real amd64 image or Kylin/GPU claim.
+Evidence: dev-docs/evidence/2026-09-24-wheelhouse-context-identity.md
+Next: Acquire target NVIDIA base image and Linux wheelhouse, build/import both code images, execute artifact/runtime chain and annotated sample acceptance on isolated Kylin. Continue P4 gaps. Keep goal active.
