@@ -318,7 +318,10 @@ def test_real_doclib_abstract_heading_proposes_unconfirmed_candidate(
         gateway=DoclibGateway(doclib, shared_root=upload_root), doclib=doclib, producer_version="4.0.6",
     )
     submitted = workflow.submit(
-        io.BytesIO("<html><body><h1>示例论文</h1><h2>摘要</h2><p>本文研究离线文档解析。</p><h2>引言</h2></body></html>".encode()),
+        io.BytesIO(
+            "<html><body><h1>示例论文</h1><h2>摘要</h2><p>本文研究离线文档解析。</p>"
+            "<p>Keywords: document parsing; evidence</p><h2>引言</h2></body></html>".encode()
+        ),
         filename="paper.html", template_code="paper",
     )
     _wait_for_parse(doclib, list(submitted.task.parse_ids))
@@ -334,6 +337,9 @@ def test_real_doclib_abstract_heading_proposes_unconfirmed_candidate(
         (item.field_code, item.value, item.method) for item in candidates
     ], doclib.read_parse_content(submitted.task.parse_ids[0],
                                  f"doc:{revision.short_id}/tier:flash/page:1", limit=30000).content
+    keyword = next(item for item in candidates if item.field_code == "keywords")
+    assert keyword.value == "document parsing; evidence" and keyword.method == "label_rule"
+    assert keyword.value in store.get_evidence(keyword.evidence_id).snippet
 
 
 def test_native_html_doclib_round_trip(live_doclib: tuple[DoclibClient, Path, Path]) -> None:

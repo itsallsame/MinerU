@@ -177,8 +177,12 @@ class FieldExtraction:
 def _label_values(content: str, field: TemplateField) -> tuple[str, ...]:
     """Only explicit label-value lines qualify; headings and prose are not guessed."""
     label = re.escape(field.label)
+    if field.code == "keywords" and field.label == "关键词":
+        label += "|(?i:Keywords)"
     pattern = re.compile(
-        rf"^[ \t]*(?:[-*][ \t]*)?(?:\*\*)?{label}(?:\*\*)?[ \t]*[:：][ \t]*(.+?)[ \t]*$",
+        rf"^[ \t]*(?:[-*][ \t]*)?(?:\*\*(?:{label})\*\*[ \t]*[:：]"
+        rf"|\*\*(?:{label})[ \t]*[:：]\*\*"
+        rf"|(?:{label})[ \t]*[:：])[ \t]*(.+?)[ \t]*$",
         re.MULTILINE,
     )
     result: list[str] = []

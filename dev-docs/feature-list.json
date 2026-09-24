@@ -2655,7 +2655,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "已在冻结模板的关键词字段上支持显式‘关键词：值’及论文‘Keywords: value’，兼容 Markdown 加粗冒号位置；保留原文完整值、不拆分列表，绑定历史修订冻结证据，始终未确认。Mac 单测与真实 Doclib HTML Flash 通过；四类标注样本和麒麟/NVIDIA 验收缺失，不标完成。见 dev-docs/evidence/2026-09-24-keyword-label-candidate.md。"
     },
     {
       "id": "BE-039",

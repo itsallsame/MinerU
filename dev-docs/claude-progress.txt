@@ -1080,3 +1080,11 @@ Changes: Added common model directories and data/wordpiece suffixes after source
 Verification: Focused offline-configuration 13 passed/1 Docker-daemon skip; full Mac business suite 317 passed/2 skipped/2 dependency warnings. A Doclib contract test was corrected to accept an already-queued ingest batch before asserting the next forced generation; production behavior was unchanged. Ruff, JSON and diff checks passed. Official Docker documentation confirms directory exclusion, ** wildcard, and last-match rule semantics. Actual BuildKit and isolated Kylin/NVIDIA verification remain open.
 Evidence: dev-docs/evidence/2026-09-24-docker-context-model-boundary.md
 Next: Re-run actual Docker build-context and target image/runtime gates when daemon and Kylin amd64 NVIDIA environment are available; continue other product work in parallel.
+
+=== 2026-09-24 Session 120 (explicit keyword labels) ===
+Status: In progress; BE-038 and P3/P6 real-sample/target gates remain open
+Discovery: The conservative field rule missed English `Keywords:` and Markdown bold labels with the colon inside `**`, common after native document conversion.
+Changes: Added an exact English alias only for the frozen `keywords`/关键词 field, accepted explicit bold-colon variants, and retained the source string rather than fabricating list normalization. Candidates remain evidence-bound and machine-unconfirmed; no user/role/permission system or schema/model change.
+Verification: Focused field tests and real local Doclib HTML Flash integration passed; final Mac business suite 325 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This does not prove real four-class accuracy or isolated Kylin/NVIDIA behavior.
+Evidence: dev-docs/evidence/2026-09-24-keyword-label-candidate.md
+Next: Continue P3 field/quality and P4 experience work; obtain four-class annotated samples and target hardware for P6. Keep Goal active.

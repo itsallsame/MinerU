@@ -79,6 +79,18 @@ def test_explicit_labels_create_unconfirmed_candidates_and_missing_issue(tmp_pat
     doclib.read_parse_structure.assert_not_called()
 
 
+def test_bold_label_with_inner_colon_keeps_existing_field_evidence(tmp_path: Path) -> None:
+    store, _doclib, extractor, revision_id = _fixture(
+        tmp_path, content="<!-- page 1 -->\n\n**标题：** 年度通知", template_code="official_document"
+    )
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    candidates = [item for item in store.list_field_candidates(run.id) if item.field_code == "title"]
+    assert [(item.value, item.method) for item in candidates] == [("年度通知", "label_rule")]
+    assert store.get_evidence(candidates[0].evidence_id).revision_id == revision_id
+
+
 def test_native_document_title_proposes_block_bound_unconfirmed_candidate(tmp_path: Path) -> None:
     store, doclib, extractor, revision_id = _fixture(tmp_path, content="<!-- page 1 -->\n\n正文内容")
     revision = store.get_revision(revision_id)
@@ -193,6 +205,30 @@ def test_abstract_heading_candidate_is_conservative_and_source_bound(
     if expected:
         evidence = store.get_evidence(abstract_candidates[0].evidence_id)
         assert evidence.revision_id == revision_id and expected[0] in evidence.snippet
+
+
+@pytest.mark.parametrize("content,expected", [
+    ("<!-- page 1 -->\n\n关键词：离线解析；证据", "离线解析；证据"),
+    ("<!-- page 1 -->\n\nKeywords: document parsing; evidence", "document parsing; evidence"),
+    ("<!-- page 1 -->\n\nKEYWORDS: document parsing", "document parsing"),
+    ("<!-- page 1 -->\n\n**Keywords:** document parsing, evidence", "document parsing, evidence"),
+    ("<!-- page 1 -->\n\n**关键词**：离线解析、证据", "离线解析、证据"),
+    ("<!-- page 1 -->\n\n## Keywords\n\ndocument parsing", None),
+    ("<!-- page 1 -->\n\n本文的 Keywords: 只是正文。", None),
+])
+def test_explicit_keyword_labels_make_unconfirmed_source_bound_candidates(
+    tmp_path: Path, content: str, expected: str | None,
+) -> None:
+    store, _doclib, extractor, revision_id = _fixture(tmp_path, content=content, template_code="paper")
+    extractor.enqueue(revision_id)
+    run = extractor.process_next()
+    assert run is not None and run.status == "done"
+    candidates = [item for item in store.list_field_candidates(run.id) if item.field_code == "keywords"]
+    assert [(item.value, item.method) for item in candidates] == ([(expected, "label_rule")] if expected else [])
+    if expected:
+        evidence = store.get_evidence(candidates[0].evidence_id)
+        assert evidence.revision_id == revision_id and expected in evidence.snippet
+        assert not hasattr(candidates[0], "confirmed")
 
 
 def test_multi_batch_revision_extracts_each_page_from_its_historical_batch(tmp_path: Path) -> None:
