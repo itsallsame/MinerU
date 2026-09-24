@@ -129,7 +129,18 @@ def create_bundle(*, repo: Path, output: Path, previous: str | None = None, reus
         _reject_weights(current_paths)
         snapshot = output / "source.git"
         subprocess.run(
-            ["git", "clone", "--quiet", "--bare", "--depth=1", "--branch=master", repo.as_uri(), str(snapshot)],
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--bare",
+                "--depth=1",
+                "--single-branch",
+                "--no-tags",
+                "--branch=master",
+                repo.as_uri(),
+                str(snapshot),
+            ],
             check=True,
         )
         _git(snapshot, "remote", "remove", "origin")

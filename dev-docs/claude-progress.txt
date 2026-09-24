@@ -905,3 +905,11 @@ Changes: Added verifiable full/incremental Git source bundles for clean master, 
 Verification: Four synthetic bundle tests cover first clone, delta fetch/fast-forward, unchanged external model data, CLI verification and fail-closed cases. Full Mac business suite 230 passed/1 skipped; Ruff lint/format and JSON/diff checks passed. No real fork release package or isolated Kylin/NVIDIA artifact transfer/build tested.
 Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
 Next: Produce amd64 NVIDIA base image, Linux wheelhouse and model artifacts; transfer and verify real source/code build on isolated Kylin, then run four-class annotated sample and rollback acceptance. Keep goal active.
+
+=== 2026-09-24 Session 97 (exclude historical weights from first source package) ===
+Status: In progress; 78/241 passed; INF-026 target-machine acceptance remains incomplete
+Discovery: The fork's current tree has no model weights, but full Git history contains deleted ONNX/PT weight objects (~11 MiB combined). A full Git bundle would retransmit them, contradicting the model-separated delivery claim.
+Changes: Initial package now uses a verified depth-one bare Git snapshot retaining the exact source commit ID; later updates remain Git bundles. Creation rejects current weight files and any model-weight object added within an incremental range, even if deleted later. Updated the deployment procedure and evidence; no login/users/permissions introduced.
+Verification: Six synthetic package tests passed; full Mac business suite 232 passed/1 skipped; Ruff/format and JSON/diff checks passed. Real fork at 8ef0b915 generated an 18 MiB temporary first package, verified/cloned/fscked, with both historical model object IDs absent from the target shallow clone. No target Kylin/NVIDIA deployment claimed.
+Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
+Next: Acquire real Linux amd64/NVIDIA base image, wheelhouse and host models, then transfer and build on isolated Kylin; complete annotated sample and rollback acceptance. Keep goal active.
