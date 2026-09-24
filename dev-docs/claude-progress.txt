@@ -898,3 +898,10 @@ Changes: Restored visible keyboard focus to batch upload feedback after the subm
 Verification: New Chromium assertions failed before fixes and exposed an intermediate disabled-button timing bug; final Web 11 Node tests, 8-asset offline build and 22 Chromium regressions passed. Full page keyboard/screen-reader and target Kylin browser checks not claimed.
 Evidence: dev-docs/evidence/2026-09-24-upload-keyboard-focus.md
 Next: Continue FE-046/FE-047 and P6 real-sample gates; obtain Linux amd64/NVIDIA target artifacts and run isolated deployment acceptance. Keep goal active.
+
+=== 2026-09-24 Session 96 (P1 offline source delta transfer) ===
+Status: In progress; 78/241 passed; INF-026 and target-machine gates remain incomplete
+Changes: Added verifiable full/incremental Git source bundles for clean master, exact previous-release target checks and dependency-input guard for wheelhouse reuse. Documented separate transfer of frontend dist, wheelhouse, code images and host models, with out-of-band source digest verification. No account, login, role or permission management added.
+Verification: Four synthetic bundle tests cover first clone, delta fetch/fast-forward, unchanged external model data, CLI verification and fail-closed cases. Full Mac business suite 230 passed/1 skipped; Ruff lint/format and JSON/diff checks passed. No real fork release package or isolated Kylin/NVIDIA artifact transfer/build tested.
+Evidence: dev-docs/evidence/2026-09-24-offline-source-bundle.md
+Next: Produce amd64 NVIDIA base image, Linux wheelhouse and model artifacts; transfer and verify real source/code build on isolated Kylin, then run four-class annotated sample and rollback acceptance. Keep goal active.

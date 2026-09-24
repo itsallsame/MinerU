@@ -10,6 +10,16 @@
 - 业务证据引用历史 parse ID。Doclib 默认压缩可能合并/删除旧批次；本 Compose 将 `MINERU_DOCLIB_COMPACTION_INTERVAL_SEC=0`，保留历史解析文件以供版本绑定证据读取。需要监测 Doclib 目录增长，并把业务 SQLite、原文件和 Doclib 目录做一致备份；不得在业务修订仍引用时手动清理相关批次。
 - `wheelhouse/`、模型权重、真实文件、数据库和私密配置不进 Git。构建后用 `scripts/release_manifest.py` 将源码提交、基础/worker/业务 API 三个镜像 ID、wheelhouse 逐文件哈希、模型清单哈希和上一个发布清单关联起来；该清单应保存在独立发布目录，用于复核与回退。
 
+## 源码离线传输与代码单独更新
+
+源码、前端构建产物、Linux wheelhouse、基础镜像和宿主模型是**不同制品**。模型目录不进入 Git bundle 或代码镜像。下述命令中的路径和提交号须替换为实际值；传输目录必须是源码仓库外尚不存在的新路径。只从干净的 `master` 生成源码包，不在麒麟机上联网拉取仓库。
+
+首次交付，在 Mac/准备机执行 `python3 -m scripts.offline_source_bundle create --repo . --output /受控传输目录/源码首版`。记录输出的完整 `source_revision` 和 `source.bundle` 的 SHA-256，连同源码包通过批准介质送至隔离区。接收方先用独立可信渠道核对预期摘要，再执行 `git clone /导入目录/源码首版/source.bundle /目标源码目录`，进入该目录运行 `python3 -m scripts.offline_source_bundle verify --bundle-dir /导入目录/源码首版 --target-repo /目标源码目录`，并核对 `git rev-parse HEAD` 与清单的 `source_revision` 完全相同。源码包内的 `manifest.json`、`COMPLETE` 和哈希用于检出/传输完整性；它们不是数字签名，不能独立证明制品来自可信准备机。
+
+只改业务代码、依赖输入未变时，在准备机以**目标当前选定发布记录**的 `source_revision` 为 `<旧提交>`，执行 `python3 -m scripts.offline_source_bundle create --repo . --previous-revision <旧提交> --reuse-wheelhouse --output /受控传输目录/源码新版本`。工具要求旧提交是当前 `master` 的祖先，并检查 `pyproject.toml` 与 `docker/worker/build-requirements.in` 在两提交间未变；不满足时拒绝复用 wheelhouse。接收方先核对独立可信的源码包摘要，在仍处于干净 `master`、且 `HEAD` 精确等于 `<旧提交>` 的目标源码目录执行 `python3 -m scripts.offline_source_bundle verify --bundle-dir /导入目录/源码新版本 --target-repo /目标源码目录`，再执行 `git -C /目标源码目录 fetch /导入目录/源码新版本/source.bundle master` 和 `git -C /目标源码目录 merge --ff-only FETCH_HEAD`。最后核对 `git -C /目标源码目录 rev-parse HEAD` 精确等于新包 `source_revision`。这只传输相对旧提交新增的 Git 对象；目标源码检出不会触碰宿主模型目录。前端 `business-web/dist/` 仍须单独重新构建、传输和验哈希；两个代码镜像按实际变更重建、复核并重启，模型及未变的 wheelhouse 无需重复传输。
+
+`--reuse-wheelhouse` 只证明上述两个声明的依赖输入文件未变，不验证 wheelhouse 的实际内容、Python ABI、基础镜像、CUDA/vLLM 组合或模型与源码兼容性。任一依赖输入变化、基础镜像/ABI变化或版本组合不确定时，须制备新的目标 Linux wheelhouse，按后续发布清单和制品核验流程重新验收。源码包验证也不代替镜像构建、模型加载和真实文件测试。旧源码提交、镜像、模型目录、清单和业务状态备份都应保留到回退窗口结束，不能以更新源码检出代替数据库回退。
+
 ## 准备与验证步骤
 
 1. 在联网的 **Linux amd64** 准备机锁定 MinerU 提交、Python 版本和目标基础镜像摘要。准备环境必须与基础镜像的 Python ABI 一致；从该镜像导出 `torch==...`、`torchvision==...`、`vllm==...` 三项精确版本到约束文件，再设置 `MINERU_BASE_CONSTRAINTS` 指向它并运行 `sh scripts/prepare-worker-wheelhouse.sh`。脚本只接受尚无 `wheelhouse/` 的新工作目录，先在同一文件系统的 `.wheelhouse-stage.*` 暂存目录中编译带哈希的锁文件并下载 wheel，两个步骤成功后才发布为 `wheelhouse/`；失败时保留暂存目录供检查，不能把它作为发布制品。旧 `wheelhouse/` 必须原样保留在另一受控位置，不得混入新锁。Mac 上只验证了脚本控制流程，尚无真实 Linux 制品，不能视为已完成。
