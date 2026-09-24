@@ -771,12 +771,20 @@ async function submitFiles(event) {
     try {
       const tier = tierForFile(file, capabilities, selectedTier);
       const result = await businessApi.upload(file, { tier, templateCode });
-      resultNode.textContent = `${file.name} · 已受理 · ${taskLabel(result.task.status)}`;
-      resultNode.className = "feedback-item success";
       accepted += 1;
+      if (result?.task?.status) {
+        resultNode.textContent = `${file.name} · 已受理 · ${taskLabel(result.task.status)}`;
+        resultNode.className = "feedback-item success";
+      } else {
+        resultNode.textContent = `${file.name} · 上传已受理，但任务状态未返回；请刷新文档列表核对。`;
+        resultNode.className = "feedback-item warning";
+      }
     } catch (error) {
-      resultNode.textContent = `${file.name} · ${error.message}`;
-      resultNode.className = "feedback-item error";
+      const unknownOutcome = error?.status === 0 || error instanceof SyntaxError;
+      resultNode.textContent = unknownOutcome
+        ? `${file.name} · 上传结果未确认；可能已受理。先刷新文档列表核对，勿直接重复上传。`
+        : `${file.name} · ${error.message}`;
+      resultNode.className = `feedback-item ${unknownOutcome ? "warning" : "error"}`;
     }
   }
   state.uploading = false;

@@ -49,6 +49,7 @@ select { width: 100%; border: 1px solid #d9e2db; background: #fff; border-radius
 .feedback-list { display: grid; gap: 6px; margin-top: 13px; }
 .feedback-item { border-radius: 7px; background: #f4f7f4; padding: 8px; font-size: 11px; overflow-wrap: anywhere; }
 .feedback-item.error { background: #fff1ed; color: #a34835; }
+.feedback-item.warning { background: #fff8e6; color: #785510; }
 .feedback-item.success { background: #eaf7ed; color: #26734a; }
 .capability-note { margin: 16px 0 0; font-size: 10px; color: #7d8e84; line-height: 1.5; }
 .side-note { display: flex; gap: 10px; margin-top: 22px; color: #667d6e; font-size: 11px; line-height: 1.65; }

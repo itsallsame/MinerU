@@ -849,3 +849,10 @@ Changes: Four-class evaluator now uses one-to-one matching that maximizes valid 
 Verification: New duplicate-candidate regression failed before fix, then passed; additional overlapping-annotation regression passed. Targeted 8 passed, full Mac business suite 213 passed/1 skipped, Ruff and diff checks passed. Synthetic contracts only; no real annotated four-class or Kylin/NVIDIA accuracy claim.
 Evidence: dev-docs/evidence/2026-09-24-sample-evidence-matching.md
 Next: Obtain real annotated four-class samples and target offline artifacts; run measured Mac and isolated Kylin/NVIDIA acceptance. Continue P4 gaps. Keep goal active.
+
+=== 2026-09-24 Session 89 (FE-047 upload unknown-outcome feedback) ===
+Status: In progress; 78/241 passed; FE-047 remains incomplete
+Changes: Upload transport uncertainty, malformed accepted JSON and accepted response without task status now receive truthful distinct feedback, without automatic retransmission. Open system remains without users or permissions.
+Verification: New Chromium regressions failed before fixes and passed after; Web 11 Node tests, offline build and 21 Chromium regressions passed. No end-to-end exactly-once guarantee or target-machine claim.
+Evidence: dev-docs/evidence/2026-09-24-upload-unknown-outcome.md
+Next: Continue FE-047 remaining async paths and FE-046 accessibility; complete P1 target artifacts and P6 real-sample acceptance. Keep goal active.
