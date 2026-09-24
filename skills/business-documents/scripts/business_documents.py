@@ -8,11 +8,21 @@ import ipaddress
 import json
 import mimetypes
 import os
+import socket
 import sys
 import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit
+
+
+ALLOWED_API_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
+    "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7",
+))
+
+
+def _approved_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return any(address in network for network in ALLOWED_API_NETWORKS)
 
 
 class BusinessAPIError(Exception):
@@ -40,9 +50,11 @@ class BusinessClient:
         except ValueError:
             if host != "localhost" and "." in host and not host.endswith((".internal", ".local", ".lan")):
                 raise BusinessAPIError("Business API host must be local or on an internal network") from None
+            self.literal_address: str | None = None
         else:
-            if address.is_global or address.is_multicast or address.is_unspecified:
-                raise BusinessAPIError("Business API address must be local or private")
+            if not _approved_address(address):
+                raise BusinessAPIError("Business API address must be loopback or on an approved private network")
+            self.literal_address = str(address)
         self.host = parsed.hostname
         self.port = port
         self.base_url = f"http://{parsed.netloc}"
@@ -51,7 +63,18 @@ class BusinessClient:
         return f"{self.base_url}/#evidence={quote(evidence_id, safe='')}"
 
     def _connect(self) -> http.client.HTTPConnection:
-        return http.client.HTTPConnection(self.host, self.port, timeout=30)
+        if self.literal_address is not None:
+            return http.client.HTTPConnection(self.literal_address, self.port, timeout=30)
+        try:
+            endpoints = socket.getaddrinfo(self.host, self.port, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise BusinessAPIError(f"Business API host cannot be resolved: {exc}") from exc
+        if not endpoints:
+            raise BusinessAPIError("Business API host has no resolved address")
+        addresses = [ipaddress.ip_address(endpoint[4][0]) for endpoint in endpoints]
+        if not all(_approved_address(address) for address in addresses):
+            raise BusinessAPIError("Business API hostname resolves outside approved private networks")
+        return http.client.HTTPConnection(str(addresses[0]), self.port, timeout=30)
 
     @staticmethod
     def _read_response(connection: http.client.HTTPConnection) -> Any:

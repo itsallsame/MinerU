@@ -119,12 +119,29 @@ def test_skill_rejects_unconfigured_or_non_plain_business_endpoint(
     for url in (
         "https://example.com:443", "http://host", "http://u:p@host:8080", "http://host:8080/v1",
         "http://example.com:8080", "http://8.8.8.8:8080", "http://host:bad",
+        "http://100.64.0.1:8080", "http://192.0.2.1:8080", "http://198.18.0.1:8080",
     ):
         with pytest.raises(script.BusinessAPIError):
             script.BusinessClient(url)
     assert script.main(["capabilities"]) == 1
     assert json.loads(capsys.readouterr().err)["error"] == "MINERU_BUSINESS_API_URL or --base-url is required"
     assert "confirm" not in script.parser()._subparsers._group_actions[0].choices
+
+
+def test_skill_resolves_internal_hostname_only_to_approved_private_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
+    script = _script()
+    client = script.BusinessClient("http://mineru.internal:8080")
+    monkeypatch.setattr(script.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (2, 1, 6, "", ("10.8.0.7", 8080)),
+    ])
+    assert client._connect().host == "10.8.0.7"
+
+    monkeypatch.setattr(script.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (2, 1, 6, "", ("10.8.0.7", 8080)),
+        (2, 1, 6, "", ("8.8.8.8", 8080)),
+    ])
+    with pytest.raises(script.BusinessAPIError, match="outside approved private networks"):
+        client._connect()
 
 
 def test_skill_write_commands_require_explicit_acknowledgement() -> None:
