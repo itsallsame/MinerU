@@ -909,6 +909,17 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return SubmissionView(document=DocumentView.from_record(result.document), task=TaskView.from_record(result.task))
 
+    @app.get("/api/business/upload-requests/{request_key}", response_model=SubmissionView)
+    def get_upload_request(request_key: str) -> SubmissionView:
+        try:
+            result = store.get_upload_request(request_key)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if result is None:
+            raise HTTPException(status_code=404, detail="Upload request not found")
+        document, task = result
+        return SubmissionView(document=DocumentView.from_record(document), task=TaskView.from_record(task))
+
     @app.get("/api/business/documents", response_model=DocumentListView)
     def list_documents(
         limit: Annotated[int, Query(ge=1, le=100)] = 20,

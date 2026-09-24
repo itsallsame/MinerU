@@ -231,6 +231,38 @@ function newUploadRequestKey() {
     .map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
+const pendingUploadsKey = "mineru.business.pendingUploads.v1";
+
+function pendingUploads() {
+  try {
+    const records = JSON.parse(sessionStorage.getItem(pendingUploadsKey) || "[]");
+    if (!Array.isArray(records)) return [];
+    return records.filter((entry) => entry && /^[A-Za-z0-9_-]{16,128}$/.test(entry.requestKey)
+      && typeof entry.name === "string" && Number.isSafeInteger(entry.size) && entry.size > 0
+      && (entry.tier === null || ["flash", "basic", "standard", "advanced"].includes(entry.tier))
+      && (entry.templateCode === null || typeof entry.templateCode === "string"));
+  } catch {
+    return [];
+  }
+}
+
+function writePendingUploads(records) {
+  try {
+    sessionStorage.setItem(pendingUploadsKey, JSON.stringify(records));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rememberUpload(record) {
+  return writePendingUploads([...pendingUploads().filter((entry) => entry.requestKey !== record.requestKey), record]);
+}
+
+function forgetUpload(requestKey) {
+  writePendingUploads(pendingUploads().filter((entry) => entry.requestKey !== requestKey));
+}
+
 function showAcceptedUpload(node, file, result) {
   node.textContent = result?.task?.status
     ? `${file.name} · 已受理 · ${taskLabel(result.task.status)}`
@@ -239,13 +271,13 @@ function showAcceptedUpload(node, file, result) {
 }
 
 function isUnknownUploadError(error) {
-  return error?.status === 0 || error instanceof SyntaxError;
+  return error?.status === 0 || error?.status === 408 || error?.status >= 500 || error instanceof SyntaxError;
 }
 
-function showUnknownUpload(node, file, { tier, templateCode, requestKey }) {
+function showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved = true) {
   node.className = "feedback-item warning";
   node.replaceChildren(document.createTextNode(
-    `${file.name} · 上传结果未确认；可能已受理。先刷新文档列表核对，勿用新请求重复上传。`,
+    `${file.name} · 上传结果未确认；可能已受理。先刷新文档列表核对，勿用新请求重复上传。${saved ? "刷新本标签页后可按原请求键继续核对。" : "浏览器未能保存请求键，请勿刷新本页。"}`,
   ));
   const retry = element("button", "secondary-button", "使用同一请求键重试");
   retry.type = "button";
@@ -259,10 +291,11 @@ function showUnknownUpload(node, file, { tier, templateCode, requestKey }) {
     node.textContent = `${file.name} · 正在重试同一次上传请求…`;
     try {
       const result = await businessApi.upload(file, { tier, templateCode, requestKey });
+      forgetUpload(requestKey);
       showAcceptedUpload(node, file, result);
       await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
     } catch (error) {
-      if (isUnknownUploadError(error)) showUnknownUpload(node, file, { tier, templateCode, requestKey });
+      if (isUnknownUploadError(error)) showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved);
       else {
         node.textContent = `${file.name} · ${error.message}`;
         node.className = "feedback-item error";
@@ -274,6 +307,83 @@ function showUnknownUpload(node, file, { tier, templateCode, requestKey }) {
     }
   });
   node.append(" ", retry);
+}
+
+function showPendingUpload(record) {
+  const node = element("div", "feedback-item warning");
+  byId("upload-feedback").append(node);
+  let operation = 0;
+  let settled = false;
+  const check = element("button", "secondary-button", "按原请求键核对");
+  check.type = "button";
+  const fileInput = element("input");
+  fileInput.type = "file";
+  fileInput.setAttribute("aria-label", `重选 ${record.name} 以重试同一次上传`);
+  const retry = element("button", "secondary-button", "用重选文件和原键重试");
+  retry.type = "button";
+  retry.disabled = true;
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    retry.disabled = settled || !file || file.name !== record.name || file.size !== record.size;
+  });
+  check.addEventListener("click", async () => {
+    if (settled) return;
+    const current = ++operation;
+    check.disabled = true;
+    node.firstChild.textContent = `${record.name} · 正在核对原请求… `;
+    try {
+      const result = await businessApi.uploadRequest(record.requestKey);
+      if (current !== operation) return;
+      settled = true;
+      forgetUpload(record.requestKey);
+      node.replaceChildren();
+      showAcceptedUpload(node, { name: record.name }, result);
+      await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
+    } catch (error) {
+      if (current !== operation || settled) return;
+      node.firstChild.textContent = error.status === 404
+        ? `${record.name} · 尚未查到该请求；这不能证明上传未受理。可稍后再核对，或重选原文件用原键重试。 `
+        : `${record.name} · 请求核对暂不可用：${error.message}。请稍后再试，不要创建新请求。 `;
+    } finally {
+      if (current === operation && !settled) check.disabled = false;
+    }
+  });
+  retry.addEventListener("click", async () => {
+    const file = fileInput.files?.[0];
+    if (settled || !file || file.name !== record.name || file.size !== record.size || state.uploading) return;
+    const current = ++operation;
+    state.uploading = true;
+    updateFileSelection();
+    retry.disabled = true;
+    node.firstChild.textContent = `${record.name} · 正在用原请求键重试… `;
+    try {
+      const result = await businessApi.upload(file, record);
+      if (current !== operation) return;
+      settled = true;
+      forgetUpload(record.requestKey);
+      node.replaceChildren();
+      showAcceptedUpload(node, file, result);
+      await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
+    } catch (error) {
+      if (current !== operation || settled) return;
+      node.firstChild.textContent = isUnknownUploadError(error)
+        ? `${record.name} · 结果仍未确认；请再次核对原请求，不要创建新请求。 `
+        : `${record.name} · 原键重试失败：${error.message}。请核对是否选了原文件。 `;
+    } finally {
+      state.uploading = false;
+      updateFileSelection();
+      if (current === operation && !settled) {
+        retry.disabled = false;
+        check.disabled = false;
+      }
+    }
+  });
+  node.append(document.createTextNode(`${record.name} · 正在核对原请求… `), check, " ", fileInput, " ", retry);
+  check.click();
+}
+
+function restorePendingUploads() {
+  for (const record of pendingUploads()) showPendingUpload(record);
 }
 
 function populateTemplateSelects() {
@@ -325,6 +435,7 @@ async function refreshWorkspace() {
 
 async function bootstrap() {
   await refreshWorkspace();
+  restorePendingUploads();
   await openEvidenceLink();
 }
 
@@ -821,16 +932,20 @@ async function submitFiles(event) {
     const resultNode = feedback(file, "正在上传…");
     let requestKey;
     let tier;
+    let saved = false;
     try {
       tier = tierForFile(file, capabilities, selectedTier);
       requestKey = newUploadRequestKey();
+      saved = rememberUpload({ requestKey, name: file.name, size: file.size, tier, templateCode: templateCode || null });
       const result = await businessApi.upload(file, { tier, templateCode, requestKey });
+      forgetUpload(requestKey);
       accepted += 1;
       showAcceptedUpload(resultNode, file, result);
     } catch (error) {
       if (requestKey && isUnknownUploadError(error)) {
-        showUnknownUpload(resultNode, file, { tier, templateCode, requestKey });
+        showUnknownUpload(resultNode, file, { tier, templateCode, requestKey }, saved);
       } else {
+        if (requestKey) forgetUpload(requestKey);
         resultNode.textContent = `${file.name} · ${error.message}`;
         resultNode.className = "feedback-item error";
       }

@@ -99,6 +99,7 @@ export const businessApi = {
   audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),
   task: (id) => request(`/tasks/${encodeURIComponent(id)}`),
   retry: (id) => request(`/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" }),
+  uploadRequest: (key) => request(`/upload-requests/${encodeURIComponent(key)}`),
   upload: (file, { tier, templateCode, requestKey } = {}) => {
     const body = new FormData();
     body.append("file", file, file.name);

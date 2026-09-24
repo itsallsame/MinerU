@@ -899,6 +899,24 @@ class BusinessStore:
             template_code=template_code, request_key=request_key,
         )
 
+    def get_upload_request(self, request_key: str) -> tuple[BusinessDocument, IngestTask] | None:
+        """Resolve a durable upload request after a client lost its accepted response."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid upload idempotency key")
+        with closing(self._connect()) as database:
+            previous = database.execute(
+                "SELECT document_id, task_id FROM ingest_requests WHERE request_key=?", (request_key,)
+            ).fetchone()
+            if previous is None:
+                return None
+            document_row = database.execute(
+                "SELECT * FROM documents WHERE id=?", (previous["document_id"],)
+            ).fetchone()
+            task_row = database.execute("SELECT * FROM tasks WHERE id=?", (previous["task_id"],)).fetchone()
+            if document_row is None or task_row is None:
+                raise BusinessStoreError("Idempotent upload record is incomplete")
+            return BusinessDocument(**dict(document_row)), self._task_from_row(task_row)
+
     def _create_document_with_task(
         self, upload: StoredUpload, *, original_name: str, requested_tier: Tier | None,
         template_code: str | None, request_key: str | None,

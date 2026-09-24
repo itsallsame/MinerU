@@ -877,3 +877,10 @@ Changes: Restore now requires the selected original release manifest and checks 
 Verification: Wrong/missing release regression, targeted backup 7 passed, full Mac business 224 passed/1 skipped, Ruff and format checks passed. No matching real Kylin images/models or target rollback rehearsal.
 Evidence: dev-docs/evidence/2026-09-24-offline-state-backup.md
 Next: Validate exact release/model/image pair and restored state on isolated Kylin; continue P4/P6 gaps. Keep goal active.
+
+=== 2026-09-24 Session 93 (FE-047 upload recovery after same-tab reload) ===
+Status: In progress; 78/241 passed; FE-047 target environment and broader async recovery remain incomplete
+Changes: Added open GET lookup of durable upload request key to current document/task. Web retains pending keys plus minimal file metadata in sessionStorage before POST, checks them after same-tab reload, and requires explicit original-file reselection for same-key retry when lookup is not found. HTTP 503/5xx and 408 are uncertain outcomes, never automatic retries. No user/auth/permission layer or stored file bytes.
+Verification: Backend contract 6 passed; full Mac business suite 224 passed/1 skipped; Web 11 Node tests, offline build and 22 Chromium regressions passed. Synthetic browser test covered accepted/lost response versus 404 lookup, no auto POST, same-key manual retry, and 503 uncertainty. Ruff lint and diff check passed. Real network and Kylin/NVIDIA not claimed.
+Evidence: dev-docs/evidence/2026-09-24-upload-request-idempotency.md
+Next: Continue P4 asynchronous and accessibility gaps; obtain real four-class samples and target offline artifacts for P1/P6. Keep goal active.

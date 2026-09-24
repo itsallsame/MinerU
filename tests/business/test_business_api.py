@@ -39,6 +39,7 @@ def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Pat
     paths = schema["paths"]
     required = {
         "/api/business/documents": {"get", "post"},
+        "/api/business/upload-requests/{request_key}": {"get"},
         "/api/business/tasks/{task_id}": {"get"},
         "/api/business/tasks/{task_id}/retry": {"post"},
         "/api/business/revisions/{revision_id}/content": {"get"},
@@ -168,6 +169,11 @@ def test_upload_idempotency_key_replays_same_intent_and_rejects_conflict(tmp_pat
     replay = upload(b"<h1>Lantern</h1>", "first-upload-request-key")
     assert first.status_code == replay.status_code == 202
     assert first.json() == replay.json()
+    recovered = client.get("/api/business/upload-requests/first-upload-request-key")
+    assert recovered.status_code == 200
+    assert recovered.json() == first.json()
+    assert client.get("/api/business/upload-requests/absent-upload-request-key").status_code == 404
+    assert client.get("/api/business/upload-requests/short").status_code == 422
     assert doclib.ensure_parse.call_count == 1
     assert len(list(shared.iterdir())) == 1
     assert upload(b"<h1>Changed</h1>", "first-upload-request-key").status_code == 409
@@ -177,6 +183,8 @@ def test_upload_idempotency_key_replays_same_intent_and_rejects_conflict(tmp_pat
     assert distinct.json()["document"]["id"] != first.json()["document"]["id"]
     assert doclib.ensure_parse.call_count == 2
     assert len(list(shared.iterdir())) == 2
+    store.mark_task_failed(first.json()["task"]["id"], error_code="doclib_submission_failed")
+    assert client.get("/api/business/upload-requests/first-upload-request-key").json()["task"]["status"] == "failed"
 
 
 def test_open_api_rejects_invalid_tier_and_accepts_selected_template(tmp_path: Path) -> None:

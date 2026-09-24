@@ -33,6 +33,8 @@ def main(base_url: str) -> None:
                 route.fulfill(status=202, content_type="application/json", body="{broken")
             elif upload_calls == 3:
                 route.fulfill(status=202, content_type="application/json", body="{}")
+            elif upload_calls == 4:
+                route.fulfill(status=503, content_type="application/json", body='{"detail":"worker unavailable"}')
             else:
                 route.fulfill(status=202, content_type="application/json", body='{"task":{"status":"submitted"}}')
             return
@@ -52,24 +54,26 @@ def main(base_url: str) -> None:
                 {"name": "lost-response.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-first"},
                 {"name": "invalid-response.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-second"},
                 {"name": "missing-task.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-third"},
+                {"name": "server-error.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-fourth"},
             ])
             page.get_by_role("button", name="开始上传与解析").click()
-            page.wait_for_function("document.querySelectorAll('#upload-feedback .feedback-item').length === 3"
+            page.wait_for_function("document.querySelectorAll('#upload-feedback .feedback-item').length === 4"
                                    " && !document.querySelector('#files').disabled")
             feedback = page.locator("#upload-feedback").inner_text()
             assert "lost-response.pdf · 上传结果未确认" in feedback
             assert "invalid-response.pdf · 上传结果未确认" in feedback
             assert "missing-task.pdf · 上传已受理，但任务状态未返回" in feedback
-            assert feedback.count("先刷新文档列表核对") == 2
-            assert upload_calls == 3, "The UI must not automatically repeat an uncertain upload"
+            assert "server-error.pdf · 上传结果未确认" in feedback
+            assert feedback.count("先刷新文档列表核对") == 3
+            assert upload_calls == 4, "The UI must not automatically repeat an uncertain upload"
             assert all(len(key) == 32 for key in request_keys)
-            assert len(set(request_keys)) == 3
+            assert len(set(request_keys)) == 4
             page.locator("#upload-feedback .feedback-item").first.get_by_role(
                 "button", name="使用同一请求键重试",
             ).click()
             page.get_by_text("lost-response.pdf · 已受理 · 解析中").wait_for()
-            assert upload_calls == 4
-            assert request_keys[3] == request_keys[0]
+            assert upload_calls == 5
+            assert request_keys[4] == request_keys[0]
             assert not errors, errors
             print("Playwright unknown upload outcome passed: no false rejection or automatic retransmission")
         finally:
