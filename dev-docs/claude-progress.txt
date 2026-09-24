@@ -1160,3 +1160,11 @@ Changes: Added an optional-but-explicit pair of modes: production input requires
 Verification: Sample-evaluator tests 12 passed; direct and module CLI help both ran; full Mac business suite 351 passed/2 skipped/2 dependency warnings. Ruff lint, feature-list JSON and diff checks passed. This proves only synthetic file consistency, not live deployment identity or physical isolation.
 Evidence: dev-docs/evidence/2026-09-24-sample-release-chain.md
 Next: Obtain real de-identified four-class annotations and target Kylin/NVIDIA access; run fresh target artifact/runtime checks then the bound sample evaluator in one stable deployment window. Keep Goal active.
+
+=== 2026-09-24 Session 130 (current master cross-layer regression) ===
+Status: In progress; four-class real-sample and target Kylin/NVIDIA gates remain open
+Discovery: The upstream baseline predated many business commits; current master needed a full cross-layer regression on a single identified source snapshot.
+Changes: Recorded source commit 19895d7014143e4547c095819af4a80798607202 and fresh upstream, business, Web and browser results. No product code, model, schema or user/role/permission change.
+Verification: Upstream tests 2832 passed/4 skipped/2 dependency warnings; business tests 351 passed/2 skipped/2 dependency warnings; Web unit tests 13 passed and eight offline assets built; Playwright offline Chromium 24 passed. All commands exited 0 on Mac. No real-sample accuracy or Kylin/NVIDIA proof.
+Evidence: dev-docs/evidence/2026-09-24-current-master-regression.md
+Next: Obtain real annotated four-class samples and target machine; rerun against the selected offline release and archive bound evidence. Keep Goal active.

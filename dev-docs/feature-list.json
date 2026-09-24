@@ -5062,7 +5062,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-24",
-      "notes": "在 fork 提交 63b3e8ac 上执行既定两条 pytest 命令：业务 171 通过/1 跳过，上游单测 2798 通过/4 跳过；macOS Python 3.13.5，不代表麒麟/GPU/模型验收。证据：dev-docs/evidence/2026-09-24-test-baselines.md"
+      "notes": "原始 Mac 基线位于提交 63b3e8ac（业务 171 通过/1 跳过，上游 2798 通过/4 跳过）；当前源码提交 19895d70 的跨层回归为业务 351 通过/2 跳过、上游 2832 通过/4 跳过，Web 13 通过且构建成功、Playwright 24 通过。均非麒麟/GPU/真实模型验收。证据：dev-docs/evidence/2026-09-24-test-baselines.md、dev-docs/evidence/2026-09-24-current-master-regression.md"
     },
     {
       "id": "QA-002",
