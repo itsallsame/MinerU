@@ -5,9 +5,13 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("offline_package", ROOT / "scripts" / "offline_package.py")
@@ -172,6 +176,41 @@ def test_business_worker_retains_parse_history_for_evidence() -> None:
     assert 'MINERU_DOCLIB_COMPACTION_INTERVAL_SEC: "0"' in worker
     assert "MINERU_EXPECTED_MODEL_MANIFEST_SHA256" in worker
     assert "MINERU_EXPECTED_MODEL_MANIFEST_SHA256" in (ROOT / "docker" / "worker" / "entrypoint.sh").read_text()
+
+
+def test_compose_bind_mounts_never_create_missing_host_paths(tmp_path: Path) -> None:
+    compose_file = ROOT / "docker" / "compose.business.yaml"
+    source = yaml.safe_load(compose_file.read_text())
+    for service in source["services"].values():
+        for volume in service["volumes"]:
+            assert volume["type"] == "bind"
+            assert volume["bind"]["create_host_path"] is False
+
+    if shutil.which("docker") is None:
+        pytest.skip("Docker Compose CLI is unavailable for rendered-config verification")
+    sources = {name: tmp_path / name for name in ("models", "manifest.json", "doclib", "inbox", "business")}
+    env = {
+        **os.environ,
+        "MINERU_WORKER_IMAGE": "worker:local",
+        "MINERU_BUSINESS_IMAGE": "business:local",
+        "MINERU_MODELS_HOST_DIR": str(sources["models"]),
+        "MINERU_MODEL_MANIFEST_HOST_FILE": str(sources["manifest.json"]),
+        "MINERU_DOCLIB_HOST_DIR": str(sources["doclib"]),
+        "MINERU_SHARED_DOCUMENTS_HOST_DIR": str(sources["inbox"]),
+        "MINERU_BUSINESS_HOST_DIR": str(sources["business"]),
+        "MINERU_EXPECTED_MODEL_MANIFEST_SHA256": "a" * 64,
+    }
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(compose_file), "config", "--format", "json"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    rendered = json.loads(result.stdout)
+    assert rendered["networks"]["business-internal"]["internal"] is True
+    for service in rendered["services"].values():
+        for volume in service["volumes"]:
+            assert volume["bind"].get("create_host_path") is not True
+            assert volume["source"] in {str(path) for path in sources.values()}
+    assert all(not path.exists() for path in sources.values())
 
 
 def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:

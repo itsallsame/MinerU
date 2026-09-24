@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
@@ -58,20 +59,26 @@ def test_business_image_and_compose_keep_models_out_of_api() -> None:
     root = Path(__file__).resolve().parents[2]
     dockerfile = (root / "docker/business-api/Dockerfile").read_text()
     compose = (root / "docker/compose.business.yaml").read_text()
+    services = yaml.safe_load(compose)["services"]
+    api = services["business-api"]
+    worker = services["doclib-worker"]
     api_service = compose.split("  business-api:", 1)[1].split("  doclib-worker:", 1)[0]
-    worker_service = compose.split("  doclib-worker:", 1)[1].split("networks:", 1)[0]
     assert "COPY mineru/" in dockerfile
     assert "COPY business-web/dist/" in dockerfile
     assert "WEB_ASSET_MANIFEST_SHA256" in dockerfile
     assert "--no-index" in dockerfile
     assert "COPY models/" not in dockerfile
     assert "MINERU_MODELS_HOST_DIR" not in api_service
-    assert "gpus:" not in api_service
-    assert "/srv/mineru-inbox:rw" in api_service
-    assert "/srv/mineru-inbox:ro" in worker_service
+    assert "gpus" not in api
+    api_upload = next(volume for volume in api["volumes"] if volume["target"] == "/srv/mineru-inbox")
+    worker_upload = next(volume for volume in worker["volumes"] if volume["target"] == "/srv/mineru-inbox")
+    assert api_upload.get("read_only") is not True
+    assert worker_upload["read_only"] is True
+    assert api_upload["source"].startswith("${MINERU_SHARED_DOCUMENTS_HOST_DIR:")
+    assert worker_upload["source"] == api_upload["source"]
     assert "MINERU_BUSINESS_BIND_ADDRESS:-127.0.0.1" in api_service
     assert "MINERU_BUSINESS_WEB_ROOT: /opt/mineru/business-web/dist" in api_service
-    assert "ports:" not in worker_service
+    assert "ports" not in worker
 
 
 def test_business_web_is_served_same_origin_without_shadowing_api(tmp_path: Path) -> None:

@@ -772,3 +772,10 @@ Changes: Made imported-artifact verification reports immutable and bound them to
 Verification: Targeted 39 passed; full business 191 passed/1 skipped with local socket permission; Ruff and diff checks passed. Restricted first full run failed on Doclib socket permission only. Local Docker inventory has only arm64 mineru:4.0.2, so no real amd64 build/target claim.
 Evidence: dev-docs/evidence/2026-09-24-offline-artifact-runtime-chain.md
 Next: Acquire/import real linux/amd64 NVIDIA base image, Linux wheelhouse and model on isolated Kylin; execute artifact/runtime chain and four-class annotated acceptance. Continue P4 gaps. Keep goal active.
+
+=== 2026-09-24 Session 78 (P1 Compose bind no-auto-create) ===
+Status: In progress; 74/241 passed; P1 target-machine gates remain incomplete
+Changes: Real Compose rendering revealed all six short-form bind mounts would auto-create missing host paths. Converted them to explicit create_host_path=false binds, retaining worker read-only models/manifest/shared uploads and business-only writable data. Added raw and rendered Compose regression. Inspected Doclib cancellation and declined a misleading GPU-stop UI without shared-consumer contract.
+Verification: Offline config 11 passed; business-server plus config 16 passed; full Mac business suite 192 passed/1 skipped; Ruff/diff checks passed. No actual target mount/GPU/model claim.
+Evidence: dev-docs/evidence/2026-09-24-compose-no-autocreate.md
+Next: Validate Compose plugin, mount permissions and model startup on Kylin; continue Doclib-aware cancellation contract and real-sample acceptance. Keep goal active.

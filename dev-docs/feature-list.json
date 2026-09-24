@@ -473,7 +473,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "Mac 上已用实际 docker compose config 验证模型目录和模型清单只读挂载，并禁止六个宿主 bind 路径由 Compose 自动创建；尚未在目标麒麟验证挂载权限和模型加载，保持未完成。证据：dev-docs/evidence/2026-09-24-compose-no-autocreate.md"
     },
     {
       "id": "INF-009",

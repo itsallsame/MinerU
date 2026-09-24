@@ -16,8 +16,16 @@ services:
       TRANSFORMERS_OFFLINE: "1"
       HF_DATASETS_OFFLINE: "1"
     volumes:
-      - "${MINERU_BUSINESS_HOST_DIR:?Set the persistent business data directory}:/var/lib/mineru-business:rw"
-      - "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}:/srv/mineru-inbox:rw"
+      - type: bind
+        source: "${MINERU_BUSINESS_HOST_DIR:?Set the persistent business data directory}"
+        target: /var/lib/mineru-business
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}"
+        target: /srv/mineru-inbox
+        bind:
+          create_host_path: false
     ports:
       - "${MINERU_BUSINESS_BIND_ADDRESS:-127.0.0.1}:${MINERU_BUSINESS_PORT:-8088}:8080"
     depends_on:
@@ -53,10 +61,29 @@ services:
       MINERU_DOCLIB_TCP_STRICT_PORT: "true"
       MINERU_DOCLIB_COMPACTION_INTERVAL_SEC: "0"
     volumes:
-      - "${MINERU_MODELS_HOST_DIR:?Set the model directory}:/opt/mineru-models:ro"
-      - "${MINERU_MODEL_MANIFEST_HOST_FILE:?Set the model manifest file}:/etc/mineru/model-manifest.json:ro"
-      - "${MINERU_DOCLIB_HOST_DIR:?Set the persistent Doclib directory}:/var/lib/mineru:rw"
-      - "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}:/srv/mineru-inbox:ro"
+      - type: bind
+        source: "${MINERU_MODELS_HOST_DIR:?Set the model directory}"
+        target: /opt/mineru-models
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINERU_MODEL_MANIFEST_HOST_FILE:?Set the model manifest file}"
+        target: /etc/mineru/model-manifest.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINERU_DOCLIB_HOST_DIR:?Set the persistent Doclib directory}"
+        target: /var/lib/mineru
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${MINERU_SHARED_DOCUMENTS_HOST_DIR:?Set the business upload directory}"
+        target: /srv/mineru-inbox
+        read_only: true
+        bind:
+          create_host_path: false
     gpus: all
     networks:
       - business-internal
