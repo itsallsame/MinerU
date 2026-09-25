@@ -1256,3 +1256,11 @@ Changes: Business schema 15 binds retry key and submission intent atomically; sa
 Verification: New workflow regression failed before implementation and passed after. Parallel same-key store, API and backup checks passed. Full Mac business suite 378 passed/2 skipped/2 dependency warnings; Web unit 13 passed, eight offline assets built, Chromium regressions 26 passed; Skill contract 18 passed. Real network faults, annotated samples and isolated Kylin/NVIDIA target remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md
 Next: Continue cancellation/other asynchronous recovery and prepare bound real-sample/target verification when inputs are available. Keep Goal active.
+
+=== 2026-09-25 Session 142 (Web cancellation uncertainty survives reload) ===
+Status: In progress; FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Unknown cancellation POST plus failed task GET kept a read-only marker only in the current JS heap; a full page reload restored an ordinary cancellation button. New browser assertion failed before the fix.
+Changes: Persist task ID and pending cancellation probe/known state in same-origin browser storage before POST. If storage fails, do not POST. Recover read-only probe after reload, retain explicit confirmation before another cancellation, and clear terminal markers. Server cancellation state machine already retains the actual intent; no new schema/key, model, auth, user, role or permission change.
+Verification: Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed including reload and storage-write failure. Focused server cancellation tests 6 passed/33 deselected/1 dependency warning. Real network faults, annotated samples and isolated Kylin/NVIDIA target remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-cancel-reload-recovery.md
+Next: Continue FE-047 remaining async/error and accessibility checks; run real-sample and target validation when inputs become available. Keep Goal active.

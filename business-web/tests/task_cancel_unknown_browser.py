@@ -67,18 +67,44 @@ def main(base_url: str) -> None:
             page.once("dialog", lambda dialog: dialog.accept())
             page.get_by_role("button", name="取消业务任务").click()
             page.get_by_text("取消结果未确认，任务状态也暂不可读", exact=False).wait_for()
-            check = page.get_by_role("button", name="核对取消状态")
+            page.get_by_role("button", name="核对取消状态").wait_for()
             assert calls == {"cancel": 1, "probe": 1}
             page.get_by_role("button", name="刷新列表").click()
             page.get_by_role("button", name="核对取消状态").wait_for()
             assert calls["cancel"] == 1
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))")
+            assert saved == [{"taskId": task["id"], "state": "probe"}]
+            page.reload(wait_until="networkidle")
+            page.get_by_role("button", name="查看 cancel.pdf，解析中").click()
+            page.get_by_role("button", name="核对取消状态").wait_for()
+            assert calls["cancel"] == 1, "reload must not offer an unguarded cancellation POST"
             probe_available["value"] = True
-            check.click()
+            page.get_by_role("button", name="核对取消状态").click()
             page.get_by_role("button", name="再次取消（上次结果未确认）").wait_for()
             assert calls == {"cancel": 1, "probe": 2}, "read-only check repeated cancellation POST"
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))")
+            assert saved == [{"taskId": task["id"], "state": "known"}]
             page.once("dialog", lambda dialog: dialog.dismiss())
             page.get_by_role("button", name="再次取消（上次结果未确认）").click()
             assert calls["cancel"] == 1
+            task.update(status="cancelled", cancel_effect="may_continue", updated_at_ms=now + 1)
+            page.get_by_role("button", name="刷新列表").click()
+            page.get_by_role("button", name="查看 cancel.pdf，已取消").wait_for()
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))") == []
+            task.update(status="submitted", cancel_effect=None, updated_at_ms=now + 2)
+            page.get_by_role("button", name="刷新列表").click()
+            page.get_by_role("button", name="查看 cancel.pdf，解析中").click()
+            page.evaluate("""() => {
+              const write = Storage.prototype.setItem;
+              Storage.prototype.setItem = function (key, value) {
+                if (key === 'mineru.business.pendingCancellations.v1') throw new Error('storage_blocked');
+                return write.call(this, key, value);
+              };
+            }""")
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="取消业务任务").click()
+            page.get_by_text("浏览器无法保存待核对的取消请求", exact=False).wait_for()
+            assert calls["cancel"] == 1, "unpersistable intent must not send a cancellation POST"
             assert not errors, errors
             print("Playwright cancellation unknown-result recovery passed")
         finally:

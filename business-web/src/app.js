@@ -3,6 +3,19 @@ import { cancelEffectLabel, classifyFile, extensionOf, formatBytes, sourcePrevie
 import { createReviewWorkbench } from "./review.js";
 import { createTemplateManager } from "./templates.js";
 
+const pendingCancellationsKey = "mineru.business.pendingCancellations.v1";
+
+function savedCancellationStates() {
+  try {
+    const records = JSON.parse(localStorage.getItem(pendingCancellationsKey) || "[]");
+    if (!Array.isArray(records)) return new Map();
+    return new Map(records.filter((entry) => entry && typeof entry.taskId === "string"
+      && ["probe", "known"].includes(entry.state)).map((entry) => [entry.taskId, entry.state]));
+  } catch {
+    return new Map();
+  }
+}
+
 const byId = (id) => document.getElementById(id);
 const state = {
   capabilities: null,
@@ -31,8 +44,34 @@ const state = {
   sourceStatus: "idle",
   sourceError: "",
   sourceRequest: 0,
-  uncertainCancelTasks: new Map(),
+  uncertainCancelTasks: savedCancellationStates(),
 };
+
+function saveCancellationStates() {
+  try {
+    localStorage.setItem(pendingCancellationsKey, JSON.stringify(
+      [...state.uncertainCancelTasks].map(([taskId, value]) => ({ taskId, state: value })),
+    ));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rememberCancellation(taskId, value) {
+  const prior = state.uncertainCancelTasks.get(taskId);
+  if (!prior && state.uncertainCancelTasks.size >= 100) return false;
+  state.uncertainCancelTasks.set(taskId, value);
+  if (saveCancellationStates()) return true;
+  if (prior) state.uncertainCancelTasks.set(taskId, prior);
+  else state.uncertainCancelTasks.delete(taskId);
+  return false;
+}
+
+function forgetCancellation(taskId) {
+  state.uncertainCancelTasks.delete(taskId);
+  saveCancellationStates();
+}
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
     const item = state.items.find((entry) => entry.document.id === state.selectedId)
@@ -690,6 +729,9 @@ function renderDetail() {
   if (task?.status === "cancel_requested" || task?.status === "cancelled") {
     summary.append(element("p", "review-hint", cancelEffectLabel(task.cancel_effect)));
   }
+  if (task && ["cancelled", "done"].includes(task.status) && state.uncertainCancelTasks.has(task.id)) {
+    forgetCancellation(task.id);
+  }
   const actions = element("div", "detail-actions");
   const pendingRetry = task ? pendingTaskRetry(task.id) : null;
   if (task && (pendingRetry || task.status === "uploaded"
@@ -781,31 +823,44 @@ function renderDetail() {
       try {
         if (checkOnly) {
           const latest = await businessApi.task(task.id);
-          if (["cancelled", "done"].includes(latest.status)) state.uncertainCancelTasks.delete(task.id);
-          else if (state.uncertainCancelTasks.has(task.id)) state.uncertainCancelTasks.set(task.id, "known");
+          if (latest?.id !== task.id || typeof latest.status !== "string") {
+            throw new SyntaxError("取消状态核对返回了不匹配的任务身份或状态");
+          }
+          if (["cancelled", "done"].includes(latest.status)) forgetCancellation(task.id);
+          else if (state.uncertainCancelTasks.has(task.id)) rememberCancellation(task.id, "known");
           if (selectionRequest === state.selectionRequest) {
             await refreshDocuments({ acceptedWriteMessage: `已核对任务当前状态：${taskLabel(latest.status)}` });
           }
+          return;
+        }
+        if (!rememberCancellation(task.id, "probe")) {
+          showError("浏览器无法保存待核对的取消请求；为避免刷新后误重复，本次没有发送取消。请检查浏览器存储设置。");
           return;
         }
         const result = await businessApi.cancel(task.id);
         if (result?.id !== task.id || typeof result.status !== "string") {
           throw new SyntaxError("取消响应缺少任务身份或状态");
         }
-        state.uncertainCancelTasks.delete(task.id);
+        forgetCancellation(task.id);
         if (selectionRequest === state.selectionRequest) clearError();
         await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
           ? (result.status === "cancel_requested" ? "取消请求已记录，结果尚未确认" : "业务任务已取消") : "" });
       } catch (error) {
-        if (selectionRequest !== state.selectionRequest) return;
+        if (selectionRequest !== state.selectionRequest) {
+          if (!checkOnly && !isUnknownWriteError(error)) forgetCancellation(task.id);
+          return;
+        }
         if (!checkOnly && isUnknownWriteError(error)) {
           checkOnly = true;
-          state.uncertainCancelTasks.set(task.id, "probe");
+          rememberCancellation(task.id, "probe");
           cancel.textContent = "核对取消状态";
           try {
             const latest = await businessApi.task(task.id);
-            if (["cancelled", "done"].includes(latest.status)) state.uncertainCancelTasks.delete(task.id);
-            else state.uncertainCancelTasks.set(task.id, "known");
+            if (latest?.id !== task.id || typeof latest.status !== "string") {
+              throw new SyntaxError("取消状态核对返回了不匹配的任务身份或状态");
+            }
+            if (["cancelled", "done"].includes(latest.status)) forgetCancellation(task.id);
+            else rememberCancellation(task.id, "known");
             if (selectionRequest === state.selectionRequest) {
               await refreshDocuments({ acceptedWriteMessage: `取消响应未确认；已核对任务当前状态：${taskLabel(latest.status)}` });
             }
@@ -817,6 +872,7 @@ function renderDetail() {
         } else if (checkOnly) {
           showError(`任务状态暂不可读：${error.message}。请稍后再次核对，不要重复取消。`);
         } else {
+          forgetCancellation(task.id);
           showError(`取消请求未受理：${error.message}`);
         }
       } finally {
