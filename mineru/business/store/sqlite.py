@@ -45,7 +45,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 16
+_SCHEMA_VERSION = 17
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -63,6 +63,10 @@ class ExtractionRequestConflict(BusinessStoreError):
 
 class TaskRetryRequestConflict(BusinessStoreError):
     """An idempotency key was reused for another task retry."""
+
+
+class TaskCancelRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for another task cancellation."""
 
 
 class TemplateRequestConflict(BusinessStoreError):
@@ -128,7 +132,7 @@ class BusinessStore:
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
-                    "extraction_requests", "task_retry_requests", "template_requests",
+                    "extraction_requests", "task_retry_requests", "task_cancel_requests", "template_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -188,6 +192,11 @@ class BusinessStore:
                         template_code TEXT
                     );
                     CREATE TABLE task_retry_requests (
+                        request_key TEXT PRIMARY KEY,
+                        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
+                        created_at_ms INTEGER NOT NULL
+                    );
+                    CREATE TABLE task_cancel_requests (
                         request_key TEXT PRIMARY KEY,
                         task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
                         created_at_ms INTEGER NOT NULL
@@ -350,7 +359,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 16")
+                database.execute("PRAGMA user_version = 17")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -1391,13 +1400,28 @@ class BusinessStore:
             raise BusinessStoreError("Idempotent task retry record is incomplete")
         return self._task_from_row(row)
 
-    def request_task_cancel(self, task_id: str) -> IngestTask:
+    def request_task_cancel(self, task_id: str, *, request_key: str | None = None) -> IngestTask:
         """Fence completion and new submissions before the cross-DB release call."""
+        if request_key is not None and _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid task cancellation idempotency key")
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            if request_key is not None:
+                prior = database.execute(
+                    "SELECT task_id FROM task_cancel_requests WHERE request_key=?", (request_key,)
+                ).fetchone()
+                if prior is not None:
+                    if prior["task_id"] != task_id:
+                        raise TaskCancelRequestConflict("Idempotency key belongs to a different task cancellation")
+                    row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+                    if row is None:
+                        raise BusinessStoreError("Idempotent task cancellation record is incomplete")
+                    return self._task_from_row(row)
             row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             if row is None:
                 raise BusinessStoreError("Task not found")
+            if row["status"] == "done":
+                raise BusinessStoreError("Completed task cannot be cancelled")
             if row["status"] in ("uploaded", "submitting", "submitted", "failed"):
                 initial_effect = "not_submitted" if row["status"] == "uploaded" else None
                 database.execute(
@@ -1405,8 +1429,27 @@ class BusinessStore:
                     (initial_effect, _now_ms(), task_id),
                 )
                 row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if request_key is not None:
+                database.execute(
+                    "INSERT INTO task_cancel_requests VALUES (?, ?, ?)", (request_key, task_id, _now_ms())
+                )
             assert row is not None
             return self._task_from_row(row)
+
+    def get_task_cancel_request(self, request_key: str) -> IngestTask | None:
+        """Read the task bound to a prior cancellation key without issuing a release."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid task cancellation idempotency key")
+        with closing(self._connect()) as database:
+            request = database.execute(
+                "SELECT task_id FROM task_cancel_requests WHERE request_key=?", (request_key,)
+            ).fetchone()
+            if request is None:
+                return None
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (request["task_id"],)).fetchone()
+        if row is None:
+            raise BusinessStoreError("Idempotent task cancellation record is incomplete")
+        return self._task_from_row(row)
 
     def finish_task_cancel(self, task_id: str, release: ParseReleaseResponse) -> IngestTask:
         """Persist Doclib's first release facts; never turn an unknown result into stopped work."""

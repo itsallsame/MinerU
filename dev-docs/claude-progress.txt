@@ -1344,3 +1344,11 @@ Changes: Rehash the selected model manifest and every current model file before 
 Verification: Focused runtime tests 42 passed, including tampered-weight CLI refusal before Docker; full business suite 390 passed/2 skipped. Target machine and real model loading remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-runtime-model-revalidation.md
 Next: Continue offline release/target phase checks and obtain Kylin/NVIDIA access plus real samples when available. Keep Goal active.
+
+=== 2026-09-25 Session 153 (keyed cancellation recovery across Web and Skill) ===
+Status: In progress; real-sample and isolated Kylin/NVIDIA acceptance remain open. User currently has neither input available.
+Discovery: A lost cancellation POST response could only be followed by a task-status read, which did not identify whether that specific request was accepted; Web and Skill diverged from the existing keyed write recovery contract.
+Changes: Business schema 17 atomically binds a cancellation request key to the task and fenced cancel intent; same-key replay and read-only lookup are available, key reuse for another task conflicts, and completed-task refusal is inside the write transaction. Web persists the key before POST, recovers after reload, treats 404 as unresolved and requires explicit same-key replay. Own Skill uses the same API and keeps explicit write acknowledgement. Backup validation and architecture/deployment/Skill docs updated. No old database migration, authentication, user/role/permission, model or remote parsing change.
+Verification: Full Mac business suite 393 passed/2 skipped; Web unit 13 passed, eight offline assets built, all 28 Chromium regressions passed; changed Python Ruff and diff check passed. Synthetic failure tests do not substitute for real network, annotated samples or target machine.
+Evidence: dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md
+Next: Continue remaining P4/P1 design and implementation checks without claiming target acceptance. Obtain real samples and isolated Kylin/NVIDIA access when available. Keep Goal active.

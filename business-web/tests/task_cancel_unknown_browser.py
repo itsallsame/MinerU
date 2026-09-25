@@ -21,7 +21,9 @@ def main(base_url: str) -> None:
         "cancel_effect": None, "created_at_ms": now, "updated_at_ms": now,
     }
     calls = {"cancel": 0, "probe": 0}
+    cancel_keys: list[str] = []
     probe_available = {"value": False}
+    replay_accepted = {"value": False}
 
     def api(route: object) -> None:
         request = route.request
@@ -41,15 +43,25 @@ def main(base_url: str) -> None:
             return
         elif path == f"/tasks/{task['id']}/cancel":
             assert request.method == "POST"
+            cancel_keys.append(request.headers["idempotency-key"])
             calls["cancel"] += 1
+            if replay_accepted["value"]:
+                assert cancel_keys[-1] == cancel_keys[0]
+                task.update(status="cancelled", cancel_effect="may_continue", updated_at_ms=now + 1)
+                route.fulfill(status=200, content_type="application/json", body=json.dumps(task))
+                return
             route.fulfill(status=503, content_type="application/json", body='{"detail":"response_lost"}')
             return
-        elif path == f"/tasks/{task['id']}":
+        elif path.startswith("/task-cancel-requests/"):
             assert request.method == "GET"
+            assert path.rsplit("/", 1)[1] == cancel_keys[0]
             calls["probe"] += 1
             if not probe_available["value"]:
                 route.fulfill(status=503, content_type="application/json", body='{"detail":"probe_unavailable"}')
                 return
+            route.fulfill(status=404, content_type="application/json", body='{"detail":"not_recorded"}')
+            return
+        elif path == f"/tasks/{task['id']}":
             payload = task
         else:
             raise AssertionError(f"Unexpected API call: {request.method} {path}")
@@ -66,14 +78,14 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="查看 cancel.pdf，解析中").click()
             page.once("dialog", lambda dialog: dialog.accept())
             page.get_by_role("button", name="取消业务任务").click()
-            page.get_by_text("取消结果未确认，任务状态也暂不可读", exact=False).wait_for()
+            page.get_by_text("取消结果未确认，原请求键暂不可读", exact=False).wait_for()
             page.get_by_role("button", name="核对取消状态").wait_for()
             assert calls == {"cancel": 1, "probe": 1}
             page.get_by_role("button", name="刷新列表").click()
             page.get_by_role("button", name="核对取消状态").wait_for()
             assert calls["cancel"] == 1
             saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))")
-            assert saved == [{"taskId": task["id"], "state": "probe"}]
+            assert saved == [{"taskId": task["id"], "state": "probe", "requestKey": cancel_keys[0]}]
             page.reload(wait_until="networkidle")
             page.get_by_role("button", name="查看 cancel.pdf，解析中").click()
             page.get_by_role("button", name="核对取消状态").wait_for()
@@ -81,7 +93,7 @@ def main(base_url: str) -> None:
             probe_available["value"] = True
             page.get_by_role("button", name="核对取消状态").focus()
             page.keyboard.press("Enter")
-            repeated = page.get_by_role("button", name="再次取消（上次结果未确认）")
+            repeated = page.get_by_role("button", name="用原键再次取消")
             repeated.wait_for()
             focused = page.evaluate("""() => ({
                 tag: document.activeElement?.tagName,
@@ -94,13 +106,15 @@ def main(base_url: str) -> None:
             assert repeated.evaluate("node => getComputedStyle(node).outlineStyle !== 'none'")
             assert calls == {"cancel": 1, "probe": 2}, "read-only check repeated cancellation POST"
             saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))")
-            assert saved == [{"taskId": task["id"], "state": "known"}]
+            assert saved == [{"taskId": task["id"], "state": "known", "requestKey": cancel_keys[0]}]
             page.once("dialog", lambda dialog: dialog.dismiss())
-            page.get_by_role("button", name="再次取消（上次结果未确认）").click()
+            page.get_by_role("button", name="用原键再次取消").click()
             assert calls["cancel"] == 1
-            task.update(status="cancelled", cancel_effect="may_continue", updated_at_ms=now + 1)
-            page.get_by_role("button", name="刷新列表").click()
+            replay_accepted["value"] = True
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="用原键再次取消").click()
             page.get_by_role("button", name="查看 cancel.pdf，已取消").wait_for()
+            assert calls["cancel"] == 2 and cancel_keys == [cancel_keys[0], cancel_keys[0]]
             assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))") == []
             task.update(status="submitted", cancel_effect=None, updated_at_ms=now + 2)
             page.get_by_role("button", name="刷新列表").click()
@@ -115,7 +129,7 @@ def main(base_url: str) -> None:
             page.once("dialog", lambda dialog: dialog.accept())
             page.get_by_role("button", name="取消业务任务").click()
             page.get_by_text("浏览器无法保存待核对的取消请求", exact=False).wait_for()
-            assert calls["cancel"] == 1, "unpersistable intent must not send a cancellation POST"
+            assert calls["cancel"] == 2, "unpersistable intent must not send a cancellation POST"
             assert not errors, errors
             print("Playwright cancellation unknown-result recovery passed")
         finally:

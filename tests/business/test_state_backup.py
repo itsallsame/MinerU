@@ -59,7 +59,7 @@ def test_backup_refuses_unshipped_older_release_schema(tmp_path: Path) -> None:
 def test_backup_refuses_prior_business_schema_without_migrating_it(tmp_path: Path) -> None:
     business, doclib, shared, release = _state(tmp_path)
     with closing(sqlite3.connect(business / "business.sqlite3")) as database, database:
-        database.execute("PRAGMA user_version = 15")
+        database.execute("PRAGMA user_version = 16")
     with pytest.raises(backup.BackupError, match="schema or integrity"):
         backup.create_backup(
             business_dir=business,
@@ -70,7 +70,7 @@ def test_backup_refuses_prior_business_schema_without_migrating_it(tmp_path: Pat
             check_stopped=lambda: None,
         )
     with closing(sqlite3.connect(business / "business.sqlite3")) as database:
-        assert database.execute("PRAGMA user_version").fetchone()[0] == 15
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 16
 
 
 def test_backup_refuses_current_schema_missing_extraction_request_table(tmp_path: Path) -> None:
@@ -92,6 +92,21 @@ def test_backup_refuses_current_schema_missing_task_retry_request_table(tmp_path
     business, doclib, shared, release = _state(tmp_path)
     with closing(sqlite3.connect(business / "business.sqlite3")) as database, database:
         database.execute("DROP TABLE task_retry_requests")
+    with pytest.raises(backup.BackupError, match="schema or integrity"):
+        backup.create_backup(
+            business_dir=business,
+            doclib_dir=doclib,
+            shared_documents_dir=shared,
+            release_manifest=release,
+            output=tmp_path / "backup",
+            check_stopped=lambda: None,
+        )
+
+
+def test_backup_refuses_current_schema_missing_task_cancel_request_table(tmp_path: Path) -> None:
+    business, doclib, shared, release = _state(tmp_path)
+    with closing(sqlite3.connect(business / "business.sqlite3")) as database, database:
+        database.execute("DROP TABLE task_cancel_requests")
     with pytest.raises(backup.BackupError, match="schema or integrity"):
         backup.create_backup(
             business_dir=business,
@@ -139,7 +154,7 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
         output=output,
         check_stopped=stopped,
     )
-    assert stopped_checks == 1 and record["business_schema"] == 16
+    assert stopped_checks == 1 and record["business_schema"] == 17
     assert backup.verify_backup(output) == record
     assert (output / "COMPLETE").is_file()
     assert (output / "shared_documents" / "opaque.html").read_bytes() == b"<h1>Business original</h1>"
@@ -156,7 +171,7 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
     assert (restored / "shared" / "opaque.html").read_bytes() == (shared / "opaque.html").read_bytes()
     assert (restored / "doclib" / "parsed-result.bin").read_bytes() == (doclib / "parsed-result.bin").read_bytes()
     with closing(sqlite3.connect(restored / "business" / "business.sqlite3")) as database:
-        assert database.execute("PRAGMA user_version").fetchone()[0] == 16
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 17
         assert database.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     recovered_store = BusinessStore(restored / "business" / "business.sqlite3")
     recovered_store.initialize()

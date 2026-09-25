@@ -114,7 +114,10 @@ export const businessApi = {
     method: "POST", headers: { "Idempotency-Key": requestKey },
   }),
   taskRetryRequest: (key) => request(`/task-retry-requests/${encodeURIComponent(key)}`),
-  cancel: (id) => request(`/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  cancel: (id, requestKey) => request(`/tasks/${encodeURIComponent(id)}/cancel`, {
+    method: "POST", headers: { "Idempotency-Key": requestKey },
+  }),
+  taskCancelRequest: (key) => request(`/task-cancel-requests/${encodeURIComponent(key)}`),
   uploadRequest: (key) => request(`/upload-requests/${encodeURIComponent(key)}`),
   upload: (file, { tier, templateCode, requestKey } = {}) => {
     const body = new FormData();

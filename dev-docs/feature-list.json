@@ -4983,7 +4983,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-24",
-      "notes": "自有 Skill 的 upload/extract/cancel/retry CLI 写操作必须携带 --confirm-write；文档要求先确认用户明确请求和批准的隔离业务服务，标志不是认证。retry/cancel/extract 均只发一次 POST；未知结果只读查询同一任务或修订提取运行，不自动重发，不把读到的状态冒充本次写入成功。Mac 契约与真实本地 Web/API/Doclib/Skill opt-in 回归通过；麒麟/真实样本仍未验收。证据：dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md"
+      "notes": "自有 Skill 的 upload/extract/cancel/retry CLI 写操作必须携带 --confirm-write；文档要求先确认用户明确请求和批准的隔离业务服务，标志不是认证。retry/cancel/extract 均只发一次 POST；未知结果只读按原请求键核对，不自动重发，不把当前任务状态冒充本次写入成功。Mac 契约与真实本地 Web/API/Doclib/Skill opt-in 回归通过；麒麟/真实样本仍未验收。证据：dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md、dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md"
     },
     {
       "id": "SKL-018",
@@ -5027,7 +5027,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-23",
-      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry 已传键，未知结果按键核对并允许显式同键重试；取消的未知结果只读核对同一任务。手动 extract 已传入请求键，未知结果只读按键查询，返回键支持跨调用明确同键重试；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md。"
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry、cancel 和手动 extract 均传请求键，未知结果只读按键查询，返回键支持跨调用明确同键重试；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md、dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md。"
     },
     {
       "id": "SKL-020",
@@ -5852,7 +5852,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已提供停服后 schema 16 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传、手动提取、任务重试和模板写入请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
+      "notes": "已提供停服后 schema 17 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传、手动提取、任务重试、任务取消和模板写入请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md、dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
     },
     {
       "id": "QA-034",

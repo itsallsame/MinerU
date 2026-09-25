@@ -376,45 +376,72 @@ def test_skill_cancel_requires_explicit_write_ack_and_uses_only_business_api() -
         script.run(script.parser().parse_args(["cancel", "task-1"]), client)
     assert connection.calls == []
     result = script.run(script.parser().parse_args(["cancel", "task-1", "--confirm-write"]), client)
-    assert result == {"id": "task-1", "status": "cancelled", "cancel_effect": "may_continue"}
+    assert result["id"] == "task-1" and result["status"] == "cancelled"
+    assert len(result["request_key"]) == 32
+    assert ("Idempotency-Key", result["request_key"]) in connection.headers
     assert connection.calls == [("POST", "/api/business/tasks/task-1/cancel")]
 
 
-def test_skill_cancel_unknown_post_only_reads_same_task() -> None:
+def test_skill_cancel_unknown_post_only_reads_same_request_key() -> None:
     script = _script()
+    key = "manual-task-cancel-request-0001"
     connection = _Connection({
         ("POST", "/api/business/tasks/task-1/cancel"): _Response({"detail": "unavailable"}, status=503),
-        ("GET", "/api/business/tasks/task-1"): _Response({"id": "task-1", "status": "cancel_requested"}),
+        ("GET", f"/api/business/task-cancel-requests/{key}"): _Response({"id": "task-1", "status": "cancel_requested"}),
     })
     client = script.BusinessClient("http://127.0.0.1:8080")
     client._connect = lambda: connection
-    args = script.parser().parse_args(["cancel", "task-1", "--confirm-write"])
+    args = script.parser().parse_args(["cancel", "task-1", "--request-key", key, "--confirm-write"])
 
     result = script.run(args, client)
-    assert result == {"state": "cancel_outcome_unconfirmed", "task": {"id": "task-1", "status": "cancel_requested"}}
+    assert result == {"state": "accepted_after_lookup", "request_key": key, "id": "task-1", "status": "cancel_requested"}
     assert connection.calls == [
-        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", "/api/business/tasks/task-1"),
+        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", f"/api/business/task-cancel-requests/{key}"),
     ]
+    assert ("Idempotency-Key", key) in connection.headers
     connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response({"unexpected": True})
-    assert script.run(args, client)["state"] == "cancel_outcome_unconfirmed"
+    assert script.run(args, client)["state"] == "accepted_after_lookup"
     connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response(
         {"detail": "Task cannot be cancelled"}, status=409,
     )
-    get_count = connection.calls.count(("GET", "/api/business/tasks/task-1"))
+    get_count = connection.calls.count(("GET", f"/api/business/task-cancel-requests/{key}"))
     with pytest.raises(script.BusinessAPIError, match="cannot be cancelled"):
         script.run(args, client)
-    assert connection.calls.count(("GET", "/api/business/tasks/task-1")) == get_count
+    assert connection.calls.count(("GET", f"/api/business/task-cancel-requests/{key}")) == get_count
     connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response(
         {"detail": "unavailable"}, status=503,
     )
-    connection.responses[("GET", "/api/business/tasks/task-1")] = _Response(
+    connection.responses[("GET", f"/api/business/task-cancel-requests/{key}")] = _Response(
         {"detail": "unavailable"}, status=503,
     )
-    with pytest.raises(script.BusinessAPIError, match="outcome unknown"):
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown") as unknown:
         script.run(args, client)
+    assert unknown.value.request_key == key
     assert connection.calls[-2:] == [
-        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", "/api/business/tasks/task-1"),
+        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", f"/api/business/task-cancel-requests/{key}"),
     ]
+    connection.responses[("GET", f"/api/business/task-cancel-requests/{key}")] = _Response(
+        {"detail": "not recorded"}, status=404,
+    )
+    assert script.run(args, client) == {"state": "not_recorded_at_lookup", "request_key": key}
+
+
+def test_skill_task_cancel_request_lookup_is_read_only() -> None:
+    script = _script()
+    key = "manual-task-cancel-request-0002"
+    client = Mock()
+    args = script.parser().parse_args(["task-cancel-request", key])
+    client.request.return_value = {"id": "task-1", "status": "cancelled"}
+    assert script.run(args, client) == {
+        "state": "accepted", "request_key": key, "id": "task-1", "status": "cancelled",
+    }
+    client.request.assert_called_once_with("GET", f"/task-cancel-requests/{key}")
+    client.request.side_effect = script.BusinessAPIError("missing", status=404)
+    assert script.run(args, client) == {"state": "not_recorded_at_lookup", "request_key": key}
+    client.request.reset_mock(side_effect=True)
+    with pytest.raises(script.BusinessAPIError, match="Invalid task cancellation"):
+        script.run(script.parser().parse_args(["task-cancel-request", "short"]), client)
+    client.request.assert_not_called()
 
 
 def test_skill_extract_unknown_post_uses_only_keyed_readback() -> None:

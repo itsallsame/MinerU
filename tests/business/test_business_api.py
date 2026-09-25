@@ -44,6 +44,7 @@ def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Pat
         "/api/business/tasks/{task_id}": {"get"},
         "/api/business/tasks/{task_id}/retry": {"post"},
         "/api/business/task-retry-requests/{request_key}": {"get"},
+        "/api/business/task-cancel-requests/{request_key}": {"get"},
         "/api/business/tasks/{task_id}/cancel": {"post"},
         "/api/business/revisions/{revision_id}/content": {"get"},
         "/api/business/revisions/{revision_id}/extractions": {"get", "post"},
@@ -189,13 +190,29 @@ def test_open_cancel_api_distinguishes_business_cancel_from_compute_stop(tmp_pat
         consumer_key=f"business:{task_id}",
         results=[ParseReleaseItem(parse_id=7, disposition="shared", status_at_release="pending")],
     )
-    cancelled = client.post(f"/api/business/tasks/{task_id}/cancel")
+    cancel_key = "cancel-api-request-key-0001"
+    cancelled = client.post(f"/api/business/tasks/{task_id}/cancel", headers={"Idempotency-Key": cancel_key})
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert cancelled.json()["cancel_effect"] == "may_continue"
+    assert client.get(f"/api/business/task-cancel-requests/{cancel_key}").json() == cancelled.json()
+    replay = client.post(f"/api/business/tasks/{task_id}/cancel", headers={"Idempotency-Key": cancel_key})
+    assert replay.json() == cancelled.json()
+    assert doclib.release_parse_consumer.call_count == 1
     assert client.post(f"/api/business/tasks/{task_id}/cancel").json() == cancelled.json()
     assert client.post(f"/api/business/tasks/{task_id}/retry").json() == cancelled.json()
+    another = client.post(
+        "/api/business/documents", files={"file": ("other.html", b"<h1>Other</h1>", "text/html")},
+    )
+    other_task_id = another.json()["task"]["id"]
+    conflict = client.post(
+        f"/api/business/tasks/{other_task_id}/cancel", headers={"Idempotency-Key": cancel_key},
+    )
+    assert conflict.status_code == 409
+    assert client.get(f"/api/business/tasks/{other_task_id}").json()["status"] == "submitted"
     assert client.post("/api/business/tasks/missing/cancel").status_code == 404
+    assert client.get("/api/business/task-cancel-requests/missing-but-valid-key").status_code == 404
+    assert client.get("/api/business/task-cancel-requests/short").status_code == 422
     assert store.list_revisions(uploaded.json()["document"]["id"]) == ()
 
 

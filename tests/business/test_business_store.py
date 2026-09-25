@@ -93,6 +93,30 @@ def test_parallel_keyed_task_retry_persists_one_submission_intent(tmp_path: Path
         business.begin_task_retry(other_task.id, request_key=key)
 
 
+def test_parallel_keyed_task_cancel_persists_one_fenced_intent(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Cancel</h1>"), filename="cancel.html")
+    _document, task = business.create_document_with_task(upload, original_name="cancel.html", requested_tier=None)
+    reopened = BusinessStore(tmp_path / "business" / "business.sqlite3")
+    key = "manual-task-cancel-request-0001"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(business.request_task_cancel, task.id, request_key=key)
+        second = pool.submit(reopened.request_task_cancel, task.id, request_key=key)
+        results = [first.result(timeout=5), second.result(timeout=5)]
+    assert all(result.status == "cancel_requested" for result in results)
+    assert business.get_task_cancel_request(key) == business.get_task(task.id)
+    assert business.get_task_cancel_request("different-cancel-request-0001") is None
+    other_upload = uploads.store(io.BytesIO(b"<h1>Other</h1>"), filename="other.html")
+    _other_document, other_task = business.create_document_with_task(
+        other_upload, original_name="other.html", requested_tier=None,
+    )
+    with pytest.raises(BusinessStoreError, match="different task cancellation"):
+        business.request_task_cancel(other_task.id, request_key=key)
+    assert business.get_task(other_task.id).status == "uploaded"
+    with pytest.raises(BusinessStoreError, match="Invalid task cancellation"):
+        business.request_task_cancel(other_task.id, request_key="short")
+
+
 def test_completed_revision_and_frozen_evidence_survive_reparse_and_restart(tmp_path: Path) -> None:
     business, uploads = _store(tmp_path)
     upload = uploads.store(io.BytesIO(b"<h1>Original evidence</h1>"), filename="report.html")
@@ -274,7 +298,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 16")
+        database.execute("PRAGMA user_version = 17")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()

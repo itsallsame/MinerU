@@ -152,16 +152,9 @@ class DocumentWorkflow:
             submission_attempt=task.submission_attempt,
         )
 
-    def cancel(self, task_id: str) -> IngestTask:
+    def cancel(self, task_id: str, *, request_key: str | None = None) -> IngestTask:
         """Fence business completion, then durably release the Doclib work intent."""
-        task = self._store.get_task(task_id)
-        if task is None:
-            raise DocumentWorkflowError("Task not found")
-        if task.status == "done":
-            raise DocumentWorkflowError("Completed task cannot be cancelled")
-        if task.status == "cancelled":
-            return task
-        task = self._store.request_task_cancel(task_id)
+        task = self._store.request_task_cancel(task_id, request_key=request_key)
         if task.status == "cancelled":
             return task
         try:
