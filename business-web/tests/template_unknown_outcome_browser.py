@@ -64,14 +64,20 @@ def main(base_url: str) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page()
+            context = browser.new_context()
+            page = context.new_page()
+            other = context.new_page()
             errors: list[str] = []
             page.on("pageerror", lambda error: errors.append(str(error)))
+            other.on("pageerror", lambda error: errors.append(str(error)))
             page.on("dialog", lambda dialog: dialog.accept())
-            page.route("**/api/business/**", api)
+            context.route("**/api/business/**", api)
             page.goto(base_url, wait_until="networkidle")
+            other.goto(base_url, wait_until="networkidle")
             page.locator("#template-manager > summary").click()
+            other.locator("#template-manager > summary").click()
             page.get_by_role("button", name="初版 · v1").click()
+            other.get_by_role("button", name="初版 · v1").click()
             page.locator('.template-editor [name="template-name"]').fill("新版")
             page.get_by_role("button", name="保存新版本").click()
             page.get_by_text("模板写入结果未确认", exact=False).wait_for()
@@ -79,6 +85,8 @@ def main(base_url: str) -> None:
             first_key = writes[0][0]
             assert len(first_key) >= 16
             assert page.get_by_role("button", name="保存新版本").is_disabled()
+            other.get_by_text(first_key, exact=False).wait_for()
+            assert other.get_by_role("button", name="保存新版本").is_disabled()
 
             page.reload(wait_until="networkidle")
             page.locator("#template-manager > summary").click()
@@ -90,6 +98,11 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="核对模板写入结果").click()
             page.get_by_text("新版 第 2 版已保存。").wait_for()
             assert len(writes) == 1 and template["version"] == 2
+            other.get_by_text("请刷新页面核对后再写入", exact=False).wait_for()
+            assert other.get_by_role("button", name="保存新版本").is_disabled()
+            other.reload(wait_until="networkidle")
+            other.locator("#template-manager > summary").click()
+            other.get_by_role("button", name="新版 · v2").wait_for()
 
             page.get_by_role("button", name="新版 · v2").click()
             page.locator('.template-editor [name="template-name"]').fill("三版")
@@ -108,7 +121,7 @@ def main(base_url: str) -> None:
             page.evaluate("""() => {
                 const original = Storage.prototype.setItem;
                 Storage.prototype.setItem = function(key, value) {
-                    if (key === 'mineru.business.pendingTemplateWrite.v1') throw new Error('storage disabled');
+                    if (key.startsWith('mineru.business.pendingTemplateWrite.v2.')) throw new Error('storage disabled');
                     return original.call(this, key, value);
                 };
             }""")
@@ -117,7 +130,7 @@ def main(base_url: str) -> None:
             page.get_by_text("无法保存模板请求键", exact=False).wait_for()
             assert page.locator('.template-editor [name="template-name"]').input_value() == "四版草稿"
             assert len(writes) == 3 and not errors, errors
-            print("Playwright template unknown outcomes passed: reload lookup, no auto retry, same-key replay")
+            print("Playwright template unknown outcomes passed: reload, same-key replay, cross-tab write guard")
         finally:
             browser.close()
 

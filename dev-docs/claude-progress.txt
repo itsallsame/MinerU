@@ -1320,3 +1320,11 @@ Changes: Schema 16 binds template create/update/disable request keys and result 
 Verification: Mac business tests 386 passed/2 skipped, changed Python Ruff passed; Web unit 13 passed, eight offline assets built and all 27 Chromium browser regressions passed including storage-unavailable refusal. Diff and feature-list JSON checks passed. Target machine and real documents remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-template-write-idempotency.md
 Next: Continue P4/P1 and obtain target inputs. Keep Goal active.
+
+=== 2026-09-25 Session 150 (template pending writes across tabs) ===
+Status: In progress; FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: A second tab opened before a template write did not see the single fixed pending key. It could submit a new write and overwrite the first tab's recovery record; the two-tab Chromium regression failed before the fix.
+Changes: Store one pending record per request key, enumerate outstanding records, remove only the resolved key, and respond to cross-tab storage changes by blocking new writes until metadata refresh. Submit also re-reads storage before sending. No backend schema, model, auth, user, role or permission change.
+Verification: Web unit 13 passed, eight offline assets built and 27 Chromium browser regressions passed, including two-tab pending and refresh guards. Real network failure and Kylin browser remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-template-multitab-recovery.md
+Next: Continue FE-047/P4 and target validation when inputs are available. Keep Goal active.

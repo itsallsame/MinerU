@@ -1,34 +1,47 @@
 import { businessApi } from "./api.js";
 
 const codePattern = /^[a-z][a-z0-9_]{0,63}$/;
-const pendingTemplateKey = "mineru.business.pendingTemplateWrite.v1";
+const legacyPendingTemplateKey = "mineru.business.pendingTemplateWrite.v1";
+const pendingTemplatePrefix = "mineru.business.pendingTemplateWrite.v2.";
 
 function readPendingTemplate() {
   try {
-    const raw = localStorage.getItem(pendingTemplateKey);
-    if (!raw) return null;
-    const record = JSON.parse(raw);
-    if (typeof record?.requestKey === "string" && /^[A-Za-z0-9_-]{16,128}$/.test(record.requestKey)
-      && ["create", "update", "disable"].includes(record.action) && typeof record.code === "string"
-      && (record.action === "disable" || (record.body && typeof record.body === "object"))) return record;
+    const keys = [legacyPendingTemplateKey, ...Array.from(
+      { length: localStorage.length }, (_, index) => localStorage.key(index),
+    ).filter((key) => key?.startsWith(pendingTemplatePrefix)).sort()];
+    for (const storageKey of keys) {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) continue;
+      const record = JSON.parse(raw);
+      if (typeof record?.requestKey !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(record.requestKey)
+        || !["create", "update", "disable"].includes(record.action) || typeof record.code !== "string"
+        || (record.action !== "disable" && (!record.body || typeof record.body !== "object"))
+        || (storageKey !== legacyPendingTemplateKey && storageKey !== pendingTemplatePrefix + record.requestKey)) {
+        return { corrupt: true };
+      }
+      return { ...record, storageKey };
+    }
+    return null;
   } catch {
     // An unreadable pending record must not be silently overwritten by a new write.
+    return { corrupt: true };
   }
-  return { corrupt: true };
 }
 
 function savePendingTemplate(record) {
   try {
-    localStorage.setItem(pendingTemplateKey, JSON.stringify(record));
+    record.storageKey = pendingTemplatePrefix + record.requestKey;
+    if (localStorage.getItem(record.storageKey) !== null) return false;
+    localStorage.setItem(record.storageKey, JSON.stringify(record));
     return true;
   } catch {
     return false;
   }
 }
 
-function removePendingTemplate() {
+function removePendingTemplate(record) {
   try {
-    localStorage.removeItem(pendingTemplateKey);
+    localStorage.removeItem(record.storageKey);
     return true;
   } catch {
     return false;
@@ -87,6 +100,15 @@ export function createTemplateManager(root, { onChanged }) {
   let error = "";
   let viewVersion = 0;
   let pending = readPendingTemplate();
+  let externalRefreshRequired = false;
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== null && event.key !== legacyPendingTemplateKey
+      && !event.key.startsWith(pendingTemplatePrefix)) return;
+    externalRefreshRequired = true;
+    pending = readPendingTemplate();
+    render({ preserveDraft: true });
+  });
 
   async function sendPending(record) {
     if (record.action === "create") return businessApi.createTemplate(record.body, record.requestKey);
@@ -98,8 +120,8 @@ export function createTemplateManager(root, { onChanged }) {
     if (!updated || updated.code !== record.code || !Number.isInteger(updated.version)) {
       throw new Error("模板写入响应不完整，结果未确认。");
     }
-    if (!removePendingTemplate()) throw new Error("模板写入已返回，但待核对记录无法清除；请核对结果。");
-    pending = null;
+    if (!removePendingTemplate(record)) throw new Error("模板写入已返回，但待核对记录无法清除；请核对结果。");
+    pending = readPendingTemplate();
     if (savedViewVersion === viewVersion && record.action !== "disable") {
       selectedCode = updated.code;
       creating = false;
@@ -121,9 +143,9 @@ export function createTemplateManager(root, { onChanged }) {
     } catch (cause) {
       if (cause.status >= 400 && cause.status < 500
         && cause.message !== "Template idempotency key belongs to another write"
-        && removePendingTemplate()) pending = null;
+        && removePendingTemplate(record)) pending = readPendingTemplate();
       if (savedViewVersion === viewVersion) {
-        error = pending
+        error = pending?.requestKey === record.requestKey
           ? `模板写入结果未确认；请先按请求键核对，勿新建请求。${cause.message}`
           : cause.message;
       }
@@ -232,6 +254,11 @@ export function createTemplateManager(root, { onChanged }) {
       success.setAttribute("role", "status");
       root.append(success);
     }
+    if (externalRefreshRequired) {
+      const warning = element("p", "review-hint", "模板可能已在另一标签页变更；请刷新页面核对后再写入。");
+      warning.setAttribute("role", "status");
+      root.append(warning);
+    }
     if (pending) {
       const warning = element("p", "review-hint", pending.corrupt
         ? "本地模板待核对记录无法读取；为避免重复写入，已暂停模板修改。请保留浏览器数据并联系维护人员。"
@@ -292,13 +319,15 @@ export function createTemplateManager(root, { onChanged }) {
     }));
     const save = element("button", "primary-button", creating ? "创建模板" : "保存新版本");
     save.type = "submit";
-    save.disabled = Boolean(pending);
+    save.disabled = Boolean(pending || externalRefreshRequired);
     form.append(save);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (busy || pending) return;
+      if (busy || pending || externalRefreshRequired) return;
       const savedViewVersion = viewVersion;
       try {
+        pending = readPendingTemplate();
+        if (pending) throw new Error("另一个模板请求仍待核对；请先核对结果。");
         const draft = validateTemplateDraft({
           code: selected?.code || code.querySelector("input").value.trim(),
           name: name.querySelector("input").value,
@@ -325,9 +354,12 @@ export function createTemplateManager(root, { onChanged }) {
     root.append(form);
     if (selected) {
       root.append(button("停用此自定义模板", async () => {
-        if (busy || pending || !window.confirm(`停用“${selected.name}”？新上传将无法选择，历史文档与版本不会删除。`)) return;
+        if (busy || pending || externalRefreshRequired
+          || !window.confirm(`停用“${selected.name}”？新上传将无法选择，历史文档与版本不会删除。`)) return;
         const savedViewVersion = viewVersion;
         try {
+          pending = readPendingTemplate();
+          if (pending) throw new Error("另一个模板请求仍待核对；请先核对结果。");
           const record = { requestKey: crypto.randomUUID(), action: "disable", code: selected.code, body: null };
           if (!savePendingTemplate(record)) throw new Error("无法保存模板请求键；为避免重复停用，本次没有发送请求。");
           pending = record;

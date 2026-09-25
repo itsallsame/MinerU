@@ -1,0 +1,7 @@
+# Template pending writes across browser tabs
+
+The prior Web implementation stored one pending template write under a fixed localStorage key. A second tab opened before the first tab wrote did not observe the new pending key; it could submit another template write and overwrite the first tab's recovery record. A two-tab Chromium regression reproduced the missing warning before the fix.
+
+Template write records now use per-request localStorage keys. The manager enumerates outstanding records (and recognizes the prior single-record key if present), resolves them one at a time, and deletes only the matching request's record. A storage event from another tab blocks new template writes and tells the operator to reload for fresh template metadata after that tab changes state. The submit path re-reads localStorage before creating a key, so a delayed storage event cannot alone permit a new write. A concurrent race could still commit two separately keyed template changes; each receipt remains recoverable, but optimistic multi-operator conflict handling is not claimed.
+
+Mac verification: 13 Web unit tests, eight offline assets and 27 Chromium browser regressions passed. The new two-tab regression checks the second tab's pending-key display and disabled save, then the refresh requirement after the first tab resolves the write. Target Kylin browser and real network failure remain unverified.
