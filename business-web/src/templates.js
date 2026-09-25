@@ -85,7 +85,13 @@ export function createTemplateManager(root, { onChanged }) {
     row.append(typeLabel, required);
     row.append(button("上移", () => { if (row.previousElementSibling) row.previousElementSibling.before(row); }));
     row.append(button("下移", () => { if (row.nextElementSibling) row.nextElementSibling.after(row); }));
-    row.append(button("移除", () => row.remove()));
+    row.append(button("移除", () => {
+      const nextFocus = row.nextElementSibling?.querySelector('[name="field-code"]')
+        ?? row.previousElementSibling?.querySelector('[name="field-code"]')
+        ?? row.parentElement?.nextElementSibling;
+      row.remove();
+      nextFocus?.focus({ preventScroll: true });
+    }));
     return row;
   }
 
@@ -169,7 +175,12 @@ export function createTemplateManager(root, { onChanged }) {
       fields.append(fieldRow(field));
     }
     form.append(element("h4", "", "字段配置 · 从上到下为提取顺序"), fields);
-    form.append(button("添加字段", () => { if (fields.children.length < 100) fields.append(fieldRow()); }));
+    form.append(button("添加字段", () => {
+      if (fields.children.length >= 100) return;
+      const row = fieldRow();
+      fields.append(row);
+      row.querySelector('[name="field-code"]').focus({ preventScroll: true });
+    }));
     const save = element("button", "primary-button", creating ? "创建模板" : "保存新版本");
     save.type = "submit";
     form.append(save);

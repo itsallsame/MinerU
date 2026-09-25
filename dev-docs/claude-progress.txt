@@ -1304,3 +1304,11 @@ Changes: Template-list refresh now preserves live editor values, field order/typ
 Verification: Web unit 13 passed, eight offline assets built, and all 26 offline Chromium browser regressions passed. Target browser and real documents remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-template-draft-refresh-race.md
 Next: Continue FE-046/FE-047 and phase validation. Await FE-033 structure-edit scope choice; obtain real samples and target machine access when available. Keep Goal active.
+
+=== 2026-09-25 Session 148 (template field keyboard focus) ===
+Status: In progress; FE-046/FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Keyboard deletion of the focused final template field dropped focus to the document body; the Chromium regression failed before the fix.
+Changes: Add-field actions now focus the new field code. Removing a row focuses next, previous, or Add when no rows remain. No auth, user, role, permission, model or deployment changes.
+Verification: Web unit 13 passed, eight offline assets built, and all 26 offline Chromium browser regressions passed. Full screen-reader/keyboard and target browser validation remain open.
+Evidence: dev-docs/evidence/2026-09-25-template-field-keyboard-focus.md
+Next: Continue P4 and phase validation; obtain real samples and target access when available. Keep Goal active.

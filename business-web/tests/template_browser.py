@@ -81,6 +81,15 @@ def main(base_url: str) -> None:
             assert editor.locator('[name="template-code"]').evaluate(
                 "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
             )
+            editor.get_by_role("button", name="移除").focus()
+            page.keyboard.press("Enter")
+            assert editor.get_by_role("button", name="添加字段").evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            )
+            page.keyboard.press("Enter")
+            assert editor.locator('[name="field-code"]').evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            )
             editor.locator('[name="template-code"]').fill("my_report")
             editor.locator('[name="template-name"]').fill("我的报告")
             editor.locator('[name="field-code"]').fill("title")
@@ -88,9 +97,23 @@ def main(base_url: str) -> None:
             editor.locator('[name="field-required"]').check()
             editor.get_by_role("button", name="添加字段").click()
             second = editor.locator(".template-field-row").nth(1)
+            assert second.locator('[name="field-code"]').evaluate(
+                "node => document.activeElement === node && getComputedStyle(node).outlineStyle !== 'none'"
+            )
             second.locator('[name="field-code"]').fill("written_date")
             second.locator('[name="field-label"]').fill("日期")
             second.locator('[name="field-type"]').select_option("date")
+            editor.get_by_role("button", name="添加字段").click()
+            editor.get_by_role("button", name="添加字段").click()
+            third = editor.locator(".template-field-row").nth(2)
+            third.get_by_role("button", name="移除").focus()
+            page.keyboard.press("Enter")
+            assert editor.locator(".template-field-row").nth(2).locator('[name="field-code"]').evaluate(
+                "node => document.activeElement === node"
+            )
+            editor.locator(".template-field-row").nth(2).get_by_role("button", name="移除").focus()
+            page.keyboard.press("Enter")
+            assert second.locator('[name="field-code"]').evaluate("node => document.activeElement === node")
             second.get_by_role("button", name="上移").click()
             refresh_failures["enabled"] = True
             editor.get_by_role("button", name="创建模板").click()
