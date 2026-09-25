@@ -1360,6 +1360,27 @@ def test_remote_parse_server_default_url_is_declared_once() -> None:
     assert occurrences == [doclib_dir / "config_defaults.py"]
 
 
+def test_offline_doclib_disables_remote_url_even_with_persisted_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    async def _run() -> None:
+        db = DatabaseManager(str(tmp_path / "doclib.db"))
+        await db.initialize()
+        service = ConfigService(db)
+        await service.set("parse_server.remote.url", "https://example.com/api")
+        monkeypatch.setenv("MINERU_DOCLIB_REMOTE_DISABLED", "1")
+        assert await service.get("parse_server.remote.url") == ""
+        config, sources = await service.get_all_with_sources()
+        assert config["parse_server.remote.url"] == ""
+        assert sources["parse_server.remote.url"] == "override"
+        with pytest.raises(InvalidRequestError, match="Remote parse-server is disabled"):
+            await service.set("parse_server.remote.url", "https://example.net/api")
+        monkeypatch.delenv("MINERU_DOCLIB_REMOTE_DISABLED")
+        assert await service.get("parse_server.remote.url") == "https://example.com/api"
+
+    asyncio.run(_run())
+
+
 def test_compaction_uses_configured_data_dir(tmp_path: Path) -> None:
     sha256 = "b" * 64
     tier = "standard"

@@ -19,6 +19,7 @@ from mineru.config import LogConfig, PatchedConfig, config as mineru_config
 from mineru.doclib import app as doclib_app
 from mineru.doclib.app import _assert_required_schema
 from mineru.doclib.core.db import DatabaseManager
+from mineru.doclib.services.config_svc import ConfigService
 from mineru.doclib.server import _tail_log, _write_temp_asset
 from mineru.model import download as model_download
 from mineru.parser import tier as parser_tier
@@ -82,6 +83,32 @@ def test_zero_compaction_interval_skips_history_destructive_background_task(
         assert client.get("/api/v1/server/status").status_code == 200
         assert client.app.state.doclib_state.compaction is None
     assert "compaction" not in scheduled
+
+
+def test_offline_doclib_status_hides_persisted_remote_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "data" / "doclib.db"
+
+    async def _seed() -> None:
+        db = DatabaseManager(str(db_path))
+        await db.initialize()
+        await ConfigService(db).set("parse_server.remote.url", "https://example.com/api")
+
+    asyncio.run(_seed())
+    monkeypatch.setenv("MINERU_DOCLIB_REMOTE_DISABLED", "1")
+    cfg = PatchedConfig(doclib={
+        "data_dir": str(tmp_path / "data"),
+        "sqlite": {"path": str(db_path)},
+        "log": {"dir": str(tmp_path / "logs")},
+    })
+    with TestClient(doclib_app.create_app(cfg)) as client:
+        response = client.get("/api/v1/server/status")
+        assert response.status_code == 200
+        assert response.json()["parse_server"]["remote"]["url"] is None
+        set_response = client.put(
+            "/api/v1/configs/parse_server.remote.url", json={"value": "https://example.net/api"},
+        )
+        assert set_response.status_code == 400, set_response.text
+        assert client.get("/api/v1/configs/parse_server.remote.url").json()["value"] == ""
 
 
 def test_huggingface_hub_base_dependency_enables_xet() -> None:

@@ -36,12 +36,16 @@ class ConfigService:
 
     async def get(self, key: str, default: str | None = None) -> str | None:
         self._validate_config_key(key)
+        if key == "parse_server.remote.url" and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            return ""
         if default is None:
             default = CONFIG_DEFAULTS[key]
         row = cast(ConfigRow | None, await self.db.fetchone("SELECT value FROM config WHERE key=?", (key,)))
         return row["value"] if row else default
 
     async def set(self, key: str, value: str) -> None:
+        if key == "parse_server.remote.url" and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            raise InvalidRequestError("invalid_config_value", "Remote parse-server is disabled for this deployment.", "value")
         validate_config_value(key, value)
         if CONFIG_DEFAULTS[key] == value:
             await self.unset(key)
@@ -61,6 +65,8 @@ class ConfigService:
 
     async def get_source(self, key: str) -> ConfigSource:
         self._validate_config_key(key)
+        if key == "parse_server.remote.url" and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            return CONFIG_SOURCE_OVERRIDE
         row = cast(ConfigRow | None, await self.db.fetchone("SELECT value FROM config WHERE key=?", (key,)))
         return CONFIG_SOURCE_OVERRIDE if row else CONFIG_SOURCE_DEFAULT
 
@@ -73,6 +79,9 @@ class ConfigService:
         for key in overrides:
             if key in CONFIG_DEFAULTS:
                 sources[key] = CONFIG_SOURCE_OVERRIDE
+        if os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            config["parse_server.remote.url"] = ""
+            sources["parse_server.remote.url"] = CONFIG_SOURCE_OVERRIDE
         return config, sources
 
     def _validate_config_key(self, key: str) -> None:

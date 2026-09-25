@@ -35,7 +35,8 @@ ENV MINERU_HOME=/var/lib/mineru \
     TORCH_HOME=/var/lib/mineru/torch-cache \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
-    HF_DATASETS_OFFLINE=1
+    HF_DATASETS_OFFLINE=1 \
+    MINERU_DOCLIB_REMOTE_DISABLED=1
 
 ENTRYPOINT ["/opt/mineru/entrypoint.sh"]
 CMD ["python3", "-m", "mineru.doclib.app"]

@@ -185,6 +185,7 @@ def check_runtime(
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
         "HF_DATASETS_OFFLINE": "1",
+        "MINERU_DOCLIB_REMOTE_DISABLED": "1",
         "MINERU_DOCLIB_TCP_ENABLED": "true",
         "MINERU_DOCLIB_TCP_STRICT_PORT": "true",
         "MINERU_LLM_AIDED_FEATURES_TITLE_LEVELING": "false",

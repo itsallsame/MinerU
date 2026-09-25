@@ -1,6 +1,8 @@
 # Copyright (c) Opendatalab. All rights reserved.
 """Parse-server 健康探测的失败退避节奏。"""
 
+import asyncio
+
 from mineru.doclib.background.parse_server_health import ParseServerHealthCheck
 
 
@@ -39,3 +41,9 @@ def test_backoff_never_exceeds_normal_interval() -> None:
     assert checker._next_interval_sec(1) == 5
     assert checker._next_interval_sec(2) == 8
     assert checker._next_interval_sec(0) == 8
+
+
+def test_empty_remote_url_never_starts_http_probe() -> None:
+    result = asyncio.run(_checker()._probe(""))
+    assert result.healthy is False
+    assert result.error_code == "parse_server_disabled"

@@ -133,6 +133,8 @@ def test_preflight_rejects_remote_configuration(tmp_path: Path, monkeypatch: pyt
         "MINERU_MODEL_VLM_ENGINE": "vllm",
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
+        "HF_DATASETS_OFFLINE": "1",
+        "MINERU_DOCLIB_REMOTE_DISABLED": "1",
         "MINERU_LLM_AIDED_FEATURES_TITLE_LEVELING": "false",
         "MINERU_LLM_AIDED_FEATURES_CROSS_PAGE_TABLE_CELL_MERGE": "false",
     }
@@ -142,6 +144,10 @@ def test_preflight_rejects_remote_configuration(tmp_path: Path, monkeypatch: pyt
     monkeypatch.delenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", raising=False)
 
     assert offline_package.preflight(model_dir, manifest_path) == 1
+    monkeypatch.setenv("MINERU_DOCLIB_REMOTE_DISABLED", "0")
+    with pytest.raises(ValueError, match="MINERU_DOCLIB_REMOTE_DISABLED"):
+        offline_package.preflight(model_dir, manifest_path)
+    monkeypatch.setenv("MINERU_DOCLIB_REMOTE_DISABLED", "1")
     monkeypatch.setenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", hashlib.sha256(manifest_path.read_bytes()).hexdigest())
     assert offline_package.preflight(model_dir, manifest_path) == 1
     monkeypatch.setenv("MINERU_EXPECTED_MODEL_MANIFEST_SHA256", "a" * 64)
@@ -168,6 +174,7 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "models download" not in dockerfile
     assert "COPY mineru/" in dockerfile
     assert "COPY models/" not in dockerfile
+    assert "MINERU_DOCLIB_REMOTE_DISABLED=1" in dockerfile
 
 
 def test_dockerignore_excludes_model_metadata_from_allowed_source_tree() -> None:
@@ -262,6 +269,7 @@ def test_business_compose_persistent_paths_match_runtime_preflight_contract() ->
         "MINERU_MODEL_MANIFEST": "/etc/mineru/model-manifest.json",
     }
     assert services["doclib-worker"]["environment"]["MINERU_DOCLIB_COMPACTION_INTERVAL_SEC"] == "0"
+    assert services["doclib-worker"]["environment"]["MINERU_DOCLIB_REMOTE_DISABLED"] == "1"
     assert {key: services["business-api"]["environment"][key] for key in (
         "MINERU_BUSINESS_DB_PATH", "MINERU_BUSINESS_UPLOAD_ROOT",
         "MINERU_BUSINESS_WEB_ROOT", "MINERU_BUSINESS_REQUIRE_WEB",

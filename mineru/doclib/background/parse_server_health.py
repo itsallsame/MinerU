@@ -502,6 +502,8 @@ class ParseServerHealthCheck:
             logger.error(f"Failed to restart managed parse-server: {exc}")
 
     async def _probe(self, base_url: str, *, api_key: str | None = None) -> ProbeResult:
+        if not base_url:
+            return ProbeResult(error_code="parse_server_disabled", error_msg="Remote parse-server is disabled.")
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         try:
             async with httpx.AsyncClient(

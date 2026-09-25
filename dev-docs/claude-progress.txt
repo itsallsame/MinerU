@@ -1272,3 +1272,11 @@ Changes: Keep cancel/retry action buttons focusable while busy with aria-disable
 Verification: Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed on the fresh build. Ruff/JSON/diff checks pending final handoff. Old-dist runs immediately after source edits were invalid and are not treated as fix evidence.
 Evidence: dev-docs/evidence/2026-09-25-task-action-keyboard-focus.md
 Next: Continue P4 async/accessibility checks and bound real-sample/target validation when inputs become available. Keep Goal active.
+
+=== 2026-09-25 Session 144 (disable Doclib remote parsing in offline deployment) ===
+Status: In progress; P1 target acceptance, P4 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Generic Doclib defaults retain the official remote parse URL. The production Compose did not disable it, so the background health check would probe remote and the runtime preflight would reject the URL. User still has neither annotated samples nor target-machine access.
+Changes: Added production-only MINERU_DOCLIB_REMOTE_DISABLED to worker image/Compose/startup/runtime checks. Effective Doclib remote URL is empty despite a persisted prior override; offline mode rejects new remote URL writes and an empty URL never starts HTTP probing. HF_DATASETS_OFFLINE is now required at worker startup. No auth, user, role, permission or model-weight changes.
+Verification: Final focused Mac pytest without coverage 60 passed/1 skipped, including Doclib startup/status/config API. Full business suite first hit local sandbox socket/port restrictions; permitted rerun passed 379/2 skipped/2 dependency warnings. A concurrent pytest run corrupted only the shared coverage report, so coverage is not claimed. Core source/business-test Ruff, diff and JSON checks passed; existing full-file Ruff warnings in two large Doclib unit-test files remain outside the new lines. Target physical isolation, model loading and real documents remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-doclib-remote-offline-switch.md
+Next: Continue phase work and obtain target inputs when available. Keep Goal active.

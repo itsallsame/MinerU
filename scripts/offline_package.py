@@ -136,6 +136,8 @@ def preflight(root: Path, manifest_path: Path) -> int:
         "MINERU_MODEL_VLM_ENGINE": "vllm",
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
+        "HF_DATASETS_OFFLINE": "1",
+        "MINERU_DOCLIB_REMOTE_DISABLED": "1",
         "MINERU_LLM_AIDED_FEATURES_TITLE_LEVELING": "false",
         "MINERU_LLM_AIDED_FEATURES_CROSS_PAGE_TABLE_CELL_MERGE": "false",
     }
