@@ -112,10 +112,10 @@ class BusinessClient:
             raise BusinessAPIError(str(detail or "Business API request failed"), status=response.status)
         return body
 
-    def request(self, method: str, path: str) -> Any:
+    def request(self, method: str, path: str, *, headers: dict[str, str] | None = None) -> Any:
         connection = self._connect()
         try:
-            connection.request(method, f"/api/business{path}", headers={"Accept": "application/json"})
+            connection.request(method, f"/api/business{path}", headers={"Accept": "application/json", **(headers or {})})
             return self._read_response(connection)
         except OSError as exc:
             raise BusinessAPIError(f"Business API unavailable: {exc}") from exc
@@ -219,6 +219,9 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("upload-request").add_argument(
         "request_key", help="Check one prior upload key without resending a file",
     )
+    commands.add_parser("extraction-request").add_argument(
+        "request_key", help="Check one prior extraction key without starting another run",
+    )
     search = commands.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
@@ -248,6 +251,9 @@ def parser() -> argparse.ArgumentParser:
         commands.add_parser(command).add_argument(argument)
     commands.choices["extract"].add_argument(
         "--confirm-write", action="store_true", help="Acknowledge an explicitly requested extraction run",
+    )
+    commands.choices["extract"].add_argument(
+        "--request-key", help="Reuse this key when retrying an uncertain extraction",
     )
     cancel = commands.add_parser("cancel")
     cancel.add_argument("task_id")
@@ -286,6 +292,21 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
             or not isinstance(result.get("task"), dict)
         ):
             raise BusinessAPIError("Business API returned an incomplete upload request", status=200)
+        return {**result, "request_key": args.request_key, "state": "accepted"}
+    if command == "extraction-request":
+        if REQUEST_KEY_RE.fullmatch(args.request_key) is None:
+            raise BusinessAPIError("Invalid extraction idempotency key")
+        try:
+            result = client.request("GET", f"/extraction-requests/{quote(args.request_key, safe='')}")
+        except BusinessAPIError as exc:
+            if exc.status == 404:
+                return {"request_key": args.request_key, "state": "not_recorded_at_lookup"}
+            raise
+        if (
+            not isinstance(result, dict) or not isinstance(result.get("id"), str)
+            or not isinstance(result.get("revision_id"), str)
+        ):
+            raise BusinessAPIError("Business API returned an incomplete extraction request", status=200)
         return {**result, "request_key": args.request_key, "state": "accepted"}
     if command == "overview":
         return client.overview(args.document_id)
@@ -347,32 +368,40 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "extract":
         if not args.confirm_write:
             raise BusinessAPIError("Extraction requires --confirm-write after explicit user approval")
+        request_key = uuid.uuid4().hex if args.request_key is None else args.request_key
+        if REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessAPIError("Invalid extraction idempotency key")
         path = f"/revisions/{quote(args.revision_id, safe='')}/extractions"
         try:
-            result = client.request("POST", path)
+            result = client.request("POST", path, headers={"Idempotency-Key": request_key})
             if (
                 not isinstance(result, dict) or not isinstance(result.get("id"), str)
                 or result.get("revision_id") != args.revision_id or not isinstance(result.get("status"), str)
             ):
                 raise BusinessAPIError("Extraction response is incomplete; outcome unknown", status=200)
-            return result
+            return {**result, "request_key": request_key}
         except BusinessAPIError as exc:
             if not _write_outcome_unknown(exc):
+                exc.request_key = request_key
                 raise
             try:
-                runs = client.request("GET", path)
+                run = client.request("GET", f"/extraction-requests/{quote(request_key, safe='')}")
             except BusinessAPIError as lookup_error:
+                if lookup_error.status == 404:
+                    return {"state": "not_recorded_at_lookup", "request_key": request_key}
                 raise BusinessAPIError(
-                    "Extraction outcome unknown; inspect this revision's extraction runs before another write",
-                    status=exc.status,
+                    "Extraction outcome unknown; check this request key before another write",
+                    status=exc.status, request_key=request_key,
                 ) from lookup_error
-            if not isinstance(runs, list) or any(
+            if (
                 not isinstance(run, dict) or not isinstance(run.get("id"), str)
                 or run.get("revision_id") != args.revision_id or not isinstance(run.get("status"), str)
-                for run in runs
             ):
-                raise BusinessAPIError("Extraction outcome unknown; run lookup returned an invalid revision") from exc
-            return {"state": "extraction_outcome_unconfirmed", "runs": runs}
+                raise BusinessAPIError(
+                    "Extraction outcome unknown; request lookup returned an invalid run",
+                    request_key=request_key,
+                ) from exc
+            return {**run, "request_key": request_key, "state": "accepted_after_lookup"}
     if command == "extraction":
         return {"state": "machine_unconfirmed", **client.request("GET", f"/extractions/{quote(args.run_id, safe='')}")}
     if command == "evidence":

@@ -3481,7 +3481,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Mac 后端存储/API 契约与备份 schema 14 校验已实现；Web/Skill 尚未传入该键，麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md。"
+      "notes": "Mac 后端存储/API 契约与备份 schema 14 校验已实现；Web 已在 POST 前把键持久化于同源浏览器本地存储，未知结果只按键核对，明确确认后才同键重试；自有 Skill 已传键、输出键并支持只读按键核对与显式同键重试。合成 Mac 回归通过；麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md。"
     },
     {
       "id": "FE-001",
@@ -4515,7 +4515,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。提取完成后证据列表失败有明确未知状态和原地重试；多种写入 POST 成功而后续 GET 失败时保留成功确认并只读重试。上传断线、服务端 5xx 或成功响应损坏会标为结果未确认；服务端同事务请求键保护同一次上传。Web 在当前标签页保存待核对键，刷新后先按键查询，404 不自动重传，重选原文件后用原键重试；Skill 可指定原键。任务重试、取消及手动再提取 POST 的断线/5xx/损坏响应不再宣称失败：只读核对同一任务或修订运行；读回不可用时提供只读核对按钮，不自动重发 POST。取消未知状态在本标签页列表刷新后仍保留；手动再提取的未知状态在文档重选后仍提示重复风险，需显式确认才再次写入。完整异步恢复、跨会话恢复及目标环境验证未完成，保持未通过。证据：dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md、dev-docs/evidence/2026-09-24-task-retry-unknown-outcome.md、2026-09-24-upload-request-idempotency.md 及此前 FE-047 证据记录"
+      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。提取完成后证据列表失败有明确未知状态和原地重试；多种写入 POST 成功而后续 GET 失败时保留成功确认并只读重试。上传断线、服务端 5xx 或成功响应损坏会标为结果未确认；服务端同事务请求键保护同一次上传。Web 在当前标签页保存待核对上传键，刷新后先按键查询，404 不自动重传，重选原文件后用原键重试。任务重试和取消的未知结果只读核对同一任务。手动再提取改为 POST 前在同源浏览器本地存储保存请求键，未知结果只按键 GET；页面重载后仍可核对，404 不证明拒绝，用户明确确认后才用同键重试。其余异步恢复、真实断网、目标环境验证未完成，保持未通过。证据：dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md 及此前 FE-047 证据记录。"
     },
     {
       "id": "FE-048",
@@ -4999,7 +4999,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-23",
-      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry/cancel 与手动 extract 的断线/408/5xx/异常成功响应也标记结果未确认，只读核对同一任务或修订，不自动再 POST；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md"
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry/cancel 未知结果只读核对同一任务。手动 extract 已传入请求键，未知结果只读按键查询，返回键支持跨调用明确同键重试；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md。"
     },
     {
       "id": "SKL-020",

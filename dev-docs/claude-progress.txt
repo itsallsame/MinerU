@@ -1240,3 +1240,11 @@ Changes: Added optional Idempotency-Key on the business extraction POST, an atom
 Verification: New regressions failed before implementation and pass after it, including concurrent same-key requests and terminal replay. Full Mac business suite 371 passed/2 skipped/2 dependency warnings; after the final backup negative test, backup suite 12 passed. Ruff, JSON and diff checks passed. No real network-fault, four-class sample or isolated Kylin/NVIDIA acceptance.
 Evidence: dev-docs/evidence/2026-09-25-extraction-request-idempotency.md
 Next: Bind and persist extraction request keys in Web and self-owned Skill, test cross-session unknown-write recovery, then obtain samples/target machine when available. Keep Goal active.
+
+=== 2026-09-25 Session 140 (Web and Skill keyed manual extraction recovery) ===
+Status: In progress; remaining P4/FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Backend durable extraction keys existed but neither client used them, so lost manual-extraction responses still could not be attributed to a specific request.
+Changes: Web writes a random key/revision pair to same-origin localStorage before POST, looks up only that key after unknown outcomes, preserves it across reload, and requires explicit confirmation to retry with the same key. Skill now sends and outputs a key, supports read-only extraction-request lookup and explicit same-key retry; updated its usage instructions and architecture notes. No model, auth, user, role or permission changes.
+Verification: Mac Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed; Skill contract 17 passed. Initial restricted full business run failed at Doclib local socket/port binding; permitted rerun passed 373/2 skipped/2 dependency warnings. Real network outage, annotated four-class documents and isolated Kylin/NVIDIA target remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-extraction-client-key-binding.md
+Next: Continue remaining Web async recovery and target validation when machine/samples become available. Keep Goal active.

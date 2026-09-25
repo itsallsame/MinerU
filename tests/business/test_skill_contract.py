@@ -185,7 +185,10 @@ def test_skill_write_commands_require_explicit_acknowledgement() -> None:
     client.request.return_value = {"id": "run-1", "revision_id": "revision-1", "status": "queued"}
     extracted = script.run(script.parser().parse_args(["extract", "revision-1", "--confirm-write"]), client)
     assert extracted["id"] == "run-1"
-    client.request.assert_called_once_with("POST", "/revisions/revision-1/extractions")
+    assert len(extracted["request_key"]) == 32
+    client.request.assert_called_once_with(
+        "POST", "/revisions/revision-1/extractions", headers={"Idempotency-Key": extracted["request_key"]},
+    )
 
 
 def test_skill_upload_request_lookup_is_read_only_and_404_is_not_rejection() -> None:
@@ -414,47 +417,74 @@ def test_skill_cancel_unknown_post_only_reads_same_task() -> None:
     ]
 
 
-def test_skill_extract_unknown_post_only_lists_revision_runs() -> None:
+def test_skill_extract_unknown_post_uses_only_keyed_readback() -> None:
     script = _script()
+    key = "manual-extraction-request-0011"
     connection = _Connection({
         ("POST", "/api/business/revisions/rev-1/extractions"): _Response({"detail": "unavailable"}, status=503),
-        ("GET", "/api/business/revisions/rev-1/extractions"): _Response([
+        ("GET", f"/api/business/extraction-requests/{key}"): _Response(
             {"id": "run-1", "revision_id": "rev-1", "status": "queued"},
-        ]),
+        ),
     })
     client = script.BusinessClient("http://127.0.0.1:8080")
     client._connect = lambda: connection
-    args = script.parser().parse_args(["extract", "rev-1", "--confirm-write"])
+    args = script.parser().parse_args(["extract", "rev-1", "--request-key", key, "--confirm-write"])
 
     result = script.run(args, client)
-    assert result == {"state": "extraction_outcome_unconfirmed", "runs": [
-        {"id": "run-1", "revision_id": "rev-1", "status": "queued"},
-    ]}
+    assert result == {"state": "accepted_after_lookup", "request_key": key,
+                      "id": "run-1", "revision_id": "rev-1", "status": "queued"}
     assert connection.calls == [
         ("POST", "/api/business/revisions/rev-1/extractions"),
-        ("GET", "/api/business/revisions/rev-1/extractions"),
+        ("GET", f"/api/business/extraction-requests/{key}"),
     ]
+    assert ("Idempotency-Key", key) in connection.headers
     connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response({"unexpected": True})
-    assert script.run(args, client)["state"] == "extraction_outcome_unconfirmed"
+    assert script.run(args, client)["state"] == "accepted_after_lookup"
     connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response(
         {"detail": "Revision not ready"}, status=409,
     )
-    get_count = connection.calls.count(("GET", "/api/business/revisions/rev-1/extractions"))
+    get_count = connection.calls.count(("GET", f"/api/business/extraction-requests/{key}"))
     with pytest.raises(script.BusinessAPIError, match="Revision not ready"):
         script.run(args, client)
-    assert connection.calls.count(("GET", "/api/business/revisions/rev-1/extractions")) == get_count
+    assert connection.calls.count(("GET", f"/api/business/extraction-requests/{key}")) == get_count
     connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response(
         {"detail": "unavailable"}, status=503,
     )
-    connection.responses[("GET", "/api/business/revisions/rev-1/extractions")] = _Response(
+    connection.responses[("GET", f"/api/business/extraction-requests/{key}")] = _Response(
         {"detail": "unavailable"}, status=503,
     )
-    with pytest.raises(script.BusinessAPIError, match="outcome unknown"):
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown") as unknown:
         script.run(args, client)
+    assert unknown.value.request_key == key
     assert connection.calls[-2:] == [
         ("POST", "/api/business/revisions/rev-1/extractions"),
-        ("GET", "/api/business/revisions/rev-1/extractions"),
+        ("GET", f"/api/business/extraction-requests/{key}"),
     ]
+    connection.responses[("GET", f"/api/business/extraction-requests/{key}")] = _Response(
+        {"detail": "not recorded"}, status=404,
+    )
+    assert script.run(args, client) == {"state": "not_recorded_at_lookup", "request_key": key}
+    assert connection.calls[-2:] == [
+        ("POST", "/api/business/revisions/rev-1/extractions"),
+        ("GET", f"/api/business/extraction-requests/{key}"),
+    ]
+
+
+def test_skill_extraction_request_lookup_and_404_are_read_only() -> None:
+    script = _script()
+    key = "manual-extraction-request-0012"
+    client = Mock()
+    args = script.parser().parse_args(["extraction-request", key])
+    client.request.return_value = {"id": "run-1", "revision_id": "rev-1", "status": "done"}
+    assert script.run(args, client) == {"state": "accepted", "request_key": key,
+                                        "id": "run-1", "revision_id": "rev-1", "status": "done"}
+    client.request.assert_called_once_with("GET", f"/extraction-requests/{key}")
+    client.request.side_effect = script.BusinessAPIError("missing", status=404)
+    assert script.run(args, client) == {"state": "not_recorded_at_lookup", "request_key": key}
+    client.request.reset_mock(side_effect=True)
+    with pytest.raises(script.BusinessAPIError, match="Invalid extraction idempotency key"):
+        script.run(script.parser().parse_args(["extraction-request", "short"]), client)
+    client.request.assert_not_called()
 
 
 def test_skill_retry_requires_explicit_write_ack_and_uses_only_business_api() -> None:

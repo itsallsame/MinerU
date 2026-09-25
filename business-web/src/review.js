@@ -7,6 +7,49 @@ const issueLabels = {
   coverage_incomplete: "原文解析覆盖不完整",
 };
 const runLabels = { queued: "等待提取", running: "正在提取", done: "待人工复核", failed: "提取失败" };
+const pendingExtractionsKey = "mineru.business.pendingExtractions.v1";
+
+function pendingExtractions() {
+  try {
+    const records = JSON.parse(localStorage.getItem(pendingExtractionsKey) || "[]");
+    if (!Array.isArray(records)) return [];
+    return records.filter((entry) => entry && typeof entry.revisionId === "string"
+      && /^[A-Za-z0-9_-]{16,128}$/.test(entry.requestKey));
+  } catch {
+    return [];
+  }
+}
+
+function pendingExtraction(revisionId) {
+  return pendingExtractions().find((entry) => entry.revisionId === revisionId) || null;
+}
+
+function writePendingExtractions(records) {
+  try {
+    localStorage.setItem(pendingExtractionsKey, JSON.stringify(records));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rememberExtraction(revisionId, requestKey) {
+  const records = pendingExtractions().filter((entry) => entry.revisionId !== revisionId);
+  if (records.length >= 100) return false;
+  return writePendingExtractions([...records, { revisionId, requestKey }]);
+}
+
+function forgetExtraction(revisionId, requestKey) {
+  writePendingExtractions(pendingExtractions().filter(
+    (entry) => entry.revisionId !== revisionId || entry.requestKey !== requestKey,
+  ));
+}
+
+function newExtractionRequestKey() {
+  if (!globalThis.crypto?.getRandomValues) throw new Error("浏览器无法生成安全提取请求键，请更换浏览器后重试。");
+  return [...crypto.getRandomValues(new Uint8Array(16))]
+    .map((value) => value.toString(16).padStart(2, "0")).join("");
+}
 
 function isUnknownWriteError(error) {
   return error?.status === 0 || error?.status === 408 || error?.status >= 500 || error instanceof SyntaxError;
@@ -59,7 +102,6 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     revisionLoading: false, runLoading: false,
     revisionLoadFailed: false, runLoadFailed: false, evidenceLoadFailed: false,
     evidenceLoading: false, targetRunId: null, contextVersion: 0,
-    uncertainExtractionRevisions: new Set(), extractionProbeFailed: false,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -88,7 +130,6 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.evidenceLoadFailed = false;
     state.evidenceLoading = false;
     state.targetRunId = null;
-    state.extractionProbeFailed = false;
     state.busy = false;
     state.error = "";
     root.replaceChildren();
@@ -181,7 +222,6 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.contextVersion += 1;
     state.busy = false;
     state.revisionId = revisionId;
-    state.extractionProbeFailed = false;
     state.targetRunId = targetRunId;
     state.runId = null;
     state.extraction = null;
@@ -260,7 +300,6 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.evidenceLoadFailed = false;
     state.evidenceLoading = false;
     state.targetRunId = null;
-    state.extractionProbeFailed = false;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -282,51 +321,62 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
   }
 
-  async function startExtraction() {
-    if (state.extractionProbeFailed) {
-      await perform(async (isCurrent) => {
-        const revisionId = state.revisionId;
-        try {
-          const runs = await businessApi.extractions(revisionId);
-          if (!isCurrent()) return;
-          state.runs = runs;
-          state.extractionProbeFailed = false;
-          state.error = "上次字段提取提交结果未确认；已读取当前运行列表，但无法归因于那次请求。再次生成可能创建重复运行。";
-        } catch (error) {
-          if (isCurrent()) state.error = `字段提取提交结果未确认，运行列表仍不可读：${error.message}。请先只读核对，不要重复提交。`;
-        }
-      });
-      return;
+  async function probeExtraction(revisionId, requestKey, isCurrent) {
+    try {
+      const run = await businessApi.extractionRequest(requestKey);
+      if (!isCurrent()) return false;
+      if (typeof run?.id !== "string" || run.revision_id !== revisionId || typeof run.status !== "string") {
+        state.error = "原请求键核对返回了不匹配的提取运行；请停止重试并检查服务。";
+        return false;
+      }
+      forgetExtraction(revisionId, requestKey);
+      state.runs = [run, ...state.runs.filter((item) => item.id !== run.id)];
+      await loadRun(run.id);
+      if (isCurrent() && !state.runLoadFailed) state.error = "已按原请求键确认提取运行；没有再次提交。";
+      return true;
+    } catch (error) {
+      if (!isCurrent()) return false;
+      state.error = error.status === 404
+        ? "原请求键暂未查到；这不证明上次提取未受理。可稍后核对，或明确用同一请求键重试。"
+        : `原请求键核对暂不可用：${error.message}。请勿创建新请求。`;
+      return false;
     }
-    if (state.uncertainExtractionRevisions.has(state.revisionId) && !window.confirm(
-      "上次字段提取提交结果未确认，再次生成可能创建重复运行。确认仍要发起新的提取？",
-    )) return;
+  }
+
+  async function checkExtraction() {
+    const revisionId = state.revisionId;
+    const pending = pendingExtraction(revisionId);
+    if (!pending) return;
+    await perform((isCurrent) => probeExtraction(revisionId, pending.requestKey, isCurrent));
+  }
+
+  async function startExtraction({ retryPending = false } = {}) {
+    const revisionId = state.revisionId;
+    const pending = pendingExtraction(revisionId);
+    if (pending && !retryPending) return checkExtraction();
+    if (retryPending && (!pending || !window.confirm("上次提取结果仍未确认。确认用同一请求键重试，不创建新的提取请求？"))) return;
     await perform(async (isCurrent) => {
-      const revisionId = state.revisionId;
+      const requestKey = pending?.requestKey || newExtractionRequestKey();
+      if (!pending && !rememberExtraction(revisionId, requestKey)) {
+        throw new Error("浏览器无法保存提取请求键；为避免响应丢失后重复提交，本次没有发起提取。");
+      }
       let created;
       try {
-        created = await businessApi.enqueueExtraction(revisionId);
+        created = await businessApi.enqueueExtraction(revisionId, requestKey);
         if (typeof created?.id !== "string" || created.revision_id !== revisionId || typeof created.status !== "string") {
           throw new SyntaxError("字段提取响应缺少运行身份或状态");
         }
       } catch (error) {
         if (!isCurrent()) return;
-        if (!isUnknownWriteError(error)) throw error;
-        state.uncertainExtractionRevisions.add(revisionId);
-        try {
-          state.runs = await businessApi.extractions(revisionId);
-          if (!isCurrent()) return;
-          state.extractionProbeFailed = false;
-          state.error = "上次字段提取提交结果未确认；已读取当前运行列表，但无法归因于那次请求。再次生成可能创建重复运行。";
-        } catch (probeError) {
-          if (!isCurrent()) return;
-          state.extractionProbeFailed = true;
-          state.error = `字段提取提交结果未确认，运行列表暂不可读：${probeError.message}。请先只读核对，不要重复提交。`;
+        if (!isUnknownWriteError(error)) {
+          forgetExtraction(revisionId, requestKey);
+          throw error;
         }
+        await probeExtraction(revisionId, requestKey, isCurrent);
         return;
       }
       if (!isCurrent()) return;
-      state.uncertainExtractionRevisions.delete(revisionId);
+      forgetExtraction(revisionId, requestKey);
       state.runId = created.id;
       state.targetRunId = created.id;
       state.runs = [created, ...state.runs.filter((run) => run.id !== created.id)];
@@ -1002,14 +1052,18 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       runSelect.addEventListener("change", () => loadRun(runSelect.value));
       tools.append(runSelect);
     }
-    tools.append(button(
-      state.extractionProbeFailed ? "核对提取运行"
-        : state.uncertainExtractionRevisions.has(state.revisionId) ? "再次生成字段候选（上次结果未确认）"
-          : state.runs.length ? "重新生成字段候选" : "生成字段候选",
-      startExtraction,
-      state.busy || state.revisionLoading || state.runLoading || state.runLoadFailed
-        || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
-    ));
+    const pending = pendingExtraction(state.revisionId);
+    const extractionDisabled = state.busy || state.revisionLoading || state.runLoading || !state.document.template_code;
+    if (pending) {
+      tools.append(button("按原请求键核对提取", checkExtraction, extractionDisabled));
+      tools.append(button("用原键重试提取", () => startExtraction({ retryPending: true }), extractionDisabled));
+    } else {
+      tools.append(button(
+        state.runs.length ? "重新生成字段候选" : "生成字段候选",
+        () => startExtraction(),
+        extractionDisabled || state.runLoadFailed || ["queued", "running"].includes(state.extraction?.run.status),
+      ));
+    }
     root.append(tools);
     if (state.evidenceLoadFailed || state.evidenceLoading) {
       root.append(element("p", "review-hint", "冻结证据列表尚未成功读取；证据及字段关联状态未知。"));

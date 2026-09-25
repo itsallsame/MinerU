@@ -83,7 +83,10 @@ export const businessApi = {
   captureEvidence: (id, locator) => postJson(`/revisions/${encodeURIComponent(id)}/evidence`, { locator }),
   inspectEvidence: (id) => request(`/evidence/${encodeURIComponent(id)}`),
   extractions: (id) => request(`/revisions/${encodeURIComponent(id)}/extractions`),
-  enqueueExtraction: (id) => request(`/revisions/${encodeURIComponent(id)}/extractions`, { method: "POST" }),
+  enqueueExtraction: (id, requestKey) => request(`/revisions/${encodeURIComponent(id)}/extractions`, {
+    method: "POST", headers: { "Idempotency-Key": requestKey },
+  }),
+  extractionRequest: (key) => request(`/extraction-requests/${encodeURIComponent(key)}`),
   extraction: (id) => request(`/extractions/${encodeURIComponent(id)}`),
   templateVersion: (code, version) => request(`/templates/${encodeURIComponent(code)}?version=${encodeURIComponent(version)}`),
   decisions: (id) => request(`/extractions/${encodeURIComponent(id)}/decisions`),

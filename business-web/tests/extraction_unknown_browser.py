@@ -1,4 +1,4 @@
-"""A lost manual-extraction response must keep recovery read-only."""
+"""A lost manual-extraction response remains bound to its key across page reload."""
 
 from __future__ import annotations
 
@@ -22,7 +22,9 @@ def main(base_url: str) -> None:
     run = {"id": "run-1", "revision_id": revision["id"], "template_code": "official_document",
            "template_version": 1, "status": "done", "error_code": None,
            "created_at_ms": now, "updated_at_ms": now}
-    calls = {"extract": 0, "runs": 0}
+    replay_run = {**run, "id": "run-2", "created_at_ms": now + 1, "updated_at_ms": now + 1}
+    calls = {"extract": 0, "runs": 0, "request": 0}
+    request_keys: list[str] = []
     reads_available = {"value": True}
 
     def api(route: object) -> None:
@@ -43,20 +45,39 @@ def main(base_url: str) -> None:
             return
         elif path == "/revisions/rev-1/extractions" and request.method == "POST":
             calls["extract"] += 1
-            reads_available["value"] = False
+            request_keys.append(request.headers["idempotency-key"])
+            if calls["extract"] == 3:
+                route.fulfill(status=202, content_type="application/json", body=json.dumps(replay_run))
+                return
+            if calls["extract"] == 1:
+                reads_available["value"] = False
             route.fulfill(status=503, content_type="application/json", body='{"detail":"response_lost"}')
             return
+        elif path.startswith("/extraction-requests/"):
+            calls["request"] += 1
+            if path == f"/extraction-requests/{request_keys[0]}":
+                if not reads_available["value"]:
+                    route.fulfill(status=503, content_type="application/json", body='{"detail":"lookup_unavailable"}')
+                    return
+                payload = run
+            else:
+                assert path == f"/extraction-requests/{request_keys[1]}"
+                route.fulfill(status=404, content_type="application/json", body='{"detail":"not_recorded"}')
+                return
         elif path == "/revisions/rev-1/extractions":
             calls["runs"] += 1
             if not reads_available["value"]:
                 route.fulfill(status=503, content_type="application/json", body='{"detail":"runs_unavailable"}')
                 return
-            payload = [run]
+            payload = [replay_run, run] if calls["extract"] >= 3 else [run]
         elif path == "/revisions/rev-1/evidence":
             payload = []
         elif path == "/extractions/run-1":
             payload = {"run": run, "candidates": [], "issues": []}
-        elif path in ("/extractions/run-1/decisions", "/extractions/run-1/results", "/extractions/run-1/audit"):
+        elif path == "/extractions/run-2":
+            payload = {"run": replay_run, "candidates": [], "issues": []}
+        elif path in ("/extractions/run-1/decisions", "/extractions/run-1/results", "/extractions/run-1/audit",
+                      "/extractions/run-2/decisions", "/extractions/run-2/results", "/extractions/run-2/audit"):
             payload = []
         elif path == "/templates/official_document":
             payload = {"code": "official_document", "name": "公文", "version": 1,
@@ -75,19 +96,37 @@ def main(base_url: str) -> None:
             page.goto(base_url, wait_until="networkidle")
             page.get_by_role("button", name="查看 extract.pdf，已解析").click()
             page.get_by_role("button", name="重新生成字段候选").click()
-            page.get_by_text("字段提取提交结果未确认", exact=False).wait_for()
-            check = page.get_by_role("button", name="核对提取运行")
+            page.get_by_text("原请求键核对暂不可用", exact=False).wait_for()
+            check = page.get_by_role("button", name="按原请求键核对提取")
             assert calls["extract"] == 1
+            assert len(request_keys[0]) == 32
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingExtractions.v1'))")
+            assert saved == [{"revisionId": "rev-1", "requestKey": request_keys[0]}]
+            page.reload(wait_until="networkidle")
+            page.get_by_role("button", name="查看 extract.pdf，已解析").click()
+            check = page.get_by_role("button", name="按原请求键核对提取")
+            assert calls["extract"] == 1, "reload repeated the extraction POST"
             reads_available["value"] = True
             check.click()
-            page.get_by_text("上次字段提取提交结果未确认", exact=False).wait_for()
+            page.get_by_text("已按原请求键确认提取运行", exact=False).wait_for()
             assert calls["extract"] == 1, "read-only extraction check repeated POST"
-            assert calls["runs"] >= 3
+            assert calls["request"] == 2
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingExtractions.v1'))") == []
+            page.get_by_role("button", name="重新生成字段候选").wait_for()
+            page.get_by_role("button", name="重新生成字段候选").click()
+            page.get_by_text("原请求键暂未查到", exact=False).wait_for()
+            assert request_keys[1] != request_keys[0]
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingExtractions.v1'))")
+            assert saved == [{"revisionId": "rev-1", "requestKey": request_keys[1]}]
+            page.reload(wait_until="networkidle")
             page.get_by_role("button", name="查看 extract.pdf，已解析").click()
-            page.get_by_role("button", name="再次生成字段候选（上次结果未确认）").wait_for()
-            assert calls["extract"] == 1, "reopening the document repeated extraction POST"
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="用原键重试提取").click()
+            page.get_by_role("button", name="重新生成字段候选").wait_for()
+            assert calls["extract"] == 3 and request_keys[2] == request_keys[1]
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingExtractions.v1'))") == []
             assert not errors, errors
-            print("Playwright manual-extraction unknown-result recovery passed")
+            print("Playwright keyed manual-extraction recovery across reload passed")
         finally:
             browser.close()
 
