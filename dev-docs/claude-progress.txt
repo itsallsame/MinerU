@@ -1384,3 +1384,11 @@ Changes: No runtime code changes. On the real clean fork, generated a code-only 
 Verification: Bundle create, `verify --target-repo`, `git fetch` and `merge --ff-only` all succeeded; target HEAD matched new master and worktree was clean. Focused offline tests 24 passed/1 skipped; feature-list JSON and diff checks passed. No model bytes or wheelhouse in the source package. This does not validate Docker layers, target Python ABI, model mounting/loading or Kylin GPU.
 Evidence: dev-docs/evidence/2026-09-25-current-code-only-offline-transfer.md
 Next: P1 target-specific base image/wheelhouse/model and actual Compose build/runtime chain require the isolated host; continue Mac-safe phase work without claiming target completion. Keep Goal active.
+
+=== 2026-09-25 Session 158 (separate implementation evidence from target gates) ===
+Status: In progress; real samples and isolated Kylin x86_64+NVIDIA access remain unavailable.
+Discovery: The feature-list `passes` flag intentionally includes final gates, leaving P2/P3 mostly false despite real Mac Doclib/API code and tests; using raw false counts as the next-development queue would repeat small or already implemented work. FE-033 remains an undecided product scope, whereas FE-046/047 and P1/P6 retain real-environment validation gates.
+Changes: Added a phase-level evidence/gap table linked from execution.md. It separates delivered code, Mac evidence, target/samples still missing and the next action for P0–P6. Kept all final feature flags unchanged. Asked the user asynchronously to select FE-033 scope; no structure edit is inferred or implemented while waiting.
+Verification: Re-ran actual Mac Doclib-contract and review-result tests together: 48 passed, 2 dependency warnings. This does not verify target GPU, real four-class accuracy or offline Compose startup. Markdown/diff links checked; no runtime code changed.
+Evidence: dev-docs/2026-09-25-stage-gates.md
+Next: Act on the FE-033 choice if provided; otherwise pursue remaining phase-level work only where current inputs permit meaningful verification. Do not declare P1/P6 complete without their target gates. Keep Goal active.
