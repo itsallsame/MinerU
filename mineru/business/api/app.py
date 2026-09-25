@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+import re
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
@@ -282,6 +283,12 @@ class TemplateWriteRequest(BaseModel):
 
 class TemplateCreateRequest(TemplateWriteRequest):
     code: str
+
+
+def _template_expected_version(if_match: str) -> int:
+    if len(if_match) > 21 or re.fullmatch(r'"[1-9][0-9]*"', if_match) is None:
+        raise HTTPException(status_code=422, detail='If-Match must be a quoted positive template version, e.g. "1"')
+    return int(if_match[1:-1])
 
 
 class TemplateView(BaseModel):
@@ -924,11 +931,13 @@ def create_app(
     @app.put("/api/business/templates/{code}", response_model=TemplateView)
     def update_template(
         code: str, request: TemplateWriteRequest,
+        if_match: Annotated[str, Header(alias="If-Match")],
         request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> TemplateView:
         try:
             template = store.update_template(
                 code, name=request.name, fields=request.domain_fields(), request_key=request_key,
+                expected_version=_template_expected_version(if_match),
             )
         except TemplateRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -941,10 +950,14 @@ def create_app(
 
     @app.post("/api/business/templates/{code}/disable", response_model=TemplateView)
     def disable_template(
-        code: str, request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+        code: str,
+        if_match: Annotated[str, Header(alias="If-Match")],
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> TemplateView:
         try:
-            template = store.disable_template(code, request_key=request_key)
+            template = store.disable_template(
+                code, request_key=request_key, expected_version=_template_expected_version(if_match),
+            )
         except TemplateRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except BusinessStoreError as exc:

@@ -1328,3 +1328,11 @@ Changes: Store one pending record per request key, enumerate outstanding records
 Verification: Web unit 13 passed, eight offline assets built and 27 Chromium browser regressions passed, including two-tab pending and refresh guards. Real network failure and Kylin browser remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-template-multitab-recovery.md
 Next: Continue FE-047/P4 and target validation when inputs are available. Keep Goal active.
+
+=== 2026-09-25 Session 151 (template version preconditions) ===
+Status: In progress; FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Independent browser profiles could edit the same old template snapshot, and the later edit silently became current despite per-request recovery keys. A new stale-editor browser test failed before the Web fix; backend tests first failed for missing version checks.
+Changes: Open API template update/disable require a quoted If-Match version. Store checks it in the write transaction, rejects stale writes without a receipt, and preserves same-key replay while rejecting changed preconditions. Web saves/sends the version, preserves stale drafts on conflict and requires reload rather than auto-merge. No schema, migration, model, auth, user, role or permission change.
+Verification: Focused template backend tests 9 passed; final full business suite 388 passed/2 skipped. Web unit 13 passed, eight offline assets built and 28 Chromium browser regressions passed, including stale update and disable. Changed Python Ruff, diff and feature-list JSON checks passed. Target browser and real workload remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-template-version-precondition.md
+Next: Continue P4/P1 and target validation when inputs are available. Keep Goal active.

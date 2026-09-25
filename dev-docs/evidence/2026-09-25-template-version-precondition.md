@@ -1,0 +1,9 @@
+# Template optimistic version preconditions
+
+A second operator or browser profile can edit a custom template from an older snapshot even when each tab preserves its own request key. Without a version precondition, both edits append versions and the latter becomes current without having reviewed the first. A new independent-context Chromium regression failed against the old Web bundle because it sent no precondition.
+
+Open business API template **update** and **disable** now require `If-Match: "<version>"`, where `version` is the template version shown to the caller. Missing/malformed headers return 422. BusinessStore compares the expected version with the current version inside the same `BEGIN IMMEDIATE` transaction as the mutation; stale edits and disables return 409 with no new version or request receipt. Same-key replay is checked first and still returns its original result even if a later independent write advanced the template. A key replay with a different version precondition conflicts; no new schema table or migration was added (schema remains 16).
+
+Web stores the version it displayed in the pending request before writing and sends it on update/disable, including explicit same-key retry after an unknown result. On a stale-version 409, it clears the rejected request, preserves the unsaved draft, blocks further writes from that stale page and asks the operator to copy the draft and reload. It does **not** automatically merge fields. Earlier pending records without a stored version may be looked up read-only but are not replayed.
+
+Mac verification: focused template backend tests passed 9; final full `tests/business` passed 388/2 skipped. Web unit 13 passed, eight offline assets built, and all 28 Chromium browser regressions passed, including independent stale update and disable. Changed Python Ruff, diff and feature-list JSON checks passed. Real multi-operator workload, annotated documents and target Kylin browser remain unverified.

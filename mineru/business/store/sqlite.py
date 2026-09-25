@@ -437,6 +437,7 @@ class BusinessStore:
 
     def update_template(
         self, code: str, *, name: str, fields: tuple[TemplateField, ...], request_key: str | None = None,
+        expected_version: int | None = None,
     ) -> TemplateVersion:
         validate_template(code, name, fields)
         payload_hash = self._template_request_hash("update", code, name, fields)
@@ -444,6 +445,8 @@ class BusinessStore:
             database.execute("BEGIN IMMEDIATE")
             replay = self._check_template_request(database, request_key, "update", code, payload_hash)
             if replay is not None:
+                if expected_version is not None and expected_version != replay["version"] - 1:
+                    raise TemplateRequestConflict("Template idempotency key belongs to another version precondition")
                 return self._template_request_result(code, replay["version"], bool(replay["enabled"]))
             row = database.execute("SELECT * FROM templates WHERE code=?", (code,)).fetchone()
             if row is None:
@@ -452,6 +455,8 @@ class BusinessStore:
                 raise BusinessStoreError("Built-in template cannot be edited")
             if not row["enabled"]:
                 raise BusinessStoreError("Disabled template cannot be edited")
+            if expected_version is not None and row["current_version"] != expected_version:
+                raise BusinessStoreError("Template version changed; reload before editing")
             next_version = row["current_version"] + 1
             database.execute(
                 "INSERT INTO template_versions VALUES (?, ?, ?, ?, ?)",
@@ -465,14 +470,20 @@ class BusinessStore:
         assert template is not None
         return template
 
-    def disable_template(self, code: str, *, request_key: str | None = None) -> TemplateVersion:
+    def disable_template(
+        self, code: str, *, request_key: str | None = None, expected_version: int | None = None,
+    ) -> TemplateVersion:
         payload_hash = self._template_request_hash("disable", code, "", ())
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             replay = self._check_template_request(database, request_key, "disable", code, payload_hash)
             if replay is not None:
+                if expected_version is not None and expected_version != replay["version"]:
+                    raise TemplateRequestConflict("Template idempotency key belongs to another version precondition")
                 return self._template_request_result(code, replay["version"], bool(replay["enabled"]))
             row = database.execute("SELECT current_version FROM templates WHERE code=?", (code,)).fetchone()
+            if row is not None and expected_version is not None and row["current_version"] != expected_version:
+                raise BusinessStoreError("Template version changed; reload before editing")
             cursor = database.execute("UPDATE templates SET enabled=0 WHERE code=? AND built_in=0", (code,))
             if cursor.rowcount != 1:
                 raise BusinessStoreError("Only custom templates can be disabled")

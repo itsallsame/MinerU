@@ -112,8 +112,13 @@ export function createTemplateManager(root, { onChanged }) {
 
   async function sendPending(record) {
     if (record.action === "create") return businessApi.createTemplate(record.body, record.requestKey);
-    if (record.action === "update") return businessApi.updateTemplate(record.code, record.body, record.requestKey);
-    return businessApi.disableTemplate(record.code, record.requestKey);
+    if (!Number.isInteger(record.expectedVersion) || record.expectedVersion < 1) {
+      throw new Error("旧模板请求缺少版本前提，只能核对，不能重试。");
+    }
+    if (record.action === "update") {
+      return businessApi.updateTemplate(record.code, record.body, record.requestKey, record.expectedVersion);
+    }
+    return businessApi.disableTemplate(record.code, record.requestKey, record.expectedVersion);
   }
 
   async function acceptWrite(updated, savedViewVersion, record) {
@@ -141,11 +146,16 @@ export function createTemplateManager(root, { onChanged }) {
       const updated = await sendPending(record);
       await acceptWrite(updated, savedViewVersion, record);
     } catch (cause) {
+      if (cause.status === 409 && cause.message === "Template version changed; reload before editing") {
+        externalRefreshRequired = true;
+      }
       if (cause.status >= 400 && cause.status < 500
         && cause.message !== "Template idempotency key belongs to another write"
         && removePendingTemplate(record)) pending = readPendingTemplate();
       if (savedViewVersion === viewVersion) {
-        error = pending?.requestKey === record.requestKey
+        error = cause.status === 409 && cause.message === "Template version changed; reload before editing"
+          ? "模板版本已被其他操作更新；草稿未自动合并。请先复制草稿，再刷新页面核对后编辑。"
+          : pending?.requestKey === record.requestKey
           ? `模板写入结果未确认；请先按请求键核对，勿新建请求。${cause.message}`
           : cause.message;
       }
@@ -283,10 +293,12 @@ export function createTemplateManager(root, { onChanged }) {
             if (savedViewVersion === viewVersion) render();
           }
         }));
-        root.append(button("确认后同键重试", () => {
-          if (busy || !window.confirm("仅在已核对或确认需要重试后，才用原请求键重发同一模板写入。继续？")) return;
-          void performWrite(pending, viewVersion);
-        }));
+        if (pending.action === "create" || Number.isInteger(pending.expectedVersion)) {
+          root.append(button("确认后同键重试", () => {
+            if (busy || !window.confirm("仅在已核对或确认需要重试后，才用原请求键重发同一模板写入。继续？")) return;
+            void performWrite(pending, viewVersion);
+          }));
+        }
       }
     }
     const selected = templates.find((item) => item.code === selectedCode);
@@ -341,6 +353,7 @@ export function createTemplateManager(root, { onChanged }) {
         const record = {
           requestKey: crypto.randomUUID(), action: creating ? "create" : "update", code: draft.code,
           body: creating ? draft : { name: draft.name, fields: draft.fields },
+          expectedVersion: creating ? null : selected.version,
         };
         if (!savePendingTemplate(record)) throw new Error("无法保存模板请求键；为避免重复写入，本次没有发送请求。");
         pending = record;
@@ -360,7 +373,10 @@ export function createTemplateManager(root, { onChanged }) {
         try {
           pending = readPendingTemplate();
           if (pending) throw new Error("另一个模板请求仍待核对；请先核对结果。");
-          const record = { requestKey: crypto.randomUUID(), action: "disable", code: selected.code, body: null };
+          const record = {
+            requestKey: crypto.randomUUID(), action: "disable", code: selected.code, body: null,
+            expectedVersion: selected.version,
+          };
           if (!savePendingTemplate(record)) throw new Error("无法保存模板请求键；为避免重复停用，本次没有发送请求。");
           pending = record;
           await performWrite(record, savedViewVersion);

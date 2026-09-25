@@ -45,12 +45,14 @@ export const businessApi = {
     method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
     body: JSON.stringify(definition),
   }),
-  updateTemplate: (code, definition, requestKey) => request(`/templates/${encodeURIComponent(code)}`, {
-    method: "PUT", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
+  updateTemplate: (code, definition, requestKey, expectedVersion) => request(`/templates/${encodeURIComponent(code)}`, {
+    method: "PUT", headers: {
+      "Content-Type": "application/json", "Idempotency-Key": requestKey, "If-Match": `"${expectedVersion}"`,
+    },
     body: JSON.stringify(definition),
   }),
-  disableTemplate: (code, requestKey) => request(`/templates/${encodeURIComponent(code)}/disable`, {
-    method: "POST", headers: { "Idempotency-Key": requestKey },
+  disableTemplate: (code, requestKey, expectedVersion) => request(`/templates/${encodeURIComponent(code)}/disable`, {
+    method: "POST", headers: { "Idempotency-Key": requestKey, "If-Match": `"${expectedVersion}"` },
   }),
   templateRequest: (requestKey) => request(`/template-requests/${encodeURIComponent(requestKey)}`),
   search: (query, limit = 20) => request(`/search?${new URLSearchParams({ query, limit: String(limit) })}`),
