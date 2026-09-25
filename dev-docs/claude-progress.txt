@@ -1376,3 +1376,11 @@ Changes: Make the browser interpreter explicit via `MINERU_BROWSER_PYTHON` and u
 Verification: `MINERU_BROWSER_PYTHON=/opt/homebrew/bin/python3 MINERU_RUN_LIVE_BROWSER=1 PYTHONPATH=. uv run --no-sync pytest -q -o addopts='' tests/business/test_live_web_smoke.py --tb=short` passed 1 in 23.40 seconds; changed test Ruff and diff checks passed. Actual business API routes were not mocked. This does not prove target hardware or sample quality.
 Evidence: dev-docs/evidence/2026-09-25-live-main-flow-recheck.md
 Next: Prioritize phase-level offline delivery and genuine acceptance gates over further minor UI/error-path polishing. FE-033 structure-edit scope remains a separate product decision. Keep Goal active.
+
+=== 2026-09-25 Session 157 (current business-code-only offline transfer) ===
+Status: In progress; P1/P6 target acceptance remains open. Real samples and isolated Kylin x86_64+NVIDIA access remain unavailable.
+Discovery: Current deployment uses two code images with an external read-only model bind; a source bundle test alone must include actual business code to support the user's code-only update constraint. Mac Docker daemon did not respond to read-only `docker info`, so no image build claim is possible.
+Changes: No runtime code changes. On the real clean fork, generated a code-only incremental Git bundle from b7f7ed50 to 91287602 (including Web/API/store changes), verified it against a temporary old-master target and fast-forward imported it. The bundle is about 12 KiB; dependency inputs are unchanged, so the package allowed wheelhouse reuse. Documented exact commits, manifest hash, bounds and remaining target gates; INF-026 stays false.
+Verification: Bundle create, `verify --target-repo`, `git fetch` and `merge --ff-only` all succeeded; target HEAD matched new master and worktree was clean. Focused offline tests 24 passed/1 skipped; feature-list JSON and diff checks passed. No model bytes or wheelhouse in the source package. This does not validate Docker layers, target Python ABI, model mounting/loading or Kylin GPU.
+Evidence: dev-docs/evidence/2026-09-25-current-code-only-offline-transfer.md
+Next: P1 target-specific base image/wheelhouse/model and actual Compose build/runtime chain require the isolated host; continue Mac-safe phase work without claiming target completion. Keep Goal active.
