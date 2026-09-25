@@ -191,6 +191,43 @@ def test_incremental_rejects_transient_model_directory_even_after_delete(tmp_pat
     assert not (tmp_path / "blocked-delta").exists()
 
 
+def test_incremental_receiver_rejects_transient_model_object_without_mutating_target(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    previous = _git(repo, "rev-parse", "HEAD")
+    target = tmp_path / "target"
+    subprocess.run(["git", "clone", "-q", str(repo), str(target)], check=True)
+    weight = repo / "temporary-model.safetensors"
+    weight.write_bytes(b"never import this object")
+    _git(repo, "add", weight.name)
+    _git(repo, "commit", "-qm", "transient model object")
+    weight.unlink()
+    _git(repo, "add", "-u")
+    _git(repo, "commit", "-qm", "delete model object")
+    revision = _git(repo, "rev-parse", "HEAD")
+    package = tmp_path / "externally-created-delta"
+    package.mkdir()
+    bundle = package / "source.bundle"
+    _git(repo, "bundle", "create", str(bundle), "HEAD", "master", f"^{previous}")
+    manifest = package / "manifest.json"
+    manifest.write_text(json.dumps({
+        "schema": 2, "format": "incremental-bundle", "source_revision": revision,
+        "previous_revision": previous, "reuse_wheelhouse_inputs_unchanged": False,
+        "files_sha256": {"source.bundle": offline_source_bundle._sha256(bundle)},
+    }), encoding="utf-8")
+    (package / "COMPLETE").write_text(offline_source_bundle._sha256(manifest) + "\n", encoding="ascii")
+
+    # The package is internally consistent, but its Git history violates the
+    # model/code separation. Receiving it must not update the approved target.
+    assert offline_source_bundle.verify_bundle(bundle_dir=package)["source_revision"] == revision
+    with pytest.raises(ValueError, match="model artifacts"):
+        offline_source_bundle.verify_bundle(bundle_dir=package, target_repo=target)
+    assert _git(target, "rev-parse", "HEAD") == previous
+    assert _git(target, "status", "--porcelain") == ""
+    assert subprocess.run(
+        ["git", "-C", str(target), "cat-file", "-e", revision], capture_output=True, check=False,
+    ).returncode != 0
+
+
 def test_incremental_verifier_requires_exact_clean_target_baseline(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
     previous = _git(repo, "rev-parse", "HEAD")

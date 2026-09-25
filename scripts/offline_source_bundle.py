@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
@@ -281,6 +282,19 @@ def verify_bundle(*, bundle_dir: Path, target_repo: Path | None = None) -> dict:
             raise ValueError("Target checkout is not at the recorded previous release commit")
         if previous is not None:
             _git(target_repo, "bundle", "verify", str(bundle.resolve()))
+            # Inspect transferred objects without changing the approved target
+            # checkout. A valid checksum alone does not enforce the code-only
+            # boundary if the sender packaged transient model objects.
+            with tempfile.TemporaryDirectory(prefix="mineru-source-audit-") as temporary:
+                audit = Path(temporary) / "repository.git"
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--bare", "--shared", str(target_repo.resolve()), str(audit)],
+                    check=True,
+                )
+                _git(audit, "fetch", "--no-tags", str(bundle.resolve()), "master")
+                if _git(audit, "rev-parse", "FETCH_HEAD") != revision:
+                    raise ValueError("Offline source bundle fetch differs from selected revision")
+                _reject_weights(_source_files(audit, revision, f"^{previous}"))
         elif _git(target_repo, "rev-parse", "HEAD") != revision:
             raise ValueError("Target checkout differs from the initial source snapshot")
     return record

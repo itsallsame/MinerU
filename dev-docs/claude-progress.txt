@@ -1176,3 +1176,11 @@ Changes: Reject invalid counts and continuations, require progress before reques
 Verification: Focused sample evaluator 18 passed; full Mac business 357 passed/2 skipped/2 dependency warnings; Ruff lint passed. Formatter check reports pre-existing formatting deviations across the two files and was not used to rewrite them wholesale. Real four-class sample and target machine tests remain absent.
 Evidence: dev-docs/evidence/2026-09-24-sample-outline-pagination-guard.md
 Next: Obtain annotated real samples and Kylin/NVIDIA access, then run bound evaluation on a stable offline release. Keep Goal active.
+
+=== 2026-09-25 Session 132 (receiver-side source bundle model boundary) ===
+Status: In progress; INF-026 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: The sender rejected model objects in code-only increments, but receiver-side verification did not independently inspect Git objects before target fetch. Mac Docker info returned 1; no actual image build is available this session. User confirmed neither four-class annotated samples nor target access is available yet.
+Changes: Receiver imports an incremental bundle into a temporary shared-object bare repository, checks the fetched revision and rejects model objects across all new reachable history before modifying the target checkout. Documented that verify without --target-repo is integrity-only. No model, database, user/role/permission or business API change.
+Verification: Focused offline source tests 11 passed, including an internally consistent transient-weight bundle rejected without adding the new commit object to target. Full Mac business 358 passed/2 skipped/2 dependency warnings; Ruff lint passed. No real Kylin/GPU transfer or Docker build proof.
+Evidence: dev-docs/evidence/2026-09-25-source-bundle-import-model-boundary.md
+Next: Obtain target machine and real samples when available; run actual code-only transfer/build, model mount and bound acceptance. Keep Goal active.
