@@ -13,7 +13,10 @@ from ...doclib.types import ParseInfo, ParseReleaseRequest
 from ...errors import MineruError
 from ...parser.page_range import parse_page_range_set
 from ...types import Tier
-from ..documents import DoclibGateway, DocumentIntegrityError, ImmutableUploadStore, UploadError, resolve_parse_tier
+from ..documents import (
+    DoclibGateway, DocumentIntegrityError, ImmutableUploadStore, UploadError, UploadIntegrityError,
+    resolve_parse_tier,
+)
 from ..domain import BusinessDocument, IngestTask
 from ..store import BusinessStore, BusinessStoreError
 
@@ -206,6 +209,20 @@ class DocumentWorkflow:
                     task.id, error_code="parse_coverage_incomplete", parse_ids=task.parse_ids,
                     submission_attempt=task.submission_attempt,
                 )
+        try:
+            self._uploads.verified_source_path(
+                document.storage_key, sha256=document.sha256, size=document.size,
+            )
+        except UploadIntegrityError:
+            return self._store.fail_submitted_task_if_current(
+                task.id, error_code="source_integrity_failed", parse_ids=task.parse_ids,
+                submission_attempt=task.submission_attempt,
+            )
+        except (UploadError, OSError):
+            return self._store.fail_submitted_task_if_current(
+                task.id, error_code="source_unavailable", parse_ids=task.parse_ids,
+                submission_attempt=task.submission_attempt,
+            )
         try:
             return self._store.complete_task_with_revision(
                 task.id, parse=_distinct_completed_batches(parses), producer_version=self._producer_version,

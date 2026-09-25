@@ -662,7 +662,7 @@ def test_changed_source_fails_before_unavailable_doclib_is_called(tmp_path: Path
     initial = workflow.submit(io.BytesIO(b"<h1>Original</h1>"), filename="report.html")
     source = shared / initial.document.storage_key
     source.chmod(0o600)
-    source.write_bytes(b"<h1>Corrupted</h1>")
+    source.write_bytes(b"<h1>Replaced</h1>")
     client.ensure_parse.reset_mock(side_effect=True)
     client.ensure_parse.side_effect = ServerNotRunningError()
 
@@ -671,3 +671,31 @@ def test_changed_source_fails_before_unavailable_doclib_is_called(tmp_path: Path
     task = store.get_task(initial.task.id)
     assert task is not None and task.error_code == "source_integrity_failed"
     client.ensure_parse.assert_not_called()
+
+
+def test_submitted_task_rejects_changed_source_before_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Original</h1>"), filename="report.html")
+    source = shared / submitted.document.storage_key
+    source.chmod(0o600)
+    source.write_bytes(b"<h1>Replaced</h1>")
+    client.get_parse.return_value = _parse_info(submitted.document.sha256)
+
+    failed = workflow.refresh(submitted.task.id)
+    assert failed.status == "failed" and failed.error_code == "source_integrity_failed"
+    assert store.list_revisions(submitted.document.id) == ()
+
+
+def test_submitted_task_rejects_missing_source_before_revision(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Original</h1>"), filename="report.html")
+    (shared / submitted.document.storage_key).unlink()
+    client.get_parse.return_value = _parse_info(submitted.document.sha256)
+
+    failed = workflow.refresh(submitted.task.id)
+    assert failed.status == "failed" and failed.error_code == "source_unavailable"
+    assert store.list_revisions(submitted.document.id) == ()

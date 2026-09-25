@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,7 +20,7 @@ from ...filetypes import (
     TIERED_PARSE_EXTENSIONS,
 )
 from ...types import Tier
-from ..documents import ImmutableUploadStore, UploadError
+from ..documents import ImmutableUploadStore, UploadError, UploadIntegrityError
 from ..domain import (
     AuditEvent,
     AuditPage,
@@ -970,17 +969,13 @@ def create_app(
         if uploads is None:
             raise HTTPException(status_code=503, detail="Upload store is not configured")
         try:
-            path = uploads.source_path(document.storage_key)
+            path = uploads.verified_source_path(
+                document.storage_key, sha256=document.sha256, size=document.size,
+            )
+        except UploadIntegrityError as exc:
+            raise HTTPException(status_code=409, detail="Document source no longer matches its recorded identity") from exc
         except UploadError as exc:
             raise HTTPException(status_code=409, detail="Document source is unavailable") from exc
-        digest = hashlib.sha256()
-        size = 0
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                size += len(chunk)
-                digest.update(chunk)
-        if size != document.size or digest.hexdigest() != document.sha256:
-            raise HTTPException(status_code=409, detail="Document source no longer matches its recorded identity")
         extension = Path(document.storage_key).suffix.removeprefix(".")
         disposition = "inline" if extension == "pdf" or extension in IMAGE_EXTENSIONS else "attachment"
         return FileResponse(

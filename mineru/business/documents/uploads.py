@@ -13,7 +13,11 @@ from ...filetypes import PARSEABLE_EXTENSIONS, normalize_parse_extension
 
 
 class UploadError(ValueError):
-    """An upload cannot be accepted without publishing a partial source."""
+    """An upload or retained source cannot be safely accepted."""
+
+
+class UploadIntegrityError(UploadError):
+    """A published source no longer matches its registered identity."""
 
 
 @dataclass(frozen=True)
@@ -109,6 +113,19 @@ class ImmutableUploadStore:
             raise UploadError("Stored source is missing or not a regular file")
         return path
 
+    def verified_source_path(self, storage_key: str, *, sha256: str, size: int) -> Path:
+        """Recheck retained bytes before serving or finalizing a parse revision."""
+        path = self.source_path(storage_key)
+        digest = hashlib.sha256()
+        actual_size = 0
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                actual_size += len(chunk)
+                digest.update(chunk)
+        if actual_size != size or digest.hexdigest() != sha256:
+            raise UploadIntegrityError("Stored source no longer matches its registered identity")
+        return path
+
     def discard_unregistered(self, upload: StoredUpload) -> None:
         """Roll back a just-published file if business DB registration failed.
 
@@ -134,4 +151,4 @@ class ImmutableUploadStore:
             os.close(directory_fd)
 
 
-__all__ = ["ImmutableUploadStore", "StoredUpload", "UploadError"]
+__all__ = ["ImmutableUploadStore", "StoredUpload", "UploadError", "UploadIntegrityError"]
