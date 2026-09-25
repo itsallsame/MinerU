@@ -762,6 +762,8 @@ class ParseService:
                 "submission_attempt_invalid", "A submission attempt requires a consumer key and a positive generation.",
                 "submission_attempt",
             )
+        if remote and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            raise InvalidRequestError("remote_disabled", "Remote parsing is disabled for this deployment.", "remote")
         page_range = normalize_page_range_input(page_range) or None
         # ensure the path is current before trusting files.sha256
         refreshed = await self.refresh_file(path, ensure_ingested=True, allow_images=True, queue_initial_parse=False)
@@ -1139,6 +1141,12 @@ class ParseService:
         # guard
         current = await self.db.fetchone("SELECT status FROM parses WHERE id=?", (task["id"],))
         if current is None or current["status"] != PARSE_STATUS_PARSING:
+            return False
+        if privacy == "remote" and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            await self._fail_task(task["id"], "remote_disabled", "Remote parsing is disabled for this deployment.")
+            await self._record_parse_task_finished(
+                task_start_ms, tier=tier, status="failed", error_code="remote_disabled",
+            )
             return False
 
         # find the file

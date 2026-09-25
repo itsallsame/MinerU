@@ -45,7 +45,7 @@ class ConfigService:
 
     async def set(self, key: str, value: str) -> None:
         if key == "parse_server.remote.url" and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
-            raise InvalidRequestError("invalid_config_value", "Remote parse-server is disabled for this deployment.", "value")
+            raise InvalidRequestError("remote_disabled", "Remote parse-server is disabled for this deployment.", "value")
         validate_config_value(key, value)
         if CONFIG_DEFAULTS[key] == value:
             await self.unset(key)
@@ -210,6 +210,8 @@ class ConfigService:
         remote: bool = False,
         priority: int = 0,
     ) -> int:
+        if rule_type == RULE_TYPE_PARSING_RULE and remote and os.getenv("MINERU_DOCLIB_REMOTE_DISABLED") == "1":
+            raise InvalidRequestError("remote_disabled", "Remote parsing is disabled for this deployment.", "remote")
         now = int(time.time() * 1000)
         if rule_type == RULE_TYPE_EXCLUDE:
             return await self.db.execute_insert(

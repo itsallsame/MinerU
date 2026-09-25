@@ -563,7 +563,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Doclib 通用默认远程 URL 曾让后台健康检查尝试访问官方服务；生产 worker 现使用 MINERU_DOCLIB_REMOTE_DISABLED=1 将有效远程 URL 固定为空并拒绝写入，空 URL 健康检查不发 HTTP 请求。Compose、镜像默认环境、启动预检与运行态预检要求该开关；Mac 定向测试通过。物理隔离麒麟/NVIDIA 上的实际启动、网络和端到端解析尚未验证，保持未通过。证据：dev-docs/evidence/2026-09-25-doclib-remote-offline-switch.md"
+      "notes": "Doclib 通用默认远程 URL 曾让后台健康检查尝试访问官方服务；生产 worker 现使用 MINERU_DOCLIB_REMOTE_DISABLED=1 将有效远程 URL 固定为空并拒绝写入，空 URL 健康检查不发 HTTP 请求。显式远程解析在读原件前拒绝，不能新增远程规则，旧库远程队列任务明确失败且不静默回退本地。Compose、镜像默认环境、启动预检与运行态预检要求该开关；Mac 定向测试通过。物理隔离麒麟/NVIDIA 上的实际启动、网络和端到端解析尚未验证，保持未通过。证据：dev-docs/evidence/2026-09-25-doclib-remote-offline-switch.md、dev-docs/evidence/2026-09-25-offline-remote-intent-guard.md"
     },
     {
       "id": "INF-013",

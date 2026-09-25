@@ -108,6 +108,7 @@ def test_offline_doclib_status_hides_persisted_remote_url(tmp_path: Path, monkey
             "/api/v1/configs/parse_server.remote.url", json={"value": "https://example.net/api"},
         )
         assert set_response.status_code == 400, set_response.text
+        assert set_response.json()["error"]["code"] == "remote_disabled"
         assert client.get("/api/v1/configs/parse_server.remote.url").json()["value"] == ""
 
 

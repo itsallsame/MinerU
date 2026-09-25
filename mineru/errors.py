@@ -61,6 +61,7 @@ _ERROR_TYPE_MAP: dict[str, ErrorType] = {
     "scan_not_found": "invalid_request_error",
     "stat_failed": "invalid_request_error",
     "remote_unsupported_for_file_type": "invalid_request_error",
+    "remote_disabled": "invalid_request_error",
     "tier_mismatch": "invalid_request_error",
     "tier_unsupported_for_file_type": "invalid_request_error",
     "tier_unsupported_for_remote": "invalid_request_error",

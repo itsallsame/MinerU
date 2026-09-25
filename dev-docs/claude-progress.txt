@@ -1280,3 +1280,11 @@ Changes: Added production-only MINERU_DOCLIB_REMOTE_DISABLED to worker image/Com
 Verification: Final focused Mac pytest without coverage 60 passed/1 skipped, including Doclib startup/status/config API. Full business suite first hit local sandbox socket/port restrictions; permitted rerun passed 379/2 skipped/2 dependency warnings. A concurrent pytest run corrupted only the shared coverage report, so coverage is not claimed. Core source/business-test Ruff, diff and JSON checks passed; existing full-file Ruff warnings in two large Doclib unit-test files remain outside the new lines. Target physical isolation, model loading and real documents remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-doclib-remote-offline-switch.md
 Next: Continue phase work and obtain target inputs when available. Keep Goal active.
+
+=== 2026-09-25 Session 145 (offline remote parse intent guard) ===
+Status: In progress; P1 target acceptance and real-sample/Kylin/NVIDIA gates remain open
+Discovery: An empty effective remote URL prevented actual remote probing, but explicit remote=true, persisted remote parsing rules and old queued remote tasks could still enter Doclib's remote path or silently fall back to local. New regressions failed before the fix.
+Changes: Registered remote_disabled as a request error; offline mode rejects new remote parse requests before source read, rejects new remote rules, and fails old remote queue tasks before source access or model work. Config API uses the same error code. Non-offline remote behavior remains unchanged. No auth, user, role, permission or model-weight change.
+Verification: Focused no-coverage Mac tests 3 passed for offline paths and 23 passed for existing remote/error behavior. Full business suite 381 passed/2 skipped/2 dependency warnings; core Ruff, diff and feature-list JSON checks passed. Target physical isolation, model loading and real samples remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-offline-remote-intent-guard.md
+Next: Continue phase work and target verification when inputs become available. Keep Goal active.
