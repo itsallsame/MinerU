@@ -1352,3 +1352,11 @@ Changes: Business schema 17 atomically binds a cancellation request key to the t
 Verification: Full Mac business suite 393 passed/2 skipped; Web unit 13 passed, eight offline assets built, all 28 Chromium regressions passed; changed Python Ruff and diff check passed. Synthetic failure tests do not substitute for real network, annotated samples or target machine.
 Evidence: dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md
 Next: Continue remaining P4/P1 design and implementation checks without claiming target acceptance. Obtain real samples and isolated Kylin/NVIDIA access when available. Keep Goal active.
+
+=== 2026-09-25 Session 154 (review write request recovery) ===
+Status: In progress; real-sample and isolated Kylin/NVIDIA acceptance remain open. User currently has neither input available.
+Discovery: Field decisions, issue resolutions and result confirmation were ordinary POSTs; lost responses could not be tied to the original write, and repeating a field decision could add audit history/new decision identity.
+Changes: Schema 18 adds an atomic keyed receipt for all three review writes. Same-key/same-intent replay returns the original record; changed intent conflicts. The open API exposes read-only keyed lookup. Web persists key and intent before POST, recovers after reload, blocks new writes for the run while unknown, and offers explicitly confirmed same-key replay. Backup verification and design/deployment/feature notes updated. No legacy migration, user/auth/permission, model or remote parsing change.
+Verification: Full Mac business suite 398 passed/2 skipped; Web unit 13 passed, eight offline assets built and all 29 Chromium regressions passed, including response-loss/reload/storage-refusal review flow; changed Python Ruff and diff/JSON checks passed. Real network and target machine remain untested.
+Evidence: dev-docs/evidence/2026-09-25-review-request-idempotency.md
+Next: Add a review-snapshot precondition for confirmation to prevent stale-tab approval, then continue remaining P4/P1 gaps and target gates. Keep Goal active.

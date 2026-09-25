@@ -65,7 +65,7 @@ from ..services import (
     StructureBlock,
 )
 from ..store import (
-    BusinessStore, BusinessStoreError, ExtractionRequestConflict, TaskCancelRequestConflict,
+    BusinessStore, BusinessStoreError, ExtractionRequestConflict, ReviewRequestConflict, TaskCancelRequestConflict,
     TaskRetryRequestConflict, TemplateRequestConflict,
     UploadRequestConflict,
 )
@@ -159,6 +159,24 @@ class ConfirmedResultView(BaseModel):
             fields=tuple(ConfirmedFieldView.from_record(field) for field in result.fields),
             fields_sha256=result.fields_sha256, source=result.source, created_at_ms=result.created_at_ms,
         )
+
+
+class ReviewRequestView(BaseModel):
+    action: Literal["decision", "resolution", "confirmation"]
+    target_id: str
+    result: FieldDecisionView | IssueResolutionView | ConfirmedResultView
+
+    @classmethod
+    def from_record(
+        cls, record: tuple[str, str, FieldDecision | IssueResolution | ConfirmedResult],
+    ) -> ReviewRequestView:
+        action, target_id, result = record
+        view = (
+            FieldDecisionView.from_record(result) if isinstance(result, FieldDecision) else
+            IssueResolutionView.from_record(result) if isinstance(result, IssueResolution) else
+            ConfirmedResultView.from_record(result)
+        )
+        return cls(action=action, target_id=target_id, result=view)
 
 
 class AuditEventView(BaseModel):
@@ -773,14 +791,20 @@ def create_app(
         "/api/business/extractions/{run_id}/fields/{field_code}/decisions",
         response_model=FieldDecisionView, status_code=201,
     )
-    def decide_field(run_id: str, field_code: str, request: FieldDecisionRequest) -> FieldDecisionView:
+    def decide_field(
+        run_id: str, field_code: str, request: FieldDecisionRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> FieldDecisionView:
         try:
             decision = store.decide_field(
                 run_id, field_code=field_code, value=request.value, evidence_id=request.evidence_id,
-                source=request.source, reason=request.reason,
+                source=request.source, reason=request.reason, request_key=request_key,
             )
-        except BusinessStoreError as exc:
+        except ReviewRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid review idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return FieldDecisionView.from_record(decision)
 
     @app.get("/api/business/extractions/{run_id}/decisions", response_model=list[FieldDecisionView])
@@ -790,13 +814,19 @@ def create_app(
         return [FieldDecisionView.from_record(item) for item in store.list_field_decisions(run_id)]
 
     @app.post("/api/business/issues/{issue_id}/resolutions", response_model=IssueResolutionView, status_code=201)
-    def resolve_issue(issue_id: str, request: IssueResolutionRequest) -> IssueResolutionView:
+    def resolve_issue(
+        issue_id: str, request: IssueResolutionRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> IssueResolutionView:
         try:
             resolution = store.resolve_issue(
-                issue_id, status=request.status, source=request.source, reason=request.reason
+                issue_id, status=request.status, source=request.source, reason=request.reason, request_key=request_key,
             )
-        except BusinessStoreError as exc:
+        except ReviewRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid review idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return IssueResolutionView.from_record(resolution)
 
     @app.get("/api/business/extractions/{run_id}/resolutions", response_model=list[IssueResolutionView])
@@ -806,12 +836,29 @@ def create_app(
         return [IssueResolutionView.from_record(item) for item in store.list_issue_resolutions(run_id)]
 
     @app.post("/api/business/extractions/{run_id}/confirm", response_model=ConfirmedResultView, status_code=201)
-    def confirm_result(run_id: str, request: ConfirmationRequest) -> ConfirmedResultView:
+    def confirm_result(
+        run_id: str, request: ConfirmationRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> ConfirmedResultView:
         try:
-            result = store.confirm_result(run_id, source=request.source)
-        except BusinessStoreError as exc:
+            result = store.confirm_result(run_id, source=request.source, request_key=request_key)
+        except ReviewRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid review idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return ConfirmedResultView.from_record(result)
+
+    @app.get("/api/business/review-requests/{request_key}", response_model=ReviewRequestView)
+    def get_review_request(request_key: str) -> ReviewRequestView:
+        try:
+            record = store.get_review_request(request_key)
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid review idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        if record is None:
+            raise HTTPException(status_code=404, detail="Review request not recorded at lookup")
+        return ReviewRequestView.from_record(record)
 
     @app.get("/api/business/extractions/{run_id}/results", response_model=list[ConfirmedResultView])
     def list_confirmed_results(run_id: str) -> list[ConfirmedResultView]:

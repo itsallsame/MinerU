@@ -99,15 +99,24 @@ export const businessApi = {
   extraction: (id) => request(`/extractions/${encodeURIComponent(id)}`),
   templateVersion: (code, version) => request(`/templates/${encodeURIComponent(code)}?version=${encodeURIComponent(version)}`),
   decisions: (id) => request(`/extractions/${encodeURIComponent(id)}/decisions`),
-  decideField: (runId, fieldCode, value, evidenceId, reason = null) => postJson(
-    `/extractions/${encodeURIComponent(runId)}/fields/${encodeURIComponent(fieldCode)}/decisions`,
-    { value, evidence_id: evidenceId, source: "web", reason },
+  decideField: (runId, fieldCode, value, evidenceId, reason = null, requestKey = null) => request(
+    `/extractions/${encodeURIComponent(runId)}/fields/${encodeURIComponent(fieldCode)}/decisions`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
+      body: JSON.stringify({ value, evidence_id: evidenceId, source: "web", reason }),
+    },
   ),
-  resolveIssue: (issueId, status, reason) => postJson(
-    `/issues/${encodeURIComponent(issueId)}/resolutions`, { status, source: "web", reason },
+  resolveIssue: (issueId, status, reason, requestKey = null) => request(
+    `/issues/${encodeURIComponent(issueId)}/resolutions`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
+      body: JSON.stringify({ status, source: "web", reason }),
+    },
   ),
   results: (id) => request(`/extractions/${encodeURIComponent(id)}/results`),
-  confirm: (id) => postJson(`/extractions/${encodeURIComponent(id)}/confirm`, { source: "web" }),
+  confirm: (id, requestKey = null) => request(`/extractions/${encodeURIComponent(id)}/confirm`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
+    body: JSON.stringify({ source: "web" }),
+  }),
+  reviewRequest: (key) => request(`/review-requests/${encodeURIComponent(key)}`),
   audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),
   task: (id) => request(`/tasks/${encodeURIComponent(id)}`),
   retry: (id, requestKey) => request(`/tasks/${encodeURIComponent(id)}/retry`, {

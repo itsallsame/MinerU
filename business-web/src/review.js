@@ -8,6 +8,45 @@ const issueLabels = {
 };
 const runLabels = { queued: "等待提取", running: "正在提取", done: "待人工复核", failed: "提取失败" };
 const pendingExtractionsKey = "mineru.business.pendingExtractions.v1";
+const pendingReviewWritesKey = "mineru.business.pendingReviewWrites.v1";
+
+function pendingReviewWrites() {
+  try {
+    const records = JSON.parse(localStorage.getItem(pendingReviewWritesKey) || "[]");
+    if (!Array.isArray(records)) return [];
+    return records.filter((entry) => entry && typeof entry.runId === "string"
+      && typeof entry.targetId === "string" && ["decision", "resolution", "confirmation"].includes(entry.action)
+      && /^[A-Za-z0-9_-]{16,128}$/.test(entry.requestKey) && entry.payload && typeof entry.payload === "object");
+  } catch {
+    return [];
+  }
+}
+
+function pendingReviewWrite(runId) {
+  return pendingReviewWrites().find((entry) => entry.runId === runId) || null;
+}
+
+function rememberReviewWrite(record) {
+  const records = pendingReviewWrites();
+  if (records.length >= 100 || records.some((entry) => entry.runId === record.runId)) return false;
+  try {
+    localStorage.setItem(pendingReviewWritesKey, JSON.stringify([...records, record]));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function forgetReviewWrite(record) {
+  try {
+    localStorage.setItem(pendingReviewWritesKey, JSON.stringify(pendingReviewWrites().filter(
+      (entry) => entry.requestKey !== record.requestKey,
+    )));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function pendingExtractions() {
   try {
@@ -215,6 +254,93 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (isCurrent() && state.runLoadFailed) {
       state.error = `${acknowledgement}，但${state.error}`;
     }
+  }
+
+  function postReviewWrite(record) {
+    const { action, runId, targetId, payload, requestKey } = record;
+    if (action === "decision") return businessApi.decideField(
+      runId, payload.fieldCode, payload.value, payload.evidenceId, payload.reason, requestKey,
+    );
+    if (action === "resolution") return businessApi.resolveIssue(
+      targetId, payload.status, payload.reason, requestKey,
+    );
+    return businessApi.confirm(runId, requestKey);
+  }
+
+  function reviewReceiptMatches(record, receipt) {
+    if (receipt?.action !== record.action || receipt?.target_id !== record.targetId
+      || typeof receipt?.result?.id !== "string" || receipt.result.run_id !== record.runId) return false;
+    if (record.action === "decision") return receipt.result.field_code === record.payload.fieldCode;
+    if (record.action === "resolution") return receipt.result.issue_id === record.targetId;
+    return typeof receipt.result.version === "number";
+  }
+
+  async function submitReviewWrite(record, isCurrent, { replay = false } = {}) {
+    if (replay) {
+      const pending = pendingReviewWrite(record.runId);
+      if (pending?.requestKey !== record.requestKey) throw new Error("原复核请求键已变化，请先重新核对。");
+    } else if (!rememberReviewWrite(record)) {
+      throw new Error("无法保存待核对的复核请求，或当前运行仍有未确认写入；本次没有发送。请先核对原请求。");
+    }
+    let result;
+    try {
+      result = await postReviewWrite(record);
+      if (!reviewReceiptMatches(record, { action: record.action, target_id: record.targetId, result })) {
+        throw new SyntaxError("复核写入响应缺少匹配的结果身份");
+      }
+    } catch (error) {
+      if (!isUnknownWriteError(error)) {
+        forgetReviewWrite(record);
+        throw error;
+      }
+      let receipt;
+      try {
+        receipt = await businessApi.reviewRequest(record.requestKey);
+      } catch (lookupError) {
+        if (lookupError.status === 404) {
+          throw new Error("复核写入结果未确认；原请求键本次未查到记录，不能据此断定未受理。请稍后核对，或明确确认后用原键重试。");
+        }
+        throw new Error(`复核写入结果未确认；原请求键暂不可读：${lookupError.message}。请勿生成新请求键。`);
+      }
+      if (!reviewReceiptMatches(record, receipt)) {
+        throw new Error("复核写入结果未确认；原请求键返回了不匹配的写入，请停止重试并核对。");
+      }
+      result = receipt.result;
+    }
+    if (!forgetReviewWrite(record)) {
+      throw new Error("复核请求已受理，但无法清除本地待核对键；请检查浏览器存储后只读核对。");
+    }
+    const acknowledgement = record.action === "confirmation" ? `成果 v${result.version} 已确认`
+      : record.action === "decision" ? "复核决定已保存" : "问题处理已保存";
+    await refreshAfterReviewWrite(record.runId, isCurrent, acknowledgement);
+  }
+
+  async function checkReviewWrite() {
+    const record = pendingReviewWrite(state.runId);
+    if (!record) return;
+    await perform(async (isCurrent) => {
+      let receipt;
+      try {
+        receipt = await businessApi.reviewRequest(record.requestKey);
+      } catch (error) {
+        if (error.status === 404) throw new Error("原复核请求键本次未查到记录；不能据此断定未受理。可稍后再核对或明确确认后同键重试。");
+        throw error;
+      }
+      if (!reviewReceiptMatches(record, receipt)) throw new Error("原复核请求键返回不匹配的写入，请停止重试并核对。");
+      if (!forgetReviewWrite(record)) throw new Error("原复核请求已受理，但无法清除本地待核对键。");
+      await refreshAfterReviewWrite(record.runId, isCurrent, "原复核请求已受理");
+    });
+  }
+
+  function replayReviewWrite() {
+    const record = pendingReviewWrite(state.runId);
+    if (!record || !window.confirm("原复核请求结果仍未确认。确认使用相同请求键和内容重试，不创建新的写入？")) return;
+    perform((isCurrent) => submitReviewWrite(record, isCurrent, { replay: true }));
+  }
+
+  function writeReview(action, targetId, payload, runId, isCurrent) {
+    const record = { action, targetId, payload, runId, requestKey: newExtractionRequestKey() };
+    return submitReviewWrite(record, isCurrent);
   }
 
   async function selectRevision(revisionId, targetRunId = null) {
@@ -849,6 +975,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   function renderFields() {
     const box = section("字段候选与人工决定");
+    const reviewWriteBlocked = state.busy || !!pendingReviewWrite(state.runId);
     box.append(element("p", "draft-banner", "机器候选 · 未确认。只有明确复核决定才会进入成果。"));
     const latest = latestDecisions(state.decisions);
     for (const field of state.template.fields) {
@@ -875,9 +1002,10 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         row.append(button("看证据", () => inspectEvidence(candidate.evidence_id, field.code, candidate.value), state.busy));
         row.append(button("接受候选", () => perform(async (isCurrent) => {
           const runId = state.runId;
-          await businessApi.decideField(runId, field.code, candidate.value, candidate.evidence_id);
-          await refreshAfterReviewWrite(runId, isCurrent, "复核决定已保存");
-        }), state.busy));
+          await writeReview("decision", `${runId}/${field.code}`, {
+            fieldCode: field.code, value: candidate.value, evidenceId: candidate.evidence_id, reason: null,
+          }, runId, isCurrent);
+        }), reviewWriteBlocked));
         card.append(row);
       }
       const form = element("form", "field-edit-form");
@@ -907,14 +1035,15 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       reason.setAttribute("aria-label", `${field.label}的修订原因`);
       const save = element("button", "secondary-button", "保存复核决定");
       save.type = "submit";
-      save.disabled = state.busy || !state.evidence.length;
+      save.disabled = reviewWriteBlocked || !state.evidence.length;
       form.append(value, evidence, reason, save);
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         perform(async (isCurrent) => {
           const runId = state.runId;
-          await businessApi.decideField(runId, field.code, value.value, evidence.value, reason.value || null);
-          await refreshAfterReviewWrite(runId, isCurrent, "复核决定已保存");
+          await writeReview("decision", `${runId}/${field.code}`, {
+            fieldCode: field.code, value: value.value, evidenceId: evidence.value, reason: reason.value || null,
+          }, runId, isCurrent);
         });
       });
       card.append(form);
@@ -925,6 +1054,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
 
   function renderIssues() {
     const box = section("问题队列");
+    const reviewWriteBlocked = state.busy || !!pendingReviewWrite(state.runId);
     const latest = latestDecisions(state.decisions);
     if (!state.extraction.issues.length) box.append(element("p", "review-hint", "未发现规则问题；仍需对必填字段作出显式复核决定。"));
     for (const issue of state.extraction.issues) {
@@ -943,18 +1073,17 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
         reason.maxLength = 2000;
         reason.placeholder = "填写处理依据或原因";
         reason.setAttribute("aria-label", `${label}处理原因`);
-        const resolve = button("标记已解决", () => {}, state.busy || !latest.has(issue.field_code));
+        const resolve = button("标记已解决", () => {}, reviewWriteBlocked || !latest.has(issue.field_code));
         resolve.type = "submit";
         if (!latest.has(issue.field_code)) resolve.title = "须先完成对应字段的复核决定";
         form.append(reason, resolve);
         if (issue.code !== "required_missing") {
-          const ignore = button("有依据地忽略", () => {}, state.busy);
+          const ignore = button("有依据地忽略", () => {}, reviewWriteBlocked);
           ignore.addEventListener("click", () => {
             if (!reason.reportValidity()) return;
             perform(async (isCurrent) => {
               const runId = state.runId;
-              await businessApi.resolveIssue(issue.id, "ignored", reason.value);
-              await refreshAfterReviewWrite(runId, isCurrent, "问题处理已保存");
+              await writeReview("resolution", issue.id, { status: "ignored", reason: reason.value }, runId, isCurrent);
             });
           });
           form.append(ignore);
@@ -963,8 +1092,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
           event.preventDefault();
           perform(async (isCurrent) => {
             const runId = state.runId;
-            await businessApi.resolveIssue(issue.id, "resolved", reason.value);
-            await refreshAfterReviewWrite(runId, isCurrent, "问题处理已保存");
+            await writeReview("resolution", issue.id, { status: "resolved", reason: reason.value }, runId, isCurrent);
           });
         });
         card.append(form);
@@ -987,9 +1115,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
     box.append(button("确认并生成不可变成果版本", () => perform(async (isCurrent) => {
       const runId = state.runId;
-      const confirmed = await businessApi.confirm(runId);
-      await refreshAfterReviewWrite(runId, isCurrent, `成果 v${confirmed.version} 已确认`);
-    }), state.busy || !!blockers.length));
+      await writeReview("confirmation", runId, {}, runId, isCurrent);
+    }), state.busy || !!blockers.length || !!pendingReviewWrite(state.runId)));
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {
       const card = element("div", "result-card");
@@ -1065,6 +1192,14 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       ));
     }
     root.append(tools);
+    const pendingReview = state.runId ? pendingReviewWrite(state.runId) : null;
+    if (pendingReview) {
+      const recovery = section("待核对的复核写入");
+      recovery.append(element("p", "review-hint", "上一次复核写入的响应未确认。先按原请求键核对；404 不证明写入未受理。核对前暂停该运行的新复核写入。"));
+      recovery.append(button("按原请求键核对复核写入", checkReviewWrite, state.busy));
+      recovery.append(button("用原键重试复核写入", replayReviewWrite, state.busy));
+      root.append(recovery);
+    }
     if (state.evidenceLoadFailed || state.evidenceLoading) {
       root.append(element("p", "review-hint", "冻结证据列表尚未成功读取；证据及字段关联状态未知。"));
       if (state.evidenceLoadFailed) {

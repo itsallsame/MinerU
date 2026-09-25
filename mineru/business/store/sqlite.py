@@ -45,7 +45,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 17
+_SCHEMA_VERSION = 18
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -67,6 +67,10 @@ class TaskRetryRequestConflict(BusinessStoreError):
 
 class TaskCancelRequestConflict(BusinessStoreError):
     """An idempotency key was reused for another task cancellation."""
+
+
+class ReviewRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for another review write."""
 
 
 class TemplateRequestConflict(BusinessStoreError):
@@ -133,6 +137,7 @@ class BusinessStore:
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
                     "extraction_requests", "task_retry_requests", "task_cancel_requests", "template_requests",
+                    "review_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -343,6 +348,14 @@ class BusinessStore:
                         UNIQUE(run_id, version)
                     );
                     CREATE INDEX confirmed_results_run_version ON confirmed_results(run_id, version);
+                    CREATE TABLE review_requests (
+                        request_key TEXT PRIMARY KEY,
+                        action TEXT NOT NULL CHECK(action IN ('decision', 'resolution', 'confirmation')),
+                        target_id TEXT NOT NULL,
+                        payload_sha256 TEXT NOT NULL,
+                        result_id TEXT NOT NULL,
+                        created_at_ms INTEGER NOT NULL
+                    );
                     CREATE TABLE audit_events (
                         id TEXT PRIMARY KEY,
                         run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
@@ -359,7 +372,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 17")
+                database.execute("PRAGMA user_version = 18")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -832,6 +845,62 @@ class BusinessStore:
         return latest
 
     @staticmethod
+    def _review_request_hash(action: str, target_id: str, payload: dict[str, str | None]) -> str:
+        canonical = json.dumps(
+            {"action": action, "target_id": target_id, "payload": payload},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _check_review_request(
+        database: sqlite3.Connection, request_key: str | None, action: str,
+        target_id: str, payload_sha256: str,
+    ) -> str | None:
+        if request_key is None:
+            return None
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid review idempotency key")
+        row = database.execute("SELECT * FROM review_requests WHERE request_key=?", (request_key,)).fetchone()
+        if row is None:
+            return None
+        if (row["action"], row["target_id"], row["payload_sha256"]) != (action, target_id, payload_sha256):
+            raise ReviewRequestConflict("Review idempotency key belongs to another write")
+        return row["result_id"]
+
+    @staticmethod
+    def _save_review_request(
+        database: sqlite3.Connection, request_key: str | None, action: str,
+        target_id: str, payload_sha256: str, result_id: str,
+    ) -> None:
+        if request_key is not None:
+            database.execute(
+                "INSERT INTO review_requests VALUES (?, ?, ?, ?, ?, ?)",
+                (request_key, action, target_id, payload_sha256, result_id, _now_ms()),
+            )
+
+    def get_review_request(self, request_key: str) -> tuple[str, str, FieldDecision | IssueResolution | ConfirmedResult] | None:
+        """Resolve one immutable review write by key without reapplying it."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid review idempotency key")
+        with closing(self._connect()) as database:
+            request = database.execute("SELECT * FROM review_requests WHERE request_key=?", (request_key,)).fetchone()
+            if request is None:
+                return None
+            table = {
+                "decision": "field_decisions", "resolution": "issue_resolutions", "confirmation": "confirmed_results",
+            }[request["action"]]
+            row = database.execute(f"SELECT * FROM {table} WHERE id=?", (request["result_id"],)).fetchone()
+        if row is None:
+            raise BusinessStoreError("Idempotent review record is incomplete")
+        result = (
+            FieldDecision(**dict(row)) if request["action"] == "decision" else
+            IssueResolution(**dict(row)) if request["action"] == "resolution" else
+            self._result_from_row(row)
+        )
+        return request["action"], request["target_id"], result
+
+    @staticmethod
     def _append_audit(
         database: sqlite3.Connection, *, run_id: str, action: str, target_id: str, source: ReviewSource,
         old_value: str | None, new_value: str, reason: str | None, created_at_ms: int,
@@ -843,15 +912,26 @@ class BusinessStore:
 
     def decide_field(
         self, run_id: str, *, field_code: str, value: str, evidence_id: str,
-        source: str, reason: str | None = None,
+        source: str, reason: str | None = None, request_key: str | None = None,
     ) -> FieldDecision:
         reviewed_by = self._review_source(source)
         if not value.strip() or len(value) > 2000:
             raise BusinessStoreError("Review value must be 1-2000 characters")
         if reason is not None and len(reason) > 2000:
             raise BusinessStoreError("Review reason is too long")
+        target_id = f"{run_id}/{field_code}"
+        payload_sha256 = self._review_request_hash(
+            "decision", target_id,
+            {"value": value, "evidence_id": evidence_id, "source": reviewed_by, "reason": reason},
+        )
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            prior_id = self._check_review_request(database, request_key, "decision", target_id, payload_sha256)
+            if prior_id is not None:
+                prior = database.execute("SELECT * FROM field_decisions WHERE id=?", (prior_id,)).fetchone()
+                if prior is None:
+                    raise BusinessStoreError("Idempotent review record is incomplete")
+                return FieldDecision(**dict(prior))
             row = database.execute(
                 "SELECT x.*, e.revision_id AS evidence_revision_id, e.snippet, e.snippet_sha256 FROM extraction_runs x "
                 "JOIN evidence e ON e.id=? WHERE x.id=?", (evidence_id, run_id),
@@ -891,6 +971,7 @@ class BusinessStore:
                 source=reviewed_by, old_value=decision.previous_value, new_value=value,
                 reason=reason, created_at_ms=now,
             )
+            self._save_review_request(database, request_key, "decision", target_id, payload_sha256, decision.id)
         return decision
 
     def list_field_decisions(self, run_id: str) -> tuple[FieldDecision, ...]:
@@ -901,15 +982,24 @@ class BusinessStore:
         return tuple(FieldDecision(**dict(row)) for row in rows)
 
     def resolve_issue(
-        self, issue_id: str, *, status: str, source: str, reason: str
+        self, issue_id: str, *, status: str, source: str, reason: str, request_key: str | None = None,
     ) -> IssueResolution:
         reviewed_by = self._review_source(source)
         if status not in ("resolved", "ignored"):
             raise BusinessStoreError("Issue status must be resolved or ignored")
         if not reason.strip() or len(reason) > 2000:
             raise BusinessStoreError("Issue resolution requires a reason")
+        payload_sha256 = self._review_request_hash(
+            "resolution", issue_id, {"status": status, "source": reviewed_by, "reason": reason},
+        )
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            prior_id = self._check_review_request(database, request_key, "resolution", issue_id, payload_sha256)
+            if prior_id is not None:
+                prior = database.execute("SELECT * FROM issue_resolutions WHERE id=?", (prior_id,)).fetchone()
+                if prior is None:
+                    raise BusinessStoreError("Idempotent review record is incomplete")
+                return IssueResolution(**dict(prior))
             row = database.execute(
                 "SELECT q.*, x.status AS run_status FROM quality_issues q "
                 "JOIN extraction_runs x ON x.id=q.run_id WHERE q.id=?", (issue_id,),
@@ -938,6 +1028,7 @@ class BusinessStore:
                 database, run_id=row["run_id"], action="issue_resolved", target_id=resolution.id,
                 source=reviewed_by, old_value="open", new_value=status, reason=reason, created_at_ms=now,
             )
+            self._save_review_request(database, request_key, "resolution", issue_id, payload_sha256, resolution.id)
         return resolution
 
     def list_issue_resolutions(self, run_id: str) -> tuple[IssueResolution, ...]:
@@ -958,10 +1049,17 @@ class BusinessStore:
             raise BusinessStoreError("Confirmed result payload is invalid") from exc
         return ConfirmedResult(**payload)
 
-    def confirm_result(self, run_id: str, *, source: str) -> ConfirmedResult:
+    def confirm_result(self, run_id: str, *, source: str, request_key: str | None = None) -> ConfirmedResult:
         reviewed_by = self._review_source(source)
+        payload_sha256 = self._review_request_hash("confirmation", run_id, {"source": reviewed_by})
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            prior_id = self._check_review_request(database, request_key, "confirmation", run_id, payload_sha256)
+            if prior_id is not None:
+                prior = database.execute("SELECT * FROM confirmed_results WHERE id=?", (prior_id,)).fetchone()
+                if prior is None:
+                    raise BusinessStoreError("Idempotent review record is incomplete")
+                return self._result_from_row(prior)
             run = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
             if run is None or run["status"] != "done":
                 raise BusinessStoreError("Only completed extraction can be confirmed")
@@ -1027,6 +1125,7 @@ class BusinessStore:
                 source=reviewed_by, old_value=previous["fields_sha256"] if previous else None,
                 new_value=fields_sha256, reason=None, created_at_ms=now,
             )
+            self._save_review_request(database, request_key, "confirmation", run_id, payload_sha256, result.id)
         return result
 
     def get_confirmed_result(self, result_id: str) -> ConfirmedResult | None:

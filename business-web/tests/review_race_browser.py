@@ -64,7 +64,7 @@ def main(base_url: str) -> None:
         elif path == "/issues/issue-1/resolutions":
             writes.append(path)
             issue["status"] = "resolved"
-            payload = {"id": "resolution-1", "issue_id": "issue-1", "status": "resolved"}
+            payload = {"id": "resolution-1", "issue_id": "issue-1", "run_id": "run-1", "status": "resolved"}
         elif path == "/extractions/run-1/confirm":
             writes.append(path)
             payload = {"id": "result-1", "run_id": "run-1", "version": 1}

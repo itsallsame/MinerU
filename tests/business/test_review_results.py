@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock
@@ -13,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from mineru.business.api import create_app
 from mineru.business.documents import ImmutableUploadStore
-from mineru.business.store import BusinessStore, BusinessStoreError
+from mineru.business.store import BusinessStore, BusinessStoreError, ReviewRequestConflict
 from mineru.doclib import ParseInfo
 
 
@@ -61,6 +62,72 @@ def test_candidate_requires_explicit_decision_before_confirmation(tmp_path: Path
     assert not hasattr(decision, "user_id")
     with pytest.raises(BusinessStoreError, match="No review changes"):
         store.confirm_result(run_id, source="web")
+
+
+def test_keyed_review_writes_replay_original_records_without_duplicate_audit(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    decision_key = "field-decision-request-0001"
+    decision = store.decide_field(
+        run_id, field_code="title", value="年度通知", evidence_id=evidence_id,
+        source="web", request_key=decision_key,
+    )
+    assert store.decide_field(
+        run_id, field_code="title", value="年度通知", evidence_id=evidence_id,
+        source="web", request_key=decision_key,
+    ) == decision
+    assert store.get_review_request(decision_key) == ("decision", f"{run_id}/title", decision)
+    with pytest.raises(ReviewRequestConflict, match="another write"):
+        store.decide_field(
+            run_id, field_code="title", value="更改的值", evidence_id=evidence_id,
+            source="web", reason="更改", request_key=decision_key,
+        )
+    with pytest.raises(ReviewRequestConflict, match="another write"):
+        store.confirm_result(run_id, source="web", request_key=decision_key)
+    confirm_key = "confirmation-request-0001"
+    result = store.confirm_result(run_id, source="web", request_key=confirm_key)
+    assert store.confirm_result(run_id, source="web", request_key=confirm_key) == result
+    assert store.get_review_request(confirm_key) == ("confirmation", run_id, result)
+    assert [event.action for event in store.list_audit_events(run_id)] == ["field_decided", "result_confirmed"]
+    store.decide_field(
+        run_id, field_code="title", value="修订通知", evidence_id=evidence_id,
+        source="web", reason="原文复核", request_key="field-decision-request-0002",
+    )
+    assert store.confirm_result(run_id, source="web", request_key=confirm_key) == result
+    assert store.list_confirmed_results(run_id) == (result,)
+
+
+def test_parallel_keyed_field_decision_creates_one_audit_event(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    reopened = BusinessStore(tmp_path / "business.sqlite3")
+    key = "parallel-field-decision-key-0001"
+    def submit(instance: BusinessStore) -> object:
+        return instance.decide_field(
+            run_id, field_code="title", value="年度通知", evidence_id=evidence_id,
+            source="web", request_key=key,
+        )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(submit, store)
+        second = pool.submit(submit, reopened)
+        assert first.result(timeout=5) == second.result(timeout=5)
+    assert len(store.list_field_decisions(run_id)) == 1
+    assert len(store.list_audit_events(run_id)) == 1
+
+
+def test_keyed_issue_resolution_replays_original_after_issue_closed(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="甲乙", candidate_values=("甲", "乙"))
+    issue = next(item for item in store.list_quality_issues(run_id) if item.code == "conflicting_candidates")
+    store.decide_field(run_id, field_code="title", value="甲", evidence_id=evidence_id, source="web")
+    key = "issue-resolution-request-0001"
+    resolution = store.resolve_issue(
+        issue.id, status="resolved", source="web", reason="核对原文", request_key=key,
+    )
+    assert store.resolve_issue(
+        issue.id, status="resolved", source="web", reason="核对原文", request_key=key,
+    ) == resolution
+    assert store.get_review_request(key) == ("resolution", issue.id, resolution)
+    with pytest.raises(ReviewRequestConflict, match="another write"):
+        store.resolve_issue(issue.id, status="ignored", source="web", reason="不同意图", request_key=key)
+    assert [event.action for event in store.list_audit_events(run_id)] == ["field_decided", "issue_resolved"]
 
 
 @pytest.mark.parametrize("corrupted_column", ["fields_json", "fields_sha256"])
@@ -288,6 +355,32 @@ def test_open_review_api_exposes_only_confirmed_result_versions(tmp_path: Path) 
         "field_decided", "result_confirmed"
     ]
     assert client.get("/api/business/results/missing").status_code == 404
+
+
+def test_open_review_api_resolves_keyed_writes_without_repeating_audit(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    client = TestClient(create_app(workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()))
+    decision_key = "review-api-decision-key-0001"
+    path = f"/api/business/extractions/{run_id}/fields/title/decisions"
+    body = {"value": "年度通知", "evidence_id": evidence_id, "source": "web"}
+    first = client.post(path, json=body, headers={"Idempotency-Key": decision_key})
+    assert first.status_code == 201
+    assert client.post(path, json=body, headers={"Idempotency-Key": decision_key}).json() == first.json()
+    lookup = client.get(f"/api/business/review-requests/{decision_key}")
+    assert lookup.json() == {"action": "decision", "target_id": f"{run_id}/title", "result": first.json()}
+    assert client.post(path, json={**body, "value": "其它"}, headers={"Idempotency-Key": decision_key}).status_code == 409
+    confirm_key = "review-api-confirm-key-0001"
+    confirm_path = f"/api/business/extractions/{run_id}/confirm"
+    confirmed = client.post(confirm_path, json={"source": "web"}, headers={"Idempotency-Key": confirm_key})
+    assert confirmed.status_code == 201
+    replay = client.post(confirm_path, json={"source": "web"}, headers={"Idempotency-Key": confirm_key})
+    assert replay.json() == confirmed.json()
+    assert client.get(f"/api/business/review-requests/{confirm_key}").json() == {
+        "action": "confirmation", "target_id": run_id, "result": confirmed.json(),
+    }
+    assert client.get("/api/business/review-requests/not-recorded-key-0001").status_code == 404
+    assert client.get("/api/business/review-requests/short").status_code == 422
+    assert [event.action for event in store.list_audit_events(run_id)] == ["field_decided", "result_confirmed"]
 
 
 def test_open_issue_resolution_api_requires_reviewed_field(tmp_path: Path) -> None:
