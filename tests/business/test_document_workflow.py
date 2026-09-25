@@ -284,6 +284,33 @@ def test_lost_force_response_retries_same_generation_and_force_flag(tmp_path: Pa
     assert store.list_revisions(initial.document.id) == ()
 
 
+def test_keyed_retry_replay_does_not_submit_again_after_quick_failure(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    requests: list[ParseRequest] = []
+
+    def submit(request: ParseRequest) -> ParseResponse:
+        requests.append(request)
+        if request.force and len(requests) == 2:
+            raise ServerNotRunningError()
+        return _parse_response(request.path, parse_id=8 if request.force else 7)
+
+    client.ensure_parse.side_effect = submit
+    workflow, store, _shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Keyed retry</h1>"), filename="keyed.html")
+    client.get_parse.return_value = _parse_info(initial.document.sha256, status="failed")
+    assert workflow.refresh(initial.task.id).status == "failed"
+    key = "manual-task-retry-request-0001"
+    first = workflow.retry(initial.task.id, request_key=key)
+    assert first.status == "failed" and first.error_code == "doclib_submission_failed"
+    assert store.get_task_retry_request(key) == first
+    assert workflow.retry(initial.task.id, request_key=key) == first
+    assert len(requests) == 2
+    second = workflow.retry(initial.task.id, request_key="manual-task-retry-request-0002")
+    assert second.status == "submitted"
+    assert len(requests) == 3
+    assert store.get_task_retry_request(key) == second
+
+
 def test_stale_failed_poll_cannot_fail_newer_submission_generation(tmp_path: Path) -> None:
     client = Mock(spec=DoclibInterface)
     client.ensure_parse.side_effect = lambda request: _parse_response(

@@ -226,13 +226,50 @@ function feedback(file, message, kind = "") {
   return node;
 }
 
-function newUploadRequestKey() {
-  if (!globalThis.crypto?.getRandomValues) throw new Error("浏览器无法生成安全上传请求键，请更换浏览器后重试。");
+function newRequestKey() {
+  if (!globalThis.crypto?.getRandomValues) throw new Error("浏览器无法生成安全请求键，请更换浏览器后重试。");
   return [...crypto.getRandomValues(new Uint8Array(16))]
     .map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 const pendingUploadsKey = "mineru.business.pendingUploads.v1";
+const pendingTaskRetriesKey = "mineru.business.pendingTaskRetries.v1";
+
+function pendingTaskRetries() {
+  try {
+    const records = JSON.parse(localStorage.getItem(pendingTaskRetriesKey) || "[]");
+    if (!Array.isArray(records)) return [];
+    return records.filter((entry) => entry && typeof entry.taskId === "string"
+      && /^[A-Za-z0-9_-]{16,128}$/.test(entry.requestKey));
+  } catch {
+    return [];
+  }
+}
+
+function pendingTaskRetry(taskId) {
+  return pendingTaskRetries().find((entry) => entry.taskId === taskId) || null;
+}
+
+function writePendingTaskRetries(records) {
+  try {
+    localStorage.setItem(pendingTaskRetriesKey, JSON.stringify(records));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rememberTaskRetry(taskId, requestKey) {
+  const records = pendingTaskRetries().filter((entry) => entry.taskId !== taskId);
+  if (records.length >= 100) return false;
+  return writePendingTaskRetries([...records, { taskId, requestKey }]);
+}
+
+function forgetTaskRetry(taskId, requestKey) {
+  writePendingTaskRetries(pendingTaskRetries().filter(
+    (entry) => entry.taskId !== taskId || entry.requestKey !== requestKey,
+  ));
+}
 
 function pendingUploads() {
   try {
@@ -654,50 +691,78 @@ function renderDetail() {
     summary.append(element("p", "review-hint", cancelEffectLabel(task.cancel_effect)));
   }
   const actions = element("div", "detail-actions");
-  if (task && (task.status === "uploaded" || (task.status === "failed" && taskFailure(task.error_code).retryable))) {
-    const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
-    retry.type = "button";
-    let checkOnly = false;
-    retry.addEventListener("click", async () => {
-      retry.disabled = true;
-      const selectionRequest = state.selectionRequest;
+  const pendingRetry = task ? pendingTaskRetry(task.id) : null;
+  if (task && (pendingRetry || task.status === "uploaded"
+    || (task.status === "failed" && taskFailure(task.error_code).retryable))) {
+    const selectionRequest = state.selectionRequest;
+    const probeRetry = async (requestKey) => {
       try {
-        if (checkOnly) {
-          const latest = await businessApi.task(task.id);
-          if (selectionRequest === state.selectionRequest) {
-            await refreshDocuments({ acceptedWriteMessage: `已核对任务当前状态：${taskLabel(latest.status)}` });
-          }
-          return;
+        const latest = await businessApi.taskRetryRequest(requestKey);
+        if (latest?.id !== task.id || typeof latest.status !== "string") {
+          throw new SyntaxError("原请求键返回了不匹配的任务身份或状态");
         }
-        await businessApi.retry(task.id);
-        if (selectionRequest === state.selectionRequest) clearError();
-        const acceptedWriteMessage = task.status === "uploaded" ? "任务已提交" : "任务已重新提交";
-        await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
-          ? acceptedWriteMessage : "" });
+        forgetTaskRetry(task.id, requestKey);
+        if (selectionRequest === state.selectionRequest) {
+          clearError();
+          await refreshDocuments({ acceptedWriteMessage: `已按原请求键确认受理；任务当前状态：${taskLabel(latest.status)}` });
+        }
+        return true;
       } catch (error) {
-        if (selectionRequest !== state.selectionRequest) return;
-        if (!checkOnly && isUnknownWriteError(error)) {
-          try {
-            const latest = await businessApi.task(task.id);
-            if (selectionRequest === state.selectionRequest) {
-              await refreshDocuments({ acceptedWriteMessage: `重试响应未确认；已核对任务当前状态：${taskLabel(latest.status)}` });
-            }
-          } catch (probeError) {
-            if (selectionRequest !== state.selectionRequest) return;
-            checkOnly = true;
-            retry.textContent = "核对任务状态";
-            showError(`重试结果未确认，任务状态也暂不可读：${probeError.message}。请先核对状态，不要重复提交。`);
-          }
-        } else if (checkOnly) {
-          showError(`任务状态暂不可读：${error.message}。请稍后再次核对，不要重复提交。`);
+        if (selectionRequest === state.selectionRequest) {
+          showError(error.status === 404
+            ? "原重试请求键暂未查到；这不证明提交未受理。可稍后核对，或明确用同一键重试。"
+            : `原重试请求键核对暂不可用：${error.message}。请勿创建新请求。`);
+        }
+        return false;
+      }
+    };
+    const submitRetry = async (button, priorKey = null) => {
+      if (priorKey && !window.confirm("上次任务重试结果未确认。确认用同一请求键重试，不创建新的提交请求？")) return;
+      button.disabled = true;
+      let requestKey;
+      try {
+        requestKey = priorKey || newRequestKey();
+        if (!priorKey && !rememberTaskRetry(task.id, requestKey)) {
+          throw new Error("浏览器无法保存任务重试请求键；本次没有发送重试。");
+        }
+        const result = await businessApi.retry(task.id, requestKey);
+        if (result?.id !== task.id || typeof result.status !== "string") {
+          throw new SyntaxError("任务重试响应缺少任务身份或状态");
+        }
+        forgetTaskRetry(task.id, requestKey);
+        if (selectionRequest === state.selectionRequest) {
+          clearError();
+          await refreshDocuments({ acceptedWriteMessage: `任务重试请求已受理；当前状态：${taskLabel(result.status)}` });
+        }
+      } catch (error) {
+        if (requestKey && isUnknownWriteError(error)) {
+          await probeRetry(requestKey);
         } else {
-          showError(`重试请求未受理：${error.message}`);
+          if (requestKey) forgetTaskRetry(task.id, requestKey);
+          if (selectionRequest === state.selectionRequest) showError(`重试请求未受理：${error.message}`);
         }
       } finally {
-        retry.disabled = false;
+        button.disabled = false;
       }
-    });
-    actions.append(retry);
+    };
+    if (pendingRetry) {
+      const check = element("button", "", "按原请求键核对重试");
+      check.type = "button";
+      check.addEventListener("click", async () => {
+        check.disabled = true;
+        await probeRetry(pendingRetry.requestKey);
+        check.disabled = false;
+      });
+      const retry = element("button", "secondary-button", "用原键重试任务");
+      retry.type = "button";
+      retry.addEventListener("click", () => submitRetry(retry, pendingRetry.requestKey));
+      actions.append(check, retry);
+    } else {
+      const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
+      retry.type = "button";
+      retry.addEventListener("click", () => submitRetry(retry));
+      actions.append(retry);
+    }
   }
   if (task && ["uploaded", "submitting", "submitted", "failed", "cancel_requested"].includes(task.status)) {
     const cancellationState = state.uncertainCancelTasks.get(task.id);
@@ -1064,7 +1129,7 @@ async function submitFiles(event) {
     let saved = false;
     try {
       tier = tierForFile(file, capabilities, selectedTier);
-      requestKey = newUploadRequestKey();
+      requestKey = newRequestKey();
       saved = rememberUpload({ requestKey, name: file.name, size: file.size, tier, templateCode: templateCode || null });
       const result = await businessApi.upload(file, { tier, templateCode, requestKey });
       forgetUpload(requestKey);

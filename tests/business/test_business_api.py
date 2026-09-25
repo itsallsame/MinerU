@@ -43,6 +43,7 @@ def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Pat
         "/api/business/upload-requests/{request_key}": {"get"},
         "/api/business/tasks/{task_id}": {"get"},
         "/api/business/tasks/{task_id}/retry": {"post"},
+        "/api/business/task-retry-requests/{request_key}": {"get"},
         "/api/business/tasks/{task_id}/cancel": {"post"},
         "/api/business/revisions/{revision_id}/content": {"get"},
         "/api/business/revisions/{revision_id}/extractions": {"get", "post"},
@@ -137,6 +138,20 @@ def test_open_upload_document_status_and_retry_api(tmp_path: Path) -> None:
     )
     assert client.get(f"/api/business/tasks/{task_id}").json()["status"] == "done"
     assert client.post(f"/api/business/tasks/{task_id}/retry").json()["status"] == "done"
+    retry_key = "manual-task-retry-request-0003"
+    keyed = client.post(f"/api/business/tasks/{task_id}/retry", headers={"Idempotency-Key": retry_key})
+    assert keyed.status_code == 200 and keyed.json()["status"] == "done"
+    assert client.get(f"/api/business/task-retry-requests/{retry_key}").json() == keyed.json()
+    assert client.post(f"/api/business/tasks/{task_id}/retry", headers={"Idempotency-Key": retry_key}).json() == keyed.json()
+    assert client.get("/api/business/task-retry-requests/missing-but-valid-key").status_code == 404
+    assert client.get("/api/business/task-retry-requests/short").status_code == 422
+    another = client.post(
+        "/api/business/documents", files={"file": ("other.html", b"<h1>Other</h1>", "text/html")},
+    )
+    assert another.status_code == 202
+    other_task_id = another.json()["task"]["id"]
+    conflict = client.post(f"/api/business/tasks/{other_task_id}/retry", headers={"Idempotency-Key": retry_key})
+    assert conflict.status_code == 409
     assert client.post(f"/api/business/tasks/{task_id}/cancel").status_code == 409
     assert client.get("/api/business/tasks/unknown").status_code == 404
     assert client.get("/api/business/documents/unknown").status_code == 404

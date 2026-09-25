@@ -4,7 +4,7 @@
   "last_updated": "2026-09-25",
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
-  "total_features": 242,
+  "total_features": 243,
   "completed_features": 81,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
@@ -167,7 +167,8 @@
         "BE-068",
         "BE-069",
         "BE-070",
-        "BE-071"
+        "BE-071",
+        "BE-072"
       ]
     },
     {
@@ -3481,7 +3482,34 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Mac 后端存储/API 契约与备份 schema 14 校验已实现；Web 已在 POST 前把键持久化于同源浏览器本地存储，未知结果只按键核对，明确确认后才同键重试；自有 Skill 已传键、输出键并支持只读按键核对与显式同键重试。合成 Mac 回归通过；麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md。"
+      "notes": "Mac 后端存储/API 契约与备份当前 schema 15 校验已实现；Web 已在 POST 前把键持久化于同源浏览器本地存储，未知结果只按键核对，明确确认后才同键重试；自有 Skill 已传键、输出键并支持只读按键核对与显式同键重试。合成 Mac 回归通过；麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md。"
+    },
+    {
+      "id": "BE-072",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "任务重试请求键持久幂等与只读核对",
+      "description": "任务重试请求键与提交意图同事务持久绑定；同键重放即使任务再次失败也不重复提交",
+      "dependencies": [
+        "BE-028"
+      ],
+      "files": [
+        "mineru/business/store/sqlite.py",
+        "mineru/business/services/documents.py",
+        "mineru/business/api/app.py",
+        "business-web/src",
+        "skills/business-documents",
+        "scripts/business_state_backup.py",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：重试请求键与任务提交意图同事务绑定，同键异任务冲突，按键只读核对",
+        "验证：.venv/bin/python -m pytest tests/business；Web 单测、离线构建和完整浏览器回归"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": "Mac 合成存储/API/Web/Skill 验证已通过；真实网络故障、四类标注样本和隔离麒麟/NVIDIA 目标机尚未验收。见 dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md。"
     },
     {
       "id": "FE-001",
@@ -4515,7 +4543,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。提取完成后证据列表失败有明确未知状态和原地重试；多种写入 POST 成功而后续 GET 失败时保留成功确认并只读重试。上传断线、服务端 5xx 或成功响应损坏会标为结果未确认；服务端同事务请求键保护同一次上传。Web 在当前标签页保存待核对上传键，刷新后先按键查询，404 不自动重传，重选原文件后用原键重试。任务重试和取消的未知结果只读核对同一任务。手动再提取改为 POST 前在同源浏览器本地存储保存请求键，未知结果只按键 GET；页面重载后仍可核对，404 不证明拒绝，用户明确确认后才用同键重试。其余异步恢复、真实断网、目标环境验证未完成，保持未通过。证据：dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md 及此前 FE-047 证据记录。"
+      "notes": "服务断线/恢复、复核重试、五类复核写入、模板升版/停用、检索结果冻结/块读取、检索/审计续页、质量统计并发、批量上传、任务重试及证据/审计异步导航已验证；对比修订切换后的旧失败已隔离。提取完成后证据列表失败有明确未知状态和原地重试；多种写入 POST 成功而后续 GET 失败时保留成功确认并只读重试。上传断线、服务端 5xx 或成功响应损坏会标为结果未确认；服务端同事务请求键保护同一次上传。Web 在当前标签页保存待核对上传键，刷新后先按键查询，404 不自动重传，重选原文件后用原键重试。任务重试已在 POST 前持久保存请求键，未知结果只按键 GET，跨页面刷新保留，404 后经明确确认才同键重试；取消的未知结果只读核对同一任务。手动再提取改为 POST 前在同源浏览器本地存储保存请求键，未知结果只按键 GET；页面重载后仍可核对，404 不证明拒绝，用户明确确认后才用同键重试。其余异步恢复、真实断网、目标环境验证未完成，保持未通过。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md 及此前 FE-047 证据记录。"
     },
     {
       "id": "FE-048",
@@ -4999,7 +5027,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-23",
-      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry/cancel 未知结果只读核对同一任务。手动 extract 已传入请求键，未知结果只读按键查询，返回键支持跨调用明确同键重试；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md。"
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry 已传键，未知结果按键核对并允许显式同键重试；取消的未知结果只读核对同一任务。手动 extract 已传入请求键，未知结果只读按键查询，返回键支持跨调用明确同键重试；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md、dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md。"
     },
     {
       "id": "SKL-020",
@@ -5824,7 +5852,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已提供停服后 schema 14 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传和手动提取请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
+      "notes": "已提供停服后 schema 15 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传、手动提取和任务重试请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
     },
     {
       "id": "QA-034",

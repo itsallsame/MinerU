@@ -101,7 +101,10 @@ export const businessApi = {
   confirm: (id) => postJson(`/extractions/${encodeURIComponent(id)}/confirm`, { source: "web" }),
   audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),
   task: (id) => request(`/tasks/${encodeURIComponent(id)}`),
-  retry: (id) => request(`/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" }),
+  retry: (id, requestKey) => request(`/tasks/${encodeURIComponent(id)}/retry`, {
+    method: "POST", headers: { "Idempotency-Key": requestKey },
+  }),
+  taskRetryRequest: (key) => request(`/task-retry-requests/${encodeURIComponent(key)}`),
   cancel: (id) => request(`/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   uploadRequest: (key) => request(`/upload-requests/${encodeURIComponent(key)}`),
   upload: (file, { tier, templateCode, requestKey } = {}) => {

@@ -96,19 +96,24 @@ class DocumentWorkflow:
         task = self._submit_existing(task, source_path=uploaded.path, expected_sha256=document.sha256)
         return DocumentSubmission(document=document, task=task)
 
-    def retry(self, task_id: str) -> IngestTask:
+    def retry(self, task_id: str, *, request_key: str | None = None) -> IngestTask:
         """Resubmit a retained source after a failed or interrupted submission."""
-        task = self._store.get_task(task_id)
-        if task is None:
-            raise DocumentWorkflowError("Task not found")
-        if task.status not in ("uploaded", "submitting", "failed"):
-            return task
+        if request_key is not None:
+            task, should_submit = self._store.begin_task_retry(task_id, request_key=request_key)
+            if not should_submit:
+                return task
+        else:
+            task = self._store.get_task(task_id)
+            if task is None:
+                raise DocumentWorkflowError("Task not found")
+            if task.status not in ("uploaded", "submitting", "failed"):
+                return task
+            task = self._store.begin_task_submission(task.id)
+            if task.status != "submitting":
+                return task
         document = self._store.get_document(task.document_id)
         if document is None:
             raise DocumentWorkflowError("Task source document not found")
-        task = self._store.begin_task_submission(task.id)
-        if task.status != "submitting":
-            return task
         try:
             source_path = self._uploads.source_path(document.storage_key)
         except (UploadError, OSError):

@@ -222,6 +222,9 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("extraction-request").add_argument(
         "request_key", help="Check one prior extraction key without starting another run",
     )
+    commands.add_parser("task-retry-request").add_argument(
+        "request_key", help="Check one prior task retry key without resubmitting",
+    )
     search = commands.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=20)
@@ -260,6 +263,7 @@ def parser() -> argparse.ArgumentParser:
     cancel.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested task cancellation")
     retry = commands.add_parser("retry")
     retry.add_argument("task_id")
+    retry.add_argument("--request-key", help="Reuse this key when retrying an uncertain task submission")
     retry.add_argument("--confirm-write", action="store_true", help="Acknowledge an explicitly requested task retry")
     return main
 
@@ -308,6 +312,18 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
         ):
             raise BusinessAPIError("Business API returned an incomplete extraction request", status=200)
         return {**result, "request_key": args.request_key, "state": "accepted"}
+    if command == "task-retry-request":
+        if REQUEST_KEY_RE.fullmatch(args.request_key) is None:
+            raise BusinessAPIError("Invalid task retry idempotency key")
+        try:
+            result = client.request("GET", f"/task-retry-requests/{quote(args.request_key, safe='')}")
+        except BusinessAPIError as exc:
+            if exc.status == 404:
+                return {"request_key": args.request_key, "state": "not_recorded_at_lookup"}
+            raise
+        if not isinstance(result, dict) or not isinstance(result.get("id"), str) or not isinstance(result.get("status"), str):
+            raise BusinessAPIError("Business API returned an incomplete task retry request", status=200)
+        return {**result, "request_key": args.request_key, "state": "accepted"}
     if command == "overview":
         return client.overview(args.document_id)
     if command == "search":
@@ -351,18 +367,34 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "retry":
         if not args.confirm_write:
             raise BusinessAPIError("Task retry requires --confirm-write after explicit user approval")
+        request_key = uuid.uuid4().hex if args.request_key is None else args.request_key
+        if REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessAPIError("Invalid task retry idempotency key")
         path = f"/tasks/{quote(args.task_id, safe='')}"
         try:
-            result = client.request("POST", f"{path}/retry")
+            result = client.request("POST", f"{path}/retry", headers={"Idempotency-Key": request_key})
             if not isinstance(result, dict) or result.get("id") != args.task_id or not isinstance(result.get("status"), str):
                 raise BusinessAPIError("Task retry response is incomplete; outcome unknown", status=200)
-            return result
+            return {**result, "request_key": request_key}
         except BusinessAPIError as exc:
             if not _write_outcome_unknown(exc):
+                exc.request_key = request_key
                 raise
-            return _task_after_unknown_write(
-                client, args.task_id, state="retry_outcome_unconfirmed", action="retry", cause=exc,
-            )
+            try:
+                task = client.request("GET", f"/task-retry-requests/{quote(request_key, safe='')}")
+            except BusinessAPIError as lookup_error:
+                if lookup_error.status == 404:
+                    return {"state": "not_recorded_at_lookup", "request_key": request_key}
+                raise BusinessAPIError(
+                    "Task retry outcome unknown; check this request key before another write",
+                    status=exc.status, request_key=request_key,
+                ) from lookup_error
+            if not isinstance(task, dict) or task.get("id") != args.task_id or not isinstance(task.get("status"), str):
+                raise BusinessAPIError(
+                    "Task retry outcome unknown; request lookup returned a different identity",
+                    request_key=request_key,
+                ) from exc
+            return {**task, "request_key": request_key, "state": "accepted_after_lookup"}
     if command == "revisions":
         return client.request("GET", f"/documents/{quote(args.document_id, safe='')}/revisions")
     if command == "extract":

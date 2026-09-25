@@ -44,7 +44,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 14
+_SCHEMA_VERSION = 15
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -58,6 +58,10 @@ class UploadRequestConflict(BusinessStoreError):
 
 class ExtractionRequestConflict(BusinessStoreError):
     """An idempotency key was reused for another extraction revision."""
+
+
+class TaskRetryRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for another task retry."""
 
 
 def _now_ms() -> int:
@@ -119,7 +123,7 @@ class BusinessStore:
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
-                    "extraction_requests",
+                    "extraction_requests", "task_retry_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -177,6 +181,11 @@ class BusinessStore:
                         size INTEGER NOT NULL CHECK(size > 0),
                         requested_tier TEXT,
                         template_code TEXT
+                    );
+                    CREATE TABLE task_retry_requests (
+                        request_key TEXT PRIMARY KEY,
+                        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
+                        created_at_ms INTEGER NOT NULL
                     );
                     CREATE TABLE revisions (
                         id TEXT PRIMARY KEY,
@@ -326,7 +335,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 14")
+                database.execute("PRAGMA user_version = 15")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -1235,6 +1244,59 @@ class BusinessStore:
                 row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
             assert row is not None
             return self._task_from_row(row)
+
+    def begin_task_retry(self, task_id: str, *, request_key: str) -> tuple[IngestTask, bool]:
+        """Bind a retry key and submission intent atomically; replay never resubmits."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid task retry idempotency key")
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            prior = database.execute(
+                "SELECT task_id FROM task_retry_requests WHERE request_key=?", (request_key,)
+            ).fetchone()
+            if prior is not None:
+                if prior["task_id"] != task_id:
+                    raise TaskRetryRequestConflict("Idempotency key belongs to a different task retry")
+                row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+                if row is None:
+                    raise BusinessStoreError("Idempotent task retry record is incomplete")
+                return self._task_from_row(row), False
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise BusinessStoreError("Task not found")
+            should_submit = row["status"] in ("uploaded", "failed")
+            if should_submit:
+                new_force_attempt = row["status"] == "failed" and row["error_code"] in (
+                    "doclib_parse_failed", "parse_coverage_incomplete", "parse_batch_invalid"
+                )
+                attempt = row["submission_attempt"] + int(new_force_attempt)
+                force = bool(new_force_attempt or row["submission_force"])
+                database.execute(
+                    "UPDATE tasks SET status='submitting', submission_attempt=?, submission_force=?, updated_at_ms=? "
+                    "WHERE id=?",
+                    (attempt, int(force), _now_ms(), task_id),
+                )
+                row = database.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            database.execute(
+                "INSERT INTO task_retry_requests VALUES (?, ?, ?)", (request_key, task_id, _now_ms())
+            )
+            assert row is not None
+            return self._task_from_row(row), should_submit
+
+    def get_task_retry_request(self, request_key: str) -> IngestTask | None:
+        """Read the current task bound to a prior retry key without submitting again."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid task retry idempotency key")
+        with closing(self._connect()) as database:
+            request = database.execute(
+                "SELECT task_id FROM task_retry_requests WHERE request_key=?", (request_key,)
+            ).fetchone()
+            if request is None:
+                return None
+            row = database.execute("SELECT * FROM tasks WHERE id=?", (request["task_id"],)).fetchone()
+        if row is None:
+            raise BusinessStoreError("Idempotent task retry record is incomplete")
+        return self._task_from_row(row)
 
     def request_task_cancel(self, task_id: str) -> IngestTask:
         """Fence completion and new submissions before the cross-DB release call."""

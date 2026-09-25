@@ -1248,3 +1248,11 @@ Changes: Web writes a random key/revision pair to same-origin localStorage befor
 Verification: Mac Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed; Skill contract 17 passed. Initial restricted full business run failed at Doclib local socket/port binding; permitted rerun passed 373/2 skipped/2 dependency warnings. Real network outage, annotated four-class documents and isolated Kylin/NVIDIA target remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-extraction-client-key-binding.md
 Next: Continue remaining Web async recovery and target validation when machine/samples become available. Keep Goal active.
+
+=== 2026-09-25 Session 141 (durable keyed task retry across Web and Skill) ===
+Status: In progress; remaining P4/FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: A lost task-retry POST response followed by a quick new failure could make task GET ambiguous; a second POST might initiate another submission.
+Changes: Business schema 15 binds retry key and submission intent atomically; same-key replay is read-only even after failure, cross-task reuse conflicts, and a keyed GET resolves the request. Backup validation/manifest and offline docs follow schema 15 without migration. Web persists pending keys before POST and recovers across reload; Skill outputs keys and supports read-only lookup and explicit same-key retry. No model, auth, user, role or permission change.
+Verification: New workflow regression failed before implementation and passed after. Parallel same-key store, API and backup checks passed. Full Mac business suite 378 passed/2 skipped/2 dependency warnings; Web unit 13 passed, eight offline assets built, Chromium regressions 26 passed; Skill contract 18 passed. Real network faults, annotated samples and isolated Kylin/NVIDIA target remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md
+Next: Continue cancellation/other asynchronous recovery and prepare bound real-sample/target verification when inputs are available. Keep Goal active.

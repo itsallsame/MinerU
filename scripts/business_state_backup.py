@@ -129,9 +129,15 @@ def _verify_business_database(path: Path) -> None:
             extraction_requests = database.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_requests'"
             ).fetchone()
+            task_retry_requests = database.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='task_retry_requests'"
+            ).fetchone()
     except sqlite3.Error as exc:
         raise BackupError("Business SQLite integrity check failed") from exc
-    if version != 14 or result != "ok" or requests is None or extraction_requests is None:
+    if (
+        version != 15 or result != "ok" or requests is None or extraction_requests is None
+        or task_retry_requests is None
+    ):
         raise BackupError("Business SQLite schema or integrity check failed")
 
 
@@ -263,7 +269,7 @@ def create_backup(
     _verify_business_database(output / "business" / "business.sqlite3")
     record = {
         "schema": 1,
-        "business_schema": 14,
+        "business_schema": 15,
         "release_sha256": _digest(output / "release.json"),
         "directories": {name: directories for name, (directories, _files) in copied.items()},
         "files": {name: files for name, (_directories, files) in copied.items()},
@@ -291,7 +297,7 @@ def verify_backup(backup: Path) -> dict[str, Any]:
         release_record = json.loads(release.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise BackupError("Backup manifest or release is unreadable") from exc
-    if not isinstance(record, dict) or record.get("schema") != 1 or record.get("business_schema") != 14:
+    if not isinstance(record, dict) or record.get("schema") != 1 or record.get("business_schema") != 15:
         raise BackupError("Backup manifest has an unsupported identity")
     if not isinstance(release_record, dict) or release_record.get("schema") != 4:
         raise BackupError("Backup release schema is unsupported")

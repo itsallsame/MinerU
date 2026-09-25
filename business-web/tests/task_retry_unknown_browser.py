@@ -1,4 +1,4 @@
-"""Lost retry responses are reconciled by task GET before another POST is offered."""
+"""Lost task-retry responses are reconciled by durable key across reload."""
 
 from __future__ import annotations
 
@@ -20,8 +20,9 @@ def main(base_url: str) -> None:
         "actual_tier": "flash", "status": "failed", "error_code": "doclib_submission_failed",
         "created_at_ms": now, "updated_at_ms": now,
     }
-    mode = {"post": "accepted", "probe_available": True}
+    mode = {"post": "accepted", "lookup": "found"}
     calls = {"retry": 0, "probe": 0}
+    keys: list[str] = []
 
     def api(route: object) -> None:
         request = route.request
@@ -41,15 +42,25 @@ def main(base_url: str) -> None:
             return
         elif path == f"/tasks/{task['id']}/retry" and request.method == "POST":
             calls["retry"] += 1
-            if mode["post"] == "accepted":
+            keys.append(request.headers["idempotency-key"])
+            if mode["post"] in ("accepted", "replay"):
                 task.update(status="submitted", error_code=None, updated_at_ms=now + 1)
-            route.fulfill(status=503, content_type="application/json", body='{"detail":"response_lost"}')
-            return
-        elif path == f"/tasks/{task['id']}" and request.method == "GET":
+            if mode["post"] == "replay":
+                payload = task
+            else:
+                route.fulfill(status=503, content_type="application/json", body='{"detail":"response_lost"}')
+                return
+        elif path.startswith("/task-retry-requests/") and request.method == "GET":
             calls["probe"] += 1
-            if not mode["probe_available"]:
+            assert path in {f"/task-retry-requests/{key}" for key in keys}
+            if mode["lookup"] == "offline":
                 route.fulfill(status=503, content_type="application/json", body='{"detail":"probe_unavailable"}')
                 return
+            if mode["lookup"] == "missing":
+                route.fulfill(status=404, content_type="application/json", body='{"detail":"not_recorded"}')
+                return
+            payload = task
+        elif path == f"/tasks/{task['id']}" and request.method == "GET":
             payload = task
         else:
             raise AssertionError(f"Unexpected API call: {request.method} {path}")
@@ -67,22 +78,34 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="重新提交任务").click()
             page.get_by_role("button", name="查看 retry.pdf，解析中").wait_for()
             assert calls == {"retry": 1, "probe": 1}
+            assert len(keys[0]) == 32
             assert page.get_by_text("重试失败", exact=False).count() == 0
 
             task.update(status="failed", error_code="doclib_submission_failed", updated_at_ms=now + 2)
-            mode.update(post="unknown", probe_available=False)
+            mode.update(post="unknown", lookup="offline")
             page.get_by_role("button", name="刷新列表").click()
             page.get_by_role("button", name="查看 retry.pdf，失败").wait_for()
             page.get_by_role("button", name="重新提交任务").click()
-            page.get_by_text("重试结果未确认，任务状态也暂不可读", exact=False).wait_for()
-            check = page.get_by_role("button", name="核对任务状态")
+            page.get_by_text("原重试请求键核对暂不可用", exact=False).wait_for()
             assert calls == {"retry": 2, "probe": 2}
-            mode["probe_available"] = True
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingTaskRetries.v1'))")
+            assert saved == [{"taskId": task["id"], "requestKey": keys[1]}]
+            page.reload(wait_until="networkidle")
+            page.get_by_role("button", name="查看 retry.pdf，失败").click()
+            check = page.get_by_role("button", name="按原请求键核对重试")
+            assert calls["retry"] == 2, "page reload repeated a retry POST"
+            mode["lookup"] = "missing"
             check.click()
-            page.get_by_role("button", name="重新提交任务").wait_for()
+            page.get_by_text("原重试请求键暂未查到", exact=False).wait_for()
             assert calls == {"retry": 2, "probe": 3}, "read-only recheck sent another POST"
+            mode["post"] = "replay"
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="用原键重试任务").click()
+            page.get_by_role("button", name="查看 retry.pdf，解析中").wait_for()
+            assert calls["retry"] == 3 and keys[2] == keys[1] and keys[1] != keys[0]
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingTaskRetries.v1'))") == []
             assert not errors, errors
-            print("Playwright retry recovery passed: accepted lost response and read-only unknown-state recheck")
+            print("Playwright keyed task retry recovery passed: reload, 404, same-key explicit replay")
         finally:
             browser.close()
 

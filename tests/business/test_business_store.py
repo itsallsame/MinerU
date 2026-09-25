@@ -6,6 +6,7 @@ import hashlib
 import io
 import sqlite3
 import stat
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
 
@@ -69,6 +70,27 @@ def test_database_creation_is_explicit_and_private(tmp_path: Path) -> None:
     alias.symlink_to(database_path)
     with pytest.raises(BusinessStoreError, match="symbolic link"):
         BusinessStore(alias).initialize()
+
+
+def test_parallel_keyed_task_retry_persists_one_submission_intent(tmp_path: Path) -> None:
+    business, uploads = _store(tmp_path)
+    upload = uploads.store(io.BytesIO(b"<h1>Retry</h1>"), filename="retry.html")
+    _document, task = business.create_document_with_task(upload, original_name="retry.html", requested_tier=None)
+    reopened = BusinessStore(tmp_path / "business" / "business.sqlite3")
+    key = "manual-task-retry-request-0004"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(business.begin_task_retry, task.id, request_key=key)
+        second = pool.submit(reopened.begin_task_retry, task.id, request_key=key)
+        results = [first.result(timeout=5), second.result(timeout=5)]
+    assert [should_submit for _task, should_submit in results].count(True) == 1
+    assert all(result.status == "submitting" for result, _should_submit in results)
+    assert business.get_task_retry_request(key) == business.get_task(task.id)
+    other_upload = uploads.store(io.BytesIO(b"<h1>Other</h1>"), filename="other.html")
+    _other_document, other_task = business.create_document_with_task(
+        other_upload, original_name="other.html", requested_tier=None,
+    )
+    with pytest.raises(BusinessStoreError, match="different task retry"):
+        business.begin_task_retry(other_task.id, request_key=key)
 
 
 def test_completed_revision_and_frozen_evidence_survive_reparse_and_restart(tmp_path: Path) -> None:
@@ -252,7 +274,7 @@ def test_existing_unknown_database_is_not_modified(tmp_path: Path) -> None:
 def test_claimed_schema_version_must_have_expected_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "spoofed.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:
-        database.execute("PRAGMA user_version = 14")
+        database.execute("PRAGMA user_version = 15")
         database.execute("CREATE TABLE user_data (secret TEXT NOT NULL)")
     with pytest.raises(BusinessStoreError, match="does not match"):
         BusinessStore(database_path).initialize()
@@ -270,7 +292,7 @@ def test_previous_prototype_schema_is_refused_without_migration(tmp_path: Path) 
         assert database.execute("SELECT marker FROM old_business_data").fetchone()[0] == "preserve"
 
 
-@pytest.mark.parametrize("version", [7, 12])
+@pytest.mark.parametrize("version", [7, 12, 14])
 def test_previous_business_schema_is_preserved_without_implicit_migration(tmp_path: Path, version: int) -> None:
     database_path = tmp_path / "old-business.sqlite3"
     with closing(sqlite3.connect(database_path)) as database, database:

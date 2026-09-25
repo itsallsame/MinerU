@@ -28,6 +28,7 @@ def main(base_url: str) -> None:
     ]
     uploaded: list[bytes] = []
     retry_calls = 0
+    retry_keys: list[str] = []
     list_fail = False
 
     def api(route: object) -> None:
@@ -57,11 +58,16 @@ def main(base_url: str) -> None:
             return
         elif path == f"/tasks/{tasks[0]['id']}/retry":
             retry_calls += 1
+            retry_keys.append(request.headers["idempotency-key"])
             if retry_calls == 1:
                 route.fulfill(status=503, content_type="application/json", body='{"detail":"retry_unavailable"}')
                 return
             tasks[0] = {**tasks[0], "status": "submitted", "error_code": None}
             payload = tasks[0]
+        elif path.startswith("/task-retry-requests/"):
+            assert path == f"/task-retry-requests/{retry_keys[0]}"
+            route.fulfill(status=404, content_type="application/json", body='{"detail":"not_recorded"}')
+            return
         else:
             raise AssertionError(f"Unexpected API call: {request.method} {path}")
         route.fulfill(status=200, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
@@ -135,9 +141,10 @@ def main(base_url: str) -> None:
             assert page.get_by_text("重试失败：retry_unavailable").count() == 0
 
             page.get_by_role("button", name="查看 failed.pdf，失败").click()
-            page.get_by_role("button", name="重新提交任务").click()
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.get_by_role("button", name="用原键重试任务").click()
             page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
-            assert retry_calls == 2
+            assert retry_calls == 2 and retry_keys[0] == retry_keys[1]
             tasks[0] = {**tasks[0], "status": "uploaded"}
             page.get_by_role("button", name="刷新列表").click()
             page.get_by_role("button", name="查看 failed.pdf，待提交").click()
@@ -150,14 +157,17 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="查看 failed.pdf，失败").click()
             list_fail = True
             page.get_by_role("button", name="重新提交任务").click()
-            page.get_by_text("任务已重新提交，但文档列表读取失败：list_unavailable").wait_for()
+            page.get_by_text("任务重试请求已受理", exact=False).wait_for()
             assert retry_calls == 4
             list_fail = False
             page.get_by_role("button", name="重新连接并刷新").click()
             page.get_by_role("button", name="查看 failed.pdf，解析中").wait_for()
             assert retry_calls == 4
             assert not errors, errors
-            print("Playwright upload/retry passed: stable batch, failure guidance, accepted retry/read failure and stale-error guard")
+            print(
+                "Playwright upload/retry passed: stable batch, failure guidance, "
+                "accepted retry/read failure and stale-error guard"
+            )
         finally:
             browser.close()
 

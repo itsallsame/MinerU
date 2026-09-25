@@ -63,7 +63,9 @@ from ..services import (
     BusinessStructurePage,
     StructureBlock,
 )
-from ..store import BusinessStore, BusinessStoreError, ExtractionRequestConflict, UploadRequestConflict
+from ..store import (
+    BusinessStore, BusinessStoreError, ExtractionRequestConflict, TaskRetryRequestConflict, UploadRequestConflict,
+)
 from .body_limit import UploadBodyLimit
 
 
@@ -1042,14 +1044,32 @@ def create_app(
         return TaskView.from_record(task)
 
     @app.post("/api/business/tasks/{task_id}/retry", response_model=TaskView)
-    def retry_task(task_id: str) -> TaskView:
+    def retry_task(
+        task_id: str,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> TaskView:
         try:
-            task = workflow.retry(task_id)
+            task = workflow.retry(task_id, request_key=request_key)
+        except TaskRetryRequestConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 404 if str(exc) == "Task not found" else 422
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except DocumentWorkflowError as exc:
             status_code = 404 if str(exc) == "Task not found" else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except UploadError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return TaskView.from_record(task)
+
+    @app.get("/api/business/task-retry-requests/{request_key}", response_model=TaskView)
+    def get_task_retry_request(request_key: str) -> TaskView:
+        try:
+            task = store.get_task_retry_request(request_key)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task retry request not recorded at lookup")
         return TaskView.from_record(task)
 
     @app.post("/api/business/tasks/{task_id}/cancel", response_model=TaskView)
