@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from scripts import release_manifest
+from scripts import offline_package, release_manifest
 from scripts.verify_host_layout import check_host_separation
 
 
@@ -54,6 +54,26 @@ def check_artifact_report(report: dict[str, Any], release: dict[str, Any], relea
         for key in ("model_files_verified", "wheelhouse_files_verified", "web_assets_verified")
     ):
         raise ValueError("Artifact verification report has no verified artifact inventory")
+
+
+def check_runtime_model_artifacts(release: dict[str, Any], model_dir: Path, model_manifest: Path) -> int:
+    """Recheck current mounted model bytes, not only the earlier artifact report."""
+    model = release.get("model")
+    expected_hash = model.get("manifest_sha256") if isinstance(model, dict) else None
+    expected_count = model.get("file_count") if isinstance(model, dict) else None
+    if (
+        not isinstance(expected_hash, str) or release_manifest.SHA256_RE.fullmatch(expected_hash) is None
+        or type(expected_count) is not int or expected_count < 1
+    ):
+        raise ValueError("Selected release has invalid model artifact identity")
+    if not model_manifest.is_file() or model_manifest.is_symlink():
+        raise ValueError("Mounted model manifest is missing or is a symlink")
+    if offline_package.sha256_file(model_manifest) != expected_hash:
+        raise ValueError("Mounted model manifest differs from selected release")
+    count = offline_package.verify_manifest(model_dir, model_manifest)
+    if count != expected_count:
+        raise ValueError("Mounted model file count differs from selected release")
+    return count
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -300,7 +320,11 @@ def main() -> int:
         release_bytes = args.release.read_bytes()
         release = json.loads(release_bytes)
         artifact_bytes = args.artifact_report.read_bytes()
-        check_artifact_report(json.loads(artifact_bytes), release, release_bytes)
+        artifact_report = json.loads(artifact_bytes)
+        check_artifact_report(artifact_report, release, release_bytes)
+        model_count = check_runtime_model_artifacts(release, args.model_dir, args.model_manifest)
+        if model_count != artifact_report["model_files_verified"]:
+            raise ValueError("Mounted model file count differs from artifact verification report")
         service_ids = {
             service: _command("docker", "compose", "-f", str(args.compose_file), "ps", "-q", service)
             for service in ("business-api", "doclib-worker")
@@ -344,6 +368,7 @@ def main() -> int:
             host_gpu_lines=host_gpu_lines,
         )
         report["artifact_report_sha256"] = hashlib.sha256(artifact_bytes).hexdigest()
+        report["model_files_reverified"] = model_count
         release_manifest._write_new_release(args.output, report)
         print("Business runtime preflight passed; physical isolation and real parsing remain separate gates")
     except (

@@ -161,6 +161,68 @@ def test_runtime_requires_matching_successful_artifact_report(tmp_path: Path) ->
             check_artifact_report(changed, release, release_bytes)
 
 
+def test_runtime_rechecks_current_model_bytes_after_artifact_report(tmp_path: Path) -> None:
+    model_dir = tmp_path / "models"
+    model_dir.mkdir()
+    model_file = model_dir / "weight.bin"
+    model_file.write_bytes(b"approved")
+    manifest_path = tmp_path / "model-manifest.json"
+    manifest_path.write_text(json.dumps({
+        "schema": 1, "files": {"weight.bin": hashlib.sha256(b"approved").hexdigest()},
+    }))
+    release = {"model": {
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "file_count": 1,
+    }}
+    assert verify_business_runtime.check_runtime_model_artifacts(release, model_dir, manifest_path) == 1
+    model_file.write_bytes(b"changed-after-artifact-check")
+    with pytest.raises(ValueError, match="Model checksum mismatch"):
+        verify_business_runtime.check_runtime_model_artifacts(release, model_dir, manifest_path)
+    model_file.write_bytes(b"approved")
+    manifest_path.write_text("{}")
+    with pytest.raises(ValueError, match="manifest differs"):
+        verify_business_runtime.check_runtime_model_artifacts(release, model_dir, manifest_path)
+
+
+def test_runtime_cli_rejects_changed_model_before_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    deployment = _deployment(tmp_path)
+    model_dir = deployment["model_dir"]
+    model_file = model_dir / "weight.bin"
+    model_file.write_bytes(b"approved")
+    model_manifest = deployment["model_manifest"]
+    model_manifest.write_text(json.dumps({
+        "schema": 1, "files": {"weight.bin": hashlib.sha256(b"approved").hexdigest()},
+    }))
+    release = deployment["release"]
+    release["model"] = {
+        "manifest_sha256": hashlib.sha256(model_manifest.read_bytes()).hexdigest(), "file_count": 1,
+    }
+    release_path = tmp_path / "release.json"
+    release_path.write_text(json.dumps(release))
+    artifact_report = tmp_path / "artifact-verification.json"
+    artifact_report.write_text(json.dumps({
+        "schema": 1, "result": "artifact_integrity_passed",
+        "release_manifest_sha256": hashlib.sha256(release_path.read_bytes()).hexdigest(),
+        "source_revision": release["source_revision"],
+        "platform": release["platform"],
+        "worker_image_id": release["worker_image_id"],
+        "business_image_id": release["business_image_id"],
+        "base_image_id": release["base_image_id"],
+        "model_manifest_sha256": release["model"]["manifest_sha256"],
+        "model_files_verified": 1, "wheelhouse_files_verified": 1, "web_assets_verified": 1,
+    }))
+    model_file.write_bytes(b"changed-after-artifact-check")
+    output = tmp_path / "runtime.json"
+    monkeypatch.setattr(verify_business_runtime, "_command", lambda *_: pytest.fail("Docker was called"))
+    monkeypatch.setattr(sys, "argv", [
+        "verify_business_runtime.py", "--release", str(release_path),
+        "--artifact-report", str(artifact_report), "--model-dir", str(model_dir),
+        "--model-manifest", str(model_manifest), "--business-bind", "127.0.0.1", "--output", str(output),
+    ])
+    assert verify_business_runtime.main() == 1
+    assert not output.exists()
+
+
 def test_runtime_cli_rejects_stale_artifact_report_before_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     release = _deployment(tmp_path)["release"]
     release_path = tmp_path / "release.json"
