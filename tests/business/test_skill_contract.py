@@ -182,7 +182,7 @@ def test_skill_write_commands_require_explicit_acknowledgement() -> None:
     assert uncertain.value.request_key == "replay-upload-request-key"
     client.upload.side_effect = None
 
-    client.request.return_value = {"id": "run-1"}
+    client.request.return_value = {"id": "run-1", "revision_id": "revision-1", "status": "queued"}
     extracted = script.run(script.parser().parse_args(["extract", "revision-1", "--confirm-write"]), client)
     assert extracted["id"] == "run-1"
     client.request.assert_called_once_with("POST", "/revisions/revision-1/extractions")
@@ -364,7 +364,7 @@ def test_skill_cancel_requires_explicit_write_ack_and_uses_only_business_api() -
     script = _script()
     connection = _Connection({
         ("POST", "/api/business/tasks/task-1/cancel"): _Response({
-            "status": "cancelled", "cancel_effect": "may_continue",
+            "id": "task-1", "status": "cancelled", "cancel_effect": "may_continue",
         }),
     })
     client = script.BusinessClient("http://127.0.0.1:8080")
@@ -373,8 +373,88 @@ def test_skill_cancel_requires_explicit_write_ack_and_uses_only_business_api() -
         script.run(script.parser().parse_args(["cancel", "task-1"]), client)
     assert connection.calls == []
     result = script.run(script.parser().parse_args(["cancel", "task-1", "--confirm-write"]), client)
-    assert result == {"status": "cancelled", "cancel_effect": "may_continue"}
+    assert result == {"id": "task-1", "status": "cancelled", "cancel_effect": "may_continue"}
     assert connection.calls == [("POST", "/api/business/tasks/task-1/cancel")]
+
+
+def test_skill_cancel_unknown_post_only_reads_same_task() -> None:
+    script = _script()
+    connection = _Connection({
+        ("POST", "/api/business/tasks/task-1/cancel"): _Response({"detail": "unavailable"}, status=503),
+        ("GET", "/api/business/tasks/task-1"): _Response({"id": "task-1", "status": "cancel_requested"}),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    args = script.parser().parse_args(["cancel", "task-1", "--confirm-write"])
+
+    result = script.run(args, client)
+    assert result == {"state": "cancel_outcome_unconfirmed", "task": {"id": "task-1", "status": "cancel_requested"}}
+    assert connection.calls == [
+        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", "/api/business/tasks/task-1"),
+    ]
+    connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response({"unexpected": True})
+    assert script.run(args, client)["state"] == "cancel_outcome_unconfirmed"
+    connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response(
+        {"detail": "Task cannot be cancelled"}, status=409,
+    )
+    get_count = connection.calls.count(("GET", "/api/business/tasks/task-1"))
+    with pytest.raises(script.BusinessAPIError, match="cannot be cancelled"):
+        script.run(args, client)
+    assert connection.calls.count(("GET", "/api/business/tasks/task-1")) == get_count
+    connection.responses[("POST", "/api/business/tasks/task-1/cancel")] = _Response(
+        {"detail": "unavailable"}, status=503,
+    )
+    connection.responses[("GET", "/api/business/tasks/task-1")] = _Response(
+        {"detail": "unavailable"}, status=503,
+    )
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown"):
+        script.run(args, client)
+    assert connection.calls[-2:] == [
+        ("POST", "/api/business/tasks/task-1/cancel"), ("GET", "/api/business/tasks/task-1"),
+    ]
+
+
+def test_skill_extract_unknown_post_only_lists_revision_runs() -> None:
+    script = _script()
+    connection = _Connection({
+        ("POST", "/api/business/revisions/rev-1/extractions"): _Response({"detail": "unavailable"}, status=503),
+        ("GET", "/api/business/revisions/rev-1/extractions"): _Response([
+            {"id": "run-1", "revision_id": "rev-1", "status": "queued"},
+        ]),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    args = script.parser().parse_args(["extract", "rev-1", "--confirm-write"])
+
+    result = script.run(args, client)
+    assert result == {"state": "extraction_outcome_unconfirmed", "runs": [
+        {"id": "run-1", "revision_id": "rev-1", "status": "queued"},
+    ]}
+    assert connection.calls == [
+        ("POST", "/api/business/revisions/rev-1/extractions"),
+        ("GET", "/api/business/revisions/rev-1/extractions"),
+    ]
+    connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response({"unexpected": True})
+    assert script.run(args, client)["state"] == "extraction_outcome_unconfirmed"
+    connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response(
+        {"detail": "Revision not ready"}, status=409,
+    )
+    get_count = connection.calls.count(("GET", "/api/business/revisions/rev-1/extractions"))
+    with pytest.raises(script.BusinessAPIError, match="Revision not ready"):
+        script.run(args, client)
+    assert connection.calls.count(("GET", "/api/business/revisions/rev-1/extractions")) == get_count
+    connection.responses[("POST", "/api/business/revisions/rev-1/extractions")] = _Response(
+        {"detail": "unavailable"}, status=503,
+    )
+    connection.responses[("GET", "/api/business/revisions/rev-1/extractions")] = _Response(
+        {"detail": "unavailable"}, status=503,
+    )
+    with pytest.raises(script.BusinessAPIError, match="outcome unknown"):
+        script.run(args, client)
+    assert connection.calls[-2:] == [
+        ("POST", "/api/business/revisions/rev-1/extractions"),
+        ("GET", "/api/business/revisions/rev-1/extractions"),
+    ]
 
 
 def test_skill_retry_requires_explicit_write_ack_and_uses_only_business_api() -> None:

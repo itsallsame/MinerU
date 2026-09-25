@@ -1216,3 +1216,11 @@ Changes: Centralize retained-source size/SHA-256 verification in ImmutableUpload
 Verification: Focused workflow/API/upload tests 44 passed; full Mac business 365 passed/2 skipped/2 dependency warnings with permission to bind the local Doclib UDS; Ruff and diff checks passed. The initial restricted-sandbox full run hit UDS PermissionError, then the same suite passed with test process permissions. Real samples and isolated Kylin/NVIDIA target remain unavailable.
 Evidence: dev-docs/evidence/2026-09-25-completion-source-integrity.md
 Next: Obtain the annotated four-class documents and target access, then run bound real-sample, GPU, offline and failure/recovery acceptance; retain Goal active.
+
+=== 2026-09-25 Session 137 (Skill cancel/extract unknown-write reconciliation) ===
+Status: In progress; P6 real-sample/Kylin/NVIDIA acceptance gates remain open
+Discovery: Skill retry handled an unknown POST outcome conservatively, but cancel and manual extract exposed only a generic error. A caller could repeat a write; manual extraction has no request idempotency key. New tests reproduced the missing read-back on 503.
+Changes: Require a complete matching response on cancel/extract; unknown results trigger only GET of the same task or revision's run list, clearly tagged as unconfirmed, with no second POST. Shared retry's uncertainty predicate; explicit business 4xx conflicts stay definitive. Updated the Skill usage contract and architecture notes. No auth, model, schema, or Web/API change.
+Verification: Focused Skill contract 16 passed, including read-back failure and 409 boundaries; full Mac business 367 passed/2 skipped/2 dependency warnings; Ruff and diff checks passed. Real isolated network faults, Kylin/NVIDIA and annotated samples remain untested.
+Evidence: dev-docs/evidence/2026-09-25-skill-write-uncertainty.md
+Next: Run target-network fault tests and bound four-class sample evaluation once inputs exist; retain Goal active.

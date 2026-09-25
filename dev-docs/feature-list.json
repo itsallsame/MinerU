@@ -4929,7 +4929,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-24",
-      "notes": "自有 Skill 的 upload/extract/cancel/retry CLI 写操作必须携带 --confirm-write；文档要求先确认用户明确请求和批准的隔离业务服务，标志不是认证。retry 只发一次 POST，未知结果仅 GET 同一任务，不自动重发。Mac 契约与真实本地 Web/API/Doclib/Skill opt-in 回归通过；麒麟/真实样本仍未验收。证据：dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md、dev-docs/evidence/2026-09-24-skill-task-retry.md"
+      "notes": "自有 Skill 的 upload/extract/cancel/retry CLI 写操作必须携带 --confirm-write；文档要求先确认用户明确请求和批准的隔离业务服务，标志不是认证。retry/cancel/extract 均只发一次 POST；未知结果只读查询同一任务或修订提取运行，不自动重发，不把读到的状态冒充本次写入成功。Mac 契约与真实本地 Web/API/Doclib/Skill opt-in 回归通过；麒麟/真实样本仍未验收。证据：dev-docs/evidence/2026-09-24-skill-write-acknowledgement.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md"
     },
     {
       "id": "SKL-018",
@@ -4973,7 +4973,7 @@
       ],
       "passes": true,
       "completed_at": "2026-09-23",
-      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry 的断线/408/5xx/异常成功响应也标记结果未确认，只读核对任务，不自动再 POST。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md"
+      "notes": "自有 Skill 标准库客户端、契约测试及真实 FastAPI 测试替身流程通过；上传 HTTP 408/5xx 与不可读成功响应归为结果未知，按原请求键先查询，404 不代表拒绝；任务 retry/cancel 与手动 extract 的断线/408/5xx/异常成功响应也标记结果未确认，只读核对同一任务或修订，不自动再 POST；明确 4xx 冲突照实返回。麒麟与真实网络故障未验收。证据：dev-docs/evidence/2026-09-24-skill-upload-request-lookup.md、dev-docs/evidence/2026-09-24-skill-task-retry.md、dev-docs/evidence/2026-09-25-skill-write-uncertainty.md"
     },
     {
       "id": "SKL-020",

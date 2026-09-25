@@ -34,6 +34,26 @@ class BusinessAPIError(Exception):
         self.request_key = request_key
 
 
+def _write_outcome_unknown(error: BusinessAPIError) -> bool:
+    return error.status is None or error.status == 408 or error.status >= 500 or 200 <= error.status < 300
+
+
+def _task_after_unknown_write(
+    client: BusinessClient, task_id: str, *, state: str, action: str, cause: BusinessAPIError,
+) -> dict[str, Any]:
+    path = f"/tasks/{quote(task_id, safe='')}"
+    try:
+        current = client.request("GET", path)
+    except BusinessAPIError as lookup_error:
+        raise BusinessAPIError(
+            f"Task {action} outcome unknown; check this task before deciding whether to write again",
+            status=cause.status,
+        ) from lookup_error
+    if not isinstance(current, dict) or current.get("id") != task_id or not isinstance(current.get("status"), str):
+        raise BusinessAPIError(f"Task {action} outcome unknown; task lookup returned a different identity") from cause
+    return {"state": state, "task": current}
+
+
 class BusinessClient:
     def __init__(self, base_url: str) -> None:
         try:
@@ -296,7 +316,17 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "cancel":
         if not args.confirm_write:
             raise BusinessAPIError("Cancellation requires --confirm-write after explicit user approval")
-        return client.request("POST", f"/tasks/{quote(args.task_id, safe='')}/cancel")
+        try:
+            result = client.request("POST", f"/tasks/{quote(args.task_id, safe='')}/cancel")
+            if not isinstance(result, dict) or result.get("id") != args.task_id or not isinstance(result.get("status"), str):
+                raise BusinessAPIError("Task cancellation response is incomplete; outcome unknown", status=200)
+            return result
+        except BusinessAPIError as exc:
+            if not _write_outcome_unknown(exc):
+                raise
+            return _task_after_unknown_write(
+                client, args.task_id, state="cancel_outcome_unconfirmed", action="cancellation", cause=exc,
+            )
     if command == "retry":
         if not args.confirm_write:
             raise BusinessAPIError("Task retry requires --confirm-write after explicit user approval")
@@ -307,27 +337,42 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
                 raise BusinessAPIError("Task retry response is incomplete; outcome unknown", status=200)
             return result
         except BusinessAPIError as exc:
-            if exc.status is not None and exc.status != 408 and exc.status < 500 and not (200 <= exc.status < 300):
+            if not _write_outcome_unknown(exc):
                 raise
-            try:
-                current = client.request("GET", path)
-            except BusinessAPIError as lookup_error:
-                raise BusinessAPIError(
-                    "Task retry outcome unknown; check this task before deciding whether to retry again",
-                    status=exc.status,
-                ) from lookup_error
-            if (
-                not isinstance(current, dict) or current.get("id") != args.task_id
-                or not isinstance(current.get("status"), str)
-            ):
-                raise BusinessAPIError("Task retry outcome unknown; task lookup returned a different identity") from exc
-            return {"state": "retry_outcome_unconfirmed", "task": current}
+            return _task_after_unknown_write(
+                client, args.task_id, state="retry_outcome_unconfirmed", action="retry", cause=exc,
+            )
     if command == "revisions":
         return client.request("GET", f"/documents/{quote(args.document_id, safe='')}/revisions")
     if command == "extract":
         if not args.confirm_write:
             raise BusinessAPIError("Extraction requires --confirm-write after explicit user approval")
-        return client.request("POST", f"/revisions/{quote(args.revision_id, safe='')}/extractions")
+        path = f"/revisions/{quote(args.revision_id, safe='')}/extractions"
+        try:
+            result = client.request("POST", path)
+            if (
+                not isinstance(result, dict) or not isinstance(result.get("id"), str)
+                or result.get("revision_id") != args.revision_id or not isinstance(result.get("status"), str)
+            ):
+                raise BusinessAPIError("Extraction response is incomplete; outcome unknown", status=200)
+            return result
+        except BusinessAPIError as exc:
+            if not _write_outcome_unknown(exc):
+                raise
+            try:
+                runs = client.request("GET", path)
+            except BusinessAPIError as lookup_error:
+                raise BusinessAPIError(
+                    "Extraction outcome unknown; inspect this revision's extraction runs before another write",
+                    status=exc.status,
+                ) from lookup_error
+            if not isinstance(runs, list) or any(
+                not isinstance(run, dict) or not isinstance(run.get("id"), str)
+                or run.get("revision_id") != args.revision_id or not isinstance(run.get("status"), str)
+                for run in runs
+            ):
+                raise BusinessAPIError("Extraction outcome unknown; run lookup returned an invalid revision") from exc
+            return {"state": "extraction_outcome_unconfirmed", "runs": runs}
     if command == "extraction":
         return {"state": "machine_unconfirmed", **client.request("GET", f"/extractions/{quote(args.run_id, safe='')}")}
     if command == "evidence":
