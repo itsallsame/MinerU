@@ -264,7 +264,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     if (action === "resolution") return businessApi.resolveIssue(
       targetId, payload.status, payload.reason, requestKey,
     );
-    return businessApi.confirm(runId, requestKey);
+    return businessApi.confirm(runId, requestKey, payload.expectedDecisions, payload.expectedIssues);
   }
 
   function reviewReceiptMatches(record, receipt) {
@@ -291,6 +291,11 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     } catch (error) {
       if (!isUnknownWriteError(error)) {
         forgetReviewWrite(record);
+        if (record.action === "confirmation" && error.status === 409
+          && error.message.includes("Review snapshot changed") && isCurrent()) {
+          await loadRun(record.runId);
+          throw new Error("确认前复核状态已变化；页面已刷新，请重新核对字段和问题后再确认。");
+        }
         throw error;
       }
       let receipt;
@@ -1115,7 +1120,11 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     }
     box.append(button("确认并生成不可变成果版本", () => perform(async (isCurrent) => {
       const runId = state.runId;
-      await writeReview("confirmation", runId, {}, runId, isCurrent);
+      const expectedDecisions = Object.fromEntries(
+        [...latestDecisions(state.decisions)].map(([fieldCode, decision]) => [fieldCode, decision.id]),
+      );
+      const expectedIssues = Object.fromEntries(state.extraction.issues.map((issue) => [issue.id, issue.status]));
+      await writeReview("confirmation", runId, { expectedDecisions, expectedIssues }, runId, isCurrent);
     }), state.busy || !!blockers.length || !!pendingReviewWrite(state.runId)));
     if (!state.results.length) box.append(element("p", "review-hint", "尚无已确认成果。机器候选不会自动进入成果。"));
     for (const result of state.results) {

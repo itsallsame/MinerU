@@ -125,6 +125,8 @@ class ConfirmationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: ReviewSource
+    expected_decisions: dict[str, str]
+    expected_issues: dict[str, Literal["open", "resolved", "ignored"]]
 
 
 class ConfirmedFieldView(BaseModel):
@@ -841,7 +843,10 @@ def create_app(
         request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> ConfirmedResultView:
         try:
-            result = store.confirm_result(run_id, source=request.source, request_key=request_key)
+            result = store.confirm_result(
+                run_id, source=request.source, request_key=request_key,
+                expected_decisions=request.expected_decisions, expected_issues=request.expected_issues,
+            )
         except ReviewRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except BusinessStoreError as exc:

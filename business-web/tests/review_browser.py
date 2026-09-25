@@ -188,7 +188,10 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             def confirm(route: object) -> None:
                 payload = json.loads(route.request.post_data)
                 writes.append(("confirmation", payload))
-                assert payload == {"source": "web"}
+                assert payload == {
+                    "source": "web", "expected_decisions": {"title": decisions[-1]["id"]},
+                    "expected_issues": {issue["id"]: issue["status"]},
+                }
                 version = len(results) + 1
                 result = {
                     "id": f"result-{version}", "run_id": run["id"], "version": version, "revision_id": revision["id"],

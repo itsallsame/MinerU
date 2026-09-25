@@ -65,11 +65,18 @@ def main(base_url: str) -> None:
                     receipts[key] = {"action": action, "target_id": target, "result": resolutions[0]}
             else:
                 action, target = "confirmation", "run-1"
+                body = json.loads(request.post_data)
+                if body["expected_decisions"] != {"title": decisions[-1]["id"]} or body["expected_issues"] != {
+                    issue["id"]: issue["status"]
+                }:
+                    reply(route, {"detail": "Review snapshot changed; reload before confirming"}, 409)
+                    return
                 if key not in receipts:
                     results.append({"id": "result-1", "run_id": "run-1", "version": 1,
                                     "revision_id": "rev-1", "template_code": "official_document", "template_version": 1,
-                                    "fields": [{"field_code": "title", "value": "年度通知", "evidence_id": evidence["id"],
-                                                "decision_id": "decision-1", "basis": "candidate_acceptance"}],
+                                    "fields": [{"field_code": "title", "value": decisions[-1]["value"],
+                                                "evidence_id": evidence["id"],
+                                                "decision_id": decisions[-1]["id"], "basis": "candidate_acceptance"}],
                                     "fields_sha256": "f" * 64, "source": "web", "created_at_ms": now})
                     receipts[key] = {"action": action, "target_id": target, "result": results[0]}
                 else:
@@ -153,17 +160,24 @@ def main(base_url: str) -> None:
             lookup_mode["resolution"] = "accepted"
             page.get_by_role("button", name="按原请求键核对复核写入").click()
             page.locator('.issue-card[data-issue-id="issue-1"]').get_by_text("必核 · 已处理").wait_for()
+            page.get_by_role("button", name="按原请求键核对复核写入").wait_for(state="hidden")
             assert len(posts) == 2
 
+            decisions.append({**decisions[0], "id": "decision-2", "value": "并发修订标题", "created_at_ms": now + 1})
+            page.get_by_role("button", name="确认并生成不可变成果版本").click()
+            page.get_by_text("已复核：并发修订标题", exact=False).wait_for()
+            page.get_by_text("确认前复核状态已变化；页面已刷新", exact=False).wait_for()
+            assert len(results) == 0 and len(posts) == 3
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingReviewWrites.v1'))") == []
             page.get_by_role("button", name="确认并生成不可变成果版本").click()
             page.get_by_role("button", name="用原键重试复核写入").wait_for()
             saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingReviewWrites.v1'))")
             assert len(saved) == 1 and saved[0]["action"] == "confirmation"
-            assert len(results) == 1 and len(posts) == 3
+            assert len(results) == 1 and len(posts) == 4
             page.once("dialog", lambda dialog: dialog.accept())
             page.get_by_role("button", name="用原键重试复核写入").click()
             page.get_by_text("确认成果 v1").wait_for()
-            assert len(posts) == 4 and posts[2][1] == posts[3][1] and len(results) == 1
+            assert len(posts) == 5 and posts[3][1] == posts[4][1] and len(results) == 1
             assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingReviewWrites.v1'))") == []
             page.get_by_label("标题的复核值").fill("修订后标题")
             page.get_by_label("标题的证据").select_option(evidence["id"])
@@ -177,7 +191,7 @@ def main(base_url: str) -> None:
             }""")
             page.get_by_role("button", name="保存复核决定").click()
             page.get_by_text("无法保存待核对的复核请求", exact=False).wait_for()
-            assert len(posts) == 4, "storage failure must prevent an untracked review POST"
+            assert len(posts) == 5, "storage failure must prevent an untracked review POST"
             assert not errors, errors
             print("Playwright keyed review-write recovery passed")
         finally:

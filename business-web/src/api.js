@@ -112,9 +112,9 @@ export const businessApi = {
     },
   ),
   results: (id) => request(`/extractions/${encodeURIComponent(id)}/results`),
-  confirm: (id, requestKey = null) => request(`/extractions/${encodeURIComponent(id)}/confirm`, {
+  confirm: (id, requestKey, expectedDecisions, expectedIssues) => request(`/extractions/${encodeURIComponent(id)}/confirm`, {
     method: "POST", headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
-    body: JSON.stringify({ source: "web" }),
+    body: JSON.stringify({ source: "web", expected_decisions: expectedDecisions, expected_issues: expectedIssues }),
   }),
   reviewRequest: (key) => request(`/review-requests/${encodeURIComponent(key)}`),
   audit: (id) => request(`/extractions/${encodeURIComponent(id)}/audit`),

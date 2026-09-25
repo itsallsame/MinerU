@@ -44,6 +44,12 @@ def _run(tmp_path: Path, *, snippet: str, candidate_values: tuple[str, ...] = ()
     return store, run.id, evidence.id
 
 
+def _confirmation_body(store: BusinessStore, run_id: str) -> dict[str, object]:
+    decisions = {decision.field_code: decision.id for decision in store.list_field_decisions(run_id)}
+    issues = {issue.id: issue.status for issue in store.list_quality_issues(run_id)}
+    return {"source": "web", "expected_decisions": decisions, "expected_issues": issues}
+
+
 def test_candidate_requires_explicit_decision_before_confirmation(tmp_path: Path) -> None:
     store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
     with pytest.raises(BusinessStoreError, match="explicit review"):
@@ -111,6 +117,56 @@ def test_parallel_keyed_field_decision_creates_one_audit_event(tmp_path: Path) -
         assert first.result(timeout=5) == second.result(timeout=5)
     assert len(store.list_field_decisions(run_id)) == 1
     assert len(store.list_audit_events(run_id)) == 1
+
+
+def test_confirmation_rejects_stale_decisions_and_reuses_original_snapshot_key(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    original = store.decide_field(
+        run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web",
+    )
+    expected = {"title": original.id}
+    store.decide_field(
+        run_id, field_code="title", value="修订通知", evidence_id=evidence_id,
+        source="web", reason="再次核对原文",
+    )
+    with pytest.raises(BusinessStoreError, match="Review snapshot changed"):
+        store.confirm_result(
+            run_id, source="web", request_key="stale-confirmation-key-0001",
+            expected_decisions=expected, expected_issues={},
+        )
+    assert store.get_review_request("stale-confirmation-key-0001") is None
+    latest = store.list_field_decisions(run_id)[-1]
+    result = store.confirm_result(
+        run_id, source="web", request_key="fresh-confirmation-key-0001",
+        expected_decisions={"title": latest.id}, expected_issues={},
+    )
+    assert result.fields[0].decision_id == latest.id
+    store.decide_field(
+        run_id, field_code="title", value="三次修订", evidence_id=evidence_id,
+        source="web", reason="继续核对原文",
+    )
+    assert store.confirm_result(
+        run_id, source="web", request_key="fresh-confirmation-key-0001",
+        expected_decisions={"title": latest.id}, expected_issues={},
+    ) == result
+    with pytest.raises(ReviewRequestConflict, match="another write"):
+        store.confirm_result(
+            run_id, source="web", request_key="fresh-confirmation-key-0001",
+            expected_decisions={"title": store.list_field_decisions(run_id)[-1].id}, expected_issues={},
+        )
+
+
+def test_confirmation_rejects_stale_issue_status(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="甲乙", candidate_values=("甲", "乙"))
+    issue = next(item for item in store.list_quality_issues(run_id) if item.code == "conflicting_candidates")
+    decision = store.decide_field(run_id, field_code="title", value="甲", evidence_id=evidence_id, source="web")
+    store.resolve_issue(issue.id, status="resolved", source="web", reason="核对原文")
+    with pytest.raises(BusinessStoreError, match="Review snapshot changed"):
+        store.confirm_result(
+            run_id, source="web", expected_decisions={"title": decision.id},
+            expected_issues={issue.id: "open"},
+        )
+    assert store.list_confirmed_results(run_id) == ()
 
 
 def test_keyed_issue_resolution_replays_original_after_issue_closed(tmp_path: Path) -> None:
@@ -335,7 +391,8 @@ def test_open_review_api_exposes_only_confirmed_result_versions(tmp_path: Path) 
     client = TestClient(create_app(
         workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()
     ))
-    assert client.post(f"/api/business/extractions/{run_id}/confirm", json={"source": "web"}).status_code == 409
+    assert client.post(f"/api/business/extractions/{run_id}/confirm",
+                       json=_confirmation_body(store, run_id)).status_code == 409
     decided = client.post(
         f"/api/business/extractions/{run_id}/fields/title/decisions",
         json={"value": "年度通知", "evidence_id": evidence_id, "source": "web"},
@@ -344,7 +401,7 @@ def test_open_review_api_exposes_only_confirmed_result_versions(tmp_path: Path) 
     assert decided.json()["basis"] == "candidate_acceptance"
     assert "user_id" not in decided.json()
     assert client.get(f"/api/business/extractions/{run_id}/decisions").json()[0]["id"] == decided.json()["id"]
-    confirmed = client.post(f"/api/business/extractions/{run_id}/confirm", json={"source": "web"})
+    confirmed = client.post(f"/api/business/extractions/{run_id}/confirm", json=_confirmation_body(store, run_id))
     assert confirmed.status_code == 201
     result_id = confirmed.json()["id"]
     assert confirmed.json()["fields"][0]["value"] == "年度通知"
@@ -371,9 +428,10 @@ def test_open_review_api_resolves_keyed_writes_without_repeating_audit(tmp_path:
     assert client.post(path, json={**body, "value": "其它"}, headers={"Idempotency-Key": decision_key}).status_code == 409
     confirm_key = "review-api-confirm-key-0001"
     confirm_path = f"/api/business/extractions/{run_id}/confirm"
-    confirmed = client.post(confirm_path, json={"source": "web"}, headers={"Idempotency-Key": confirm_key})
+    confirmation_body = _confirmation_body(store, run_id)
+    confirmed = client.post(confirm_path, json=confirmation_body, headers={"Idempotency-Key": confirm_key})
     assert confirmed.status_code == 201
-    replay = client.post(confirm_path, json={"source": "web"}, headers={"Idempotency-Key": confirm_key})
+    replay = client.post(confirm_path, json=confirmation_body, headers={"Idempotency-Key": confirm_key})
     assert replay.json() == confirmed.json()
     assert client.get(f"/api/business/review-requests/{confirm_key}").json() == {
         "action": "confirmation", "target_id": run_id, "result": confirmed.json(),
@@ -381,6 +439,25 @@ def test_open_review_api_resolves_keyed_writes_without_repeating_audit(tmp_path:
     assert client.get("/api/business/review-requests/not-recorded-key-0001").status_code == 404
     assert client.get("/api/business/review-requests/short").status_code == 422
     assert [event.action for event in store.list_audit_events(run_id)] == ["field_decided", "result_confirmed"]
+
+
+def test_open_confirmation_requires_snapshot_and_rejects_stale_tab(tmp_path: Path) -> None:
+    store, run_id, evidence_id = _run(tmp_path, snippet="标题：年度通知", candidate_values=("年度通知",))
+    client = TestClient(create_app(workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()))
+    path = f"/api/business/extractions/{run_id}/confirm"
+    assert client.post(path, json={"source": "web"}).status_code == 422
+    first = store.decide_field(run_id, field_code="title", value="年度通知", evidence_id=evidence_id, source="web")
+    stale = {"source": "web", "expected_decisions": {"title": first.id}, "expected_issues": {}}
+    store.decide_field(
+        run_id, field_code="title", value="修订通知", evidence_id=evidence_id,
+        source="web", reason="另一页面更正",
+    )
+    conflict = client.post(path, json=stale, headers={"Idempotency-Key": "stale-api-confirm-key-0001"})
+    assert conflict.status_code == 409 and "Review snapshot changed" in conflict.text
+    assert client.get("/api/business/review-requests/stale-api-confirm-key-0001").status_code == 404
+    fresh = client.post(path, json=_confirmation_body(store, run_id))
+    assert fresh.status_code == 201
+    assert fresh.json()["fields"][0]["value"] == "修订通知"
 
 
 def test_open_issue_resolution_api_requires_reviewed_field(tmp_path: Path) -> None:
@@ -404,4 +481,5 @@ def test_open_issue_resolution_api_requires_reviewed_field(tmp_path: Path) -> No
     assert resolved.json()["status"] == "resolved"
     assert client.get(f"/api/business/extractions/{run_id}/resolutions").json()[0]["issue_id"] == issue_id
     assert client.get(f"/api/business/extractions/{run_id}").json()["issues"][0]["status"] == "resolved"
-    assert client.post(f"/api/business/extractions/{run_id}/confirm", json={"source": "web"}).status_code == 201
+    assert client.post(f"/api/business/extractions/{run_id}/confirm",
+                       json=_confirmation_body(store, run_id)).status_code == 201

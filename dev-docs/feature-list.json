@@ -3332,7 +3332,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Mac 业务 API 已提供字段决定、问题处理和成果确认写入；schema 18 对三类写入同事务绑定请求键、目标、内容哈希与原记录，按键只读核对，同键回放不重复审计或成果版本，异意图冲突。存储/API 与浏览器合成回归已通过；确认动作尚无复核快照并发前提，真实样本和目标麒麟验证未完成，保持未完成。证据：dev-docs/evidence/2026-09-25-review-request-idempotency.md"
+      "notes": "Mac 业务 API 已提供字段决定、问题处理和成果确认写入；schema 18 对三类写入同事务绑定请求键、目标、内容哈希与原记录，按键只读核对，同键回放不重复审计或成果版本，异意图冲突。确认 API 现要求调用方所见字段决定 ID 与问题状态快照，并在 SQLite 写事务内比对；旧快照 409 不生成成果或请求收据，Web 刷新后要求重新核对。存储/API 与浏览器合成回归已通过；真实样本和目标麒麟验证未完成，保持未完成。证据：dev-docs/evidence/2026-09-25-review-request-idempotency.md、dev-docs/evidence/2026-09-25-review-snapshot-precondition.md"
     },
     {
       "id": "BE-066",

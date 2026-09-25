@@ -845,7 +845,7 @@ class BusinessStore:
         return latest
 
     @staticmethod
-    def _review_request_hash(action: str, target_id: str, payload: dict[str, str | None]) -> str:
+    def _review_request_hash(action: str, target_id: str, payload: dict[str, object]) -> str:
         canonical = json.dumps(
             {"action": action, "target_id": target_id, "payload": payload},
             ensure_ascii=False, sort_keys=True, separators=(",", ":"),
@@ -1049,9 +1049,16 @@ class BusinessStore:
             raise BusinessStoreError("Confirmed result payload is invalid") from exc
         return ConfirmedResult(**payload)
 
-    def confirm_result(self, run_id: str, *, source: str, request_key: str | None = None) -> ConfirmedResult:
+    def confirm_result(
+        self, run_id: str, *, source: str, request_key: str | None = None,
+        expected_decisions: dict[str, str] | None = None, expected_issues: dict[str, str] | None = None,
+    ) -> ConfirmedResult:
         reviewed_by = self._review_source(source)
-        payload_sha256 = self._review_request_hash("confirmation", run_id, {"source": reviewed_by})
+        if (expected_decisions is None) != (expected_issues is None):
+            raise BusinessStoreError("Both review snapshot components are required")
+        payload_sha256 = self._review_request_hash("confirmation", run_id, {
+            "source": reviewed_by, "expected_decisions": expected_decisions, "expected_issues": expected_issues,
+        })
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
             prior_id = self._check_review_request(database, request_key, "confirmation", run_id, payload_sha256)
@@ -1063,6 +1070,16 @@ class BusinessStore:
             run = database.execute("SELECT * FROM extraction_runs WHERE id=?", (run_id,)).fetchone()
             if run is None or run["status"] != "done":
                 raise BusinessStoreError("Only completed extraction can be confirmed")
+            latest = self._latest_decisions(database, run_id)
+            current_decisions = {code: decision.id for code, decision in latest.items()}
+            issue_rows = database.execute(
+                "SELECT id, status FROM quality_issues WHERE run_id=?", (run_id,)
+            ).fetchall()
+            current_issues = {row["id"]: row["status"] for row in issue_rows}
+            if expected_decisions is not None and (
+                expected_decisions != current_decisions or expected_issues != current_issues
+            ):
+                raise BusinessStoreError("Review snapshot changed; reload before confirming")
             open_issue = database.execute(
                 "SELECT 1 FROM quality_issues WHERE run_id=? AND status='open' LIMIT 1", (run_id,)
             ).fetchone()
@@ -1074,7 +1091,6 @@ class BusinessStore:
             ).fetchone()
             if fields_row is None:
                 raise BusinessStoreError("Frozen template version is missing")
-            latest = self._latest_decisions(database, run_id)
             for decision in latest.values():
                 evidence = database.execute(
                     "SELECT revision_id, snippet, snippet_sha256 FROM evidence WHERE id=?", (decision.evidence_id,)
