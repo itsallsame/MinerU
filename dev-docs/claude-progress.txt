@@ -1296,3 +1296,11 @@ Changes: Require release CLI to compare HTML/CSS/JS dist set and hashes with the
 Verification: Current Web unit 13 passed, eight offline assets rebuilt and matched to current source; release/import tests 29 passed; full business suite 382 passed/2 skipped/2 dependency warnings. Static checks pending final handoff. Target Docker build, GPU/model and real samples remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-web-source-release-binding.md
 Next: Continue release/rollback and phase validation when target inputs become available. Keep Goal active.
+
+=== 2026-09-25 Session 147 (preserve new template draft after stale write) ===
+Status: In progress; FE-046/FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: An old template save's list refresh and final render could erase a new template draft started while that save was pending. A Chromium regression reproduced the loss before the fix.
+Changes: Template-list refresh now preserves live editor values, field order/type/required status and focus; stale write final renders no longer replace a newer view. No auth, user, role, permission, model or deployment changes.
+Verification: Web unit 13 passed, eight offline assets built, and all 26 offline Chromium browser regressions passed. Target browser and real documents remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-template-draft-refresh-race.md
+Next: Continue FE-046/FE-047 and phase validation. Await FE-033 structure-edit scope choice; obtain real samples and target machine access when available. Keep Goal active.

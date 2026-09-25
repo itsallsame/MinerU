@@ -85,12 +85,24 @@ def main(base_url: str) -> None:
             page.evaluate("window.__delayTemplate('/templates/my_report')")
             page.get_by_role("button", name="保存新版本").click()
             page.wait_for_function("window.__pendingTemplate === true")
-            page.get_by_role("button", name="公文 · v1 · 内置").click()
-            page.get_by_text("内置模板只读；需要不同字段时").wait_for()
+            page.get_by_role("button", name="新增自定义模板").click()
+            draft = page.locator(".template-editor")
+            draft.locator('[name="template-code"]').fill("next_report")
+            draft.locator('[name="template-name"]').fill("正在编辑的新草稿")
+            draft.locator('[name="field-code"]').fill("summary")
+            draft.locator('[name="field-label"]').fill("摘要")
+            draft.locator('[name="field-type"]').select_option("list")
+            draft.locator('[name="field-required"]').check()
             page.evaluate("window.__releaseTemplate()")
             page.wait_for_function("window.__settledTemplate === true")
             page.get_by_role("button", name="新版报告 · v2").wait_for()
-            assert page.get_by_text("内置模板只读；需要不同字段时").count() == 1
+            assert draft.locator('[name="template-code"]').input_value() == "next_report"
+            assert draft.locator('[name="template-name"]').input_value() == "正在编辑的新草稿"
+            assert draft.locator('[name="field-code"]').input_value() == "summary"
+            assert draft.locator('[name="field-label"]').input_value() == "摘要"
+            assert draft.locator('[name="field-type"]').input_value() == "list"
+            assert draft.locator('[name="field-required"]').is_checked()
+            assert draft.locator('[name="field-required"]').evaluate("element => element === document.activeElement")
             assert page.get_by_text("新版报告 第 2 版已保存。").count() == 0
 
             page.get_by_role("button", name="新版报告 · v2").click()
@@ -105,7 +117,7 @@ def main(base_url: str) -> None:
             assert page.get_by_text("新版报告 已停用；历史版本仍可读取。").count() == 0
             assert writes == ["update", "disable"]
             assert not errors, errors
-            print("Playwright template races passed: delayed save and disable preserve newer selection")
+            print("Playwright template races passed: delayed writes preserve newer draft and selection")
         finally:
             browser.close()
 

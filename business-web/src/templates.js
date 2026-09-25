@@ -89,7 +89,23 @@ export function createTemplateManager(root, { onChanged }) {
     return row;
   }
 
-  function render() {
+  function render({ preserveDraft = false } = {}) {
+    const currentForm = preserveDraft ? root.querySelector(".template-editor") : null;
+    const focusedControl = currentForm?.contains(document.activeElement) && document.activeElement.name
+      ? {
+        name: document.activeElement.name,
+        index: [...currentForm.querySelectorAll(`[name="${document.activeElement.name}"]`)].indexOf(document.activeElement),
+      } : null;
+    const draft = currentForm ? {
+      code: currentForm.querySelector('[name="template-code"]').value,
+      name: currentForm.querySelector('[name="template-name"]').value,
+      fields: [...currentForm.querySelectorAll(".template-field-row")].map((row) => ({
+        code: row.querySelector('[name="field-code"]').value,
+        label: row.querySelector('[name="field-label"]').value,
+        type: row.querySelector('[name="field-type"]').value,
+        required: row.querySelector('[name="field-required"]').checked,
+      })),
+    } : null;
     root.replaceChildren();
     const intro = element("p", "review-hint", "内置模板不可修改；自定义模板每次保存都生成新版本。旧文档继续使用上传时绑定的版本。此系统没有用户或审批权限。");
     const list = element("div", "template-list");
@@ -144,12 +160,12 @@ export function createTemplateManager(root, { onChanged }) {
 
     const form = element("form", "template-editor");
     form.append(element("h3", "", creating ? "新建自定义模板" : `编辑 ${selected.name} · 保存为第 ${selected.version + 1} 版`));
-    const code = input("模板代码（创建后不可更改）", selected?.code || "", "template-code");
+    const code = input("模板代码（创建后不可更改）", draft?.code ?? selected?.code ?? "", "template-code");
     code.querySelector("input").disabled = !creating;
-    const name = input("模板名称", selected?.name || "", "template-name");
+    const name = input("模板名称", draft?.name ?? selected?.name ?? "", "template-name");
     form.append(code, name);
     const fields = element("div", "template-fields");
-    for (const field of selected?.fields || [{ code: "", label: "", type: "text", required: false }]) {
+    for (const field of draft?.fields ?? selected?.fields ?? [{ code: "", label: "", type: "text", required: false }]) {
       fields.append(fieldRow(field));
     }
     form.append(element("h4", "", "字段配置 · 从上到下为提取顺序"), fields);
@@ -190,7 +206,7 @@ export function createTemplateManager(root, { onChanged }) {
         if (savedViewVersion === viewVersion) error = cause.message;
       } finally {
         busy = false;
-        render();
+        if (savedViewVersion === viewVersion) render();
       }
     });
     root.append(form);
@@ -210,9 +226,12 @@ export function createTemplateManager(root, { onChanged }) {
           if (savedViewVersion === viewVersion) error = cause.message;
         } finally {
           busy = false;
-          render();
+          if (savedViewVersion === viewVersion) render();
         }
       }));
+    }
+    if (focusedControl && focusedControl.index >= 0) {
+      [...form.querySelectorAll(`[name="${focusedControl.name}"]`)][focusedControl.index]?.focus({ preventScroll: true });
     }
   }
 
@@ -220,7 +239,7 @@ export function createTemplateManager(root, { onChanged }) {
     setTemplates(items) {
       templates = items;
       if (selectedCode && !templates.some((item) => item.code === selectedCode)) selectedCode = null;
-      render();
+      render({ preserveDraft: true });
     },
   };
 }
