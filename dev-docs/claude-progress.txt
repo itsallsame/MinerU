@@ -1312,3 +1312,11 @@ Changes: Add-field actions now focus the new field code. Removing a row focuses 
 Verification: Web unit 13 passed, eight offline assets built, and all 26 offline Chromium browser regressions passed. Full screen-reader/keyboard and target browser validation remain open.
 Evidence: dev-docs/evidence/2026-09-25-template-field-keyboard-focus.md
 Next: Continue P4 and phase validation; obtain real samples and target access when available. Keep Goal active.
+
+=== 2026-09-25 Session 149 (template write idempotency and unknown outcomes) ===
+Status: In progress; FE-047, P1 target acceptance and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Lost template write responses could lead to duplicate version increments on retry; Web had no durable request identity and validation errors cleared a live draft.
+Changes: Schema 16 binds template create/update/disable request keys and result versions in one transaction, rejects key reuse for other intent, and provides read-only lookup. Web persists intent before POST/PUT, blocks fresh writes while unknown, offers read-only lookup and explicitly confirmed same-key replay across reload, and preserves invalid drafts. Backup schema check and deployment/design docs advanced; no old DB migration, auth, user, role, permission or model change.
+Verification: Mac business tests 386 passed/2 skipped, changed Python Ruff passed; Web unit 13 passed, eight offline assets built and all 27 Chromium browser regressions passed including storage-unavailable refusal. Diff and feature-list JSON checks passed. Target machine and real documents remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-template-write-idempotency.md
+Next: Continue P4/P1 and obtain target inputs. Keep Goal active.

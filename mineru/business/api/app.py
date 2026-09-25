@@ -64,7 +64,8 @@ from ..services import (
     StructureBlock,
 )
 from ..store import (
-    BusinessStore, BusinessStoreError, ExtractionRequestConflict, TaskRetryRequestConflict, UploadRequestConflict,
+    BusinessStore, BusinessStoreError, ExtractionRequestConflict, TaskRetryRequestConflict, TemplateRequestConflict,
+    UploadRequestConflict,
 )
 from .body_limit import UploadBodyLimit
 
@@ -886,11 +887,19 @@ def create_app(
         return [TemplateView.from_record(template) for template in store.list_templates()]
 
     @app.post("/api/business/templates", response_model=TemplateView, status_code=201)
-    def create_template(request: TemplateCreateRequest) -> TemplateView:
+    def create_template(
+        request: TemplateCreateRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> TemplateView:
         try:
-            template = store.create_template(code=request.code, name=request.name, fields=request.domain_fields())
-        except BusinessStoreError as exc:
+            template = store.create_template(
+                code=request.code, name=request.name, fields=request.domain_fields(), request_key=request_key,
+            )
+        except TemplateRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid template idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return TemplateView.from_record(template)
@@ -902,22 +911,45 @@ def create_app(
             raise HTTPException(status_code=404, detail="Template version not found")
         return TemplateView.from_record(template)
 
-    @app.put("/api/business/templates/{code}", response_model=TemplateView)
-    def update_template(code: str, request: TemplateWriteRequest) -> TemplateView:
+    @app.get("/api/business/template-requests/{request_key}", response_model=TemplateView)
+    def get_template_request(request_key: str) -> TemplateView:
         try:
-            template = store.update_template(code, name=request.name, fields=request.domain_fields())
+            template = store.get_template_request(request_key)
         except BusinessStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if template is None:
+            raise HTTPException(status_code=404, detail="Template request not found")
+        return TemplateView.from_record(template)
+
+    @app.put("/api/business/templates/{code}", response_model=TemplateView)
+    def update_template(
+        code: str, request: TemplateWriteRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> TemplateView:
+        try:
+            template = store.update_template(
+                code, name=request.name, fields=request.domain_fields(), request_key=request_key,
+            )
+        except TemplateRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid template idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return TemplateView.from_record(template)
 
     @app.post("/api/business/templates/{code}/disable", response_model=TemplateView)
-    def disable_template(code: str) -> TemplateView:
+    def disable_template(
+        code: str, request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> TemplateView:
         try:
-            template = store.disable_template(code)
-        except BusinessStoreError as exc:
+            template = store.disable_template(code, request_key=request_key)
+        except TemplateRequestConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid template idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
         return TemplateView.from_record(template)
 
     @app.post("/api/business/documents", response_model=SubmissionView, status_code=202)

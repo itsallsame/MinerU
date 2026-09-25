@@ -41,11 +41,18 @@ export const businessApi = {
     limit: String(limit), ...(before ? { before } : {}),
   })}`),
   templates: () => request("/templates"),
-  createTemplate: (definition) => postJson("/templates", definition),
-  updateTemplate: (code, definition) => request(`/templates/${encodeURIComponent(code)}`, {
-    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(definition),
+  createTemplate: (definition, requestKey) => request("/templates", {
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
+    body: JSON.stringify(definition),
   }),
-  disableTemplate: (code) => request(`/templates/${encodeURIComponent(code)}/disable`, { method: "POST" }),
+  updateTemplate: (code, definition, requestKey) => request(`/templates/${encodeURIComponent(code)}`, {
+    method: "PUT", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
+    body: JSON.stringify(definition),
+  }),
+  disableTemplate: (code, requestKey) => request(`/templates/${encodeURIComponent(code)}/disable`, {
+    method: "POST", headers: { "Idempotency-Key": requestKey },
+  }),
+  templateRequest: (requestKey) => request(`/template-requests/${encodeURIComponent(requestKey)}`),
   search: (query, limit = 20) => request(`/search?${new URLSearchParams({ query, limit: String(limit) })}`),
   readRevision: (id, locator, limit = 12000) => request(
     `/revisions/${encodeURIComponent(id)}/content?${new URLSearchParams({ locator, limit: String(limit) })}`,

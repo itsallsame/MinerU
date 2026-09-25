@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from mineru.business.api import create_app
 from mineru.business.documents import ImmutableUploadStore
 from mineru.business.domain import TemplateField
-from mineru.business.store import BusinessStore, BusinessStoreError
+from mineru.business.store import BusinessStore, BusinessStoreError, TemplateRequestConflict
 
 
 def _store(tmp_path: Path) -> BusinessStore:
@@ -65,6 +65,30 @@ def test_template_validation_and_builtin_protection(tmp_path: Path) -> None:
         store.disable_template("paper")
 
 
+def test_template_write_keys_replay_exact_version_without_duplicate_update(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    fields = (TemplateField("title", "标题"),)
+    create_key, update_key, disable_key = (character * 20 for character in "cud")
+    first = store.create_template(code="my_report", name="报告", fields=fields, request_key=create_key)
+    assert store.create_template(code="my_report", name="报告", fields=fields, request_key=create_key) == first
+    second = store.update_template("my_report", name="新版", fields=fields, request_key=update_key)
+    assert second.version == 2
+    assert store.update_template("my_report", name="新版", fields=fields, request_key=update_key) == second
+    store.update_template("my_report", name="三版", fields=fields)
+    assert store.get_template_request(update_key) == second
+    with pytest.raises(TemplateRequestConflict):
+        store.update_template("my_report", name="不同内容", fields=fields, request_key=update_key)
+    with pytest.raises(TemplateRequestConflict):
+        store.disable_template("my_report", request_key=update_key)
+    disabled = store.disable_template("my_report", request_key=disable_key)
+    assert disabled.version == 3 and not disabled.enabled
+    assert store.disable_template("my_report", request_key=disable_key) == disabled
+    assert store.get_template_request(create_key) == first
+    assert store.get_template_request("missing_key_123456") is None
+    with pytest.raises(BusinessStoreError, match="Invalid template idempotency key"):
+        store.get_template_request("short")
+
+
 def test_template_api_is_open_and_old_version_is_readable(tmp_path: Path) -> None:
     store = _store(tmp_path)
     client = TestClient(create_app(workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()))
@@ -83,6 +107,23 @@ def test_template_api_is_open_and_old_version_is_readable(tmp_path: Path) -> Non
     assert client.get("/api/business/templates/sample?version=1").json()["fields"][0]["code"] == "title"
     assert client.get("/api/business/templates/sample?version=3").status_code == 404
     assert client.post("/api/business/templates/sample/disable").json()["enabled"] is False
+
+
+def test_template_api_request_lookup_and_replay(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    client = TestClient(create_app(workflow=Mock(), store=store, evidence_reader=Mock(), evidence_writer=Mock()))
+    key = "template_update_123456"
+    body = {"name": "二版", "fields": [{"code": "title", "label": "标题"}]}
+    store.create_template(code="sample", name="一版", fields=(TemplateField("title", "标题"),))
+    first = client.put("/api/business/templates/sample", json=body, headers={"Idempotency-Key": key})
+    assert first.status_code == 200 and first.json()["version"] == 2
+    assert client.put("/api/business/templates/sample", json=body, headers={"Idempotency-Key": key}).json() == first.json()
+    assert client.get(f"/api/business/template-requests/{key}").json() == first.json()
+    assert store.get_template("sample").version == 2
+    changed = {"name": "三版", "fields": body["fields"]}
+    assert client.put("/api/business/templates/sample", json=changed, headers={"Idempotency-Key": key}).status_code == 409
+    assert client.get("/api/business/template-requests/missing_key_123456").status_code == 404
+    assert client.post("/api/business/templates/sample/disable", headers={"Idempotency-Key": "short"}).status_code == 422
 
 
 def test_document_freezes_selected_template_version_without_user_identity(tmp_path: Path) -> None:

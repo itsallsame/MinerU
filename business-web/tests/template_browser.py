@@ -103,6 +103,13 @@ def main(base_url: str) -> None:
             second.locator('[name="field-code"]').fill("written_date")
             second.locator('[name="field-label"]').fill("日期")
             second.locator('[name="field-type"]').select_option("date")
+            second.locator('[name="field-code"]').fill("title")
+            editor.get_by_role("button", name="创建模板").click()
+            page.get_by_role("alert").get_by_text("字段代码须唯一", exact=False).wait_for()
+            assert editor.locator('[name="template-code"]').input_value() == "my_report"
+            assert editor.locator(".template-field-row").nth(1).locator('[name="field-code"]').input_value() == "title"
+            assert not writes
+            second.locator('[name="field-code"]').fill("written_date")
             editor.get_by_role("button", name="添加字段").click()
             editor.get_by_role("button", name="添加字段").click()
             third = editor.locator(".template-field-row").nth(2)

@@ -1,6 +1,39 @@
 import { businessApi } from "./api.js";
 
 const codePattern = /^[a-z][a-z0-9_]{0,63}$/;
+const pendingTemplateKey = "mineru.business.pendingTemplateWrite.v1";
+
+function readPendingTemplate() {
+  try {
+    const raw = localStorage.getItem(pendingTemplateKey);
+    if (!raw) return null;
+    const record = JSON.parse(raw);
+    if (typeof record?.requestKey === "string" && /^[A-Za-z0-9_-]{16,128}$/.test(record.requestKey)
+      && ["create", "update", "disable"].includes(record.action) && typeof record.code === "string"
+      && (record.action === "disable" || (record.body && typeof record.body === "object"))) return record;
+  } catch {
+    // An unreadable pending record must not be silently overwritten by a new write.
+  }
+  return { corrupt: true };
+}
+
+function savePendingTemplate(record) {
+  try {
+    localStorage.setItem(pendingTemplateKey, JSON.stringify(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removePendingTemplate() {
+  try {
+    localStorage.removeItem(pendingTemplateKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function validateTemplateDraft(draft) {
   if (!codePattern.test(draft.code)) throw new Error("模板代码须以小写字母开头，只能包含小写字母、数字和下划线（最多 64 字符）。");
@@ -53,6 +86,52 @@ export function createTemplateManager(root, { onChanged }) {
   let message = "";
   let error = "";
   let viewVersion = 0;
+  let pending = readPendingTemplate();
+
+  async function sendPending(record) {
+    if (record.action === "create") return businessApi.createTemplate(record.body, record.requestKey);
+    if (record.action === "update") return businessApi.updateTemplate(record.code, record.body, record.requestKey);
+    return businessApi.disableTemplate(record.code, record.requestKey);
+  }
+
+  async function acceptWrite(updated, savedViewVersion, record) {
+    if (!updated || updated.code !== record.code || !Number.isInteger(updated.version)) {
+      throw new Error("模板写入响应不完整，结果未确认。");
+    }
+    if (!removePendingTemplate()) throw new Error("模板写入已返回，但待核对记录无法清除；请核对结果。");
+    pending = null;
+    if (savedViewVersion === viewVersion && record.action !== "disable") {
+      selectedCode = updated.code;
+      creating = false;
+    }
+    const refreshWarning = await refreshAfterWrite(updated);
+    if (savedViewVersion === viewVersion) {
+      message = record.action === "disable"
+        ? `${updated.name} 已停用；历史版本仍可读取。${refreshWarning}`
+        : `${updated.name} 第 ${updated.version} 版已保存。${refreshWarning}`;
+      error = "";
+    }
+  }
+
+  async function performWrite(record, savedViewVersion) {
+    busy = true;
+    try {
+      const updated = await sendPending(record);
+      await acceptWrite(updated, savedViewVersion, record);
+    } catch (cause) {
+      if (cause.status >= 400 && cause.status < 500
+        && cause.message !== "Template idempotency key belongs to another write"
+        && removePendingTemplate()) pending = null;
+      if (savedViewVersion === viewVersion) {
+        error = pending
+          ? `模板写入结果未确认；请先按请求键核对，勿新建请求。${cause.message}`
+          : cause.message;
+      }
+    } finally {
+      busy = false;
+      if (savedViewVersion === viewVersion) render({ preserveDraft: Boolean(error) });
+    }
+  }
 
   async function refreshAfterWrite(updated) {
     try {
@@ -153,6 +232,36 @@ export function createTemplateManager(root, { onChanged }) {
       success.setAttribute("role", "status");
       root.append(success);
     }
+    if (pending) {
+      const warning = element("p", "review-hint", pending.corrupt
+        ? "本地模板待核对记录无法读取；为避免重复写入，已暂停模板修改。请保留浏览器数据并联系维护人员。"
+        : `模板请求 ${pending.requestKey} 的结果待核对；不要用新请求重复写入。`);
+      warning.setAttribute("role", "status");
+      root.append(warning);
+      if (!pending.corrupt) {
+        root.append(button("核对模板写入结果", async () => {
+          if (busy) return;
+          const savedViewVersion = viewVersion;
+          const record = pending;
+          busy = true;
+          try {
+            const updated = await businessApi.templateRequest(record.requestKey);
+            await acceptWrite(updated, savedViewVersion, record);
+          } catch (cause) {
+            if (savedViewVersion === viewVersion) error = cause.status === 404
+              ? "尚未查到该请求；404 不代表写入未受理，请稍后再核对，或确认后使用同一请求键重试。"
+              : `核对模板写入失败：${cause.message}`;
+          } finally {
+            busy = false;
+            if (savedViewVersion === viewVersion) render();
+          }
+        }));
+        root.append(button("确认后同键重试", () => {
+          if (busy || !window.confirm("仅在已核对或确认需要重试后，才用原请求键重发同一模板写入。继续？")) return;
+          void performWrite(pending, viewVersion);
+        }));
+      }
+    }
     const selected = templates.find((item) => item.code === selectedCode);
     if (!selected && !creating) return;
     if (selected && (selected.built_in || !selected.enabled)) {
@@ -183,10 +292,11 @@ export function createTemplateManager(root, { onChanged }) {
     }));
     const save = element("button", "primary-button", creating ? "创建模板" : "保存新版本");
     save.type = "submit";
+    save.disabled = Boolean(pending);
     form.append(save);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (busy) return;
+      if (busy || pending) return;
       const savedViewVersion = viewVersion;
       try {
         const draft = validateTemplateDraft({
@@ -199,45 +309,32 @@ export function createTemplateManager(root, { onChanged }) {
             required: row.querySelector('[name="field-required"]').checked,
           })),
         });
-        busy = true;
+        const record = {
+          requestKey: crypto.randomUUID(), action: creating ? "create" : "update", code: draft.code,
+          body: creating ? draft : { name: draft.name, fields: draft.fields },
+        };
+        if (!savePendingTemplate(record)) throw new Error("无法保存模板请求键；为避免重复写入，本次没有发送请求。");
+        pending = record;
         save.disabled = true;
-        const updated = creating
-          ? await businessApi.createTemplate(draft)
-          : await businessApi.updateTemplate(selected.code, { name: draft.name, fields: draft.fields });
-        if (savedViewVersion === viewVersion) {
-          selectedCode = updated.code;
-          creating = false;
-        }
-        const refreshWarning = await refreshAfterWrite(updated);
-        if (savedViewVersion === viewVersion) {
-          message = `${updated.name} 第 ${updated.version} 版已保存。${refreshWarning}`;
-          error = "";
-        }
+        await performWrite(record, savedViewVersion);
       } catch (cause) {
         if (savedViewVersion === viewVersion) error = cause.message;
-      } finally {
-        busy = false;
-        if (savedViewVersion === viewVersion) render();
+        if (savedViewVersion === viewVersion) render({ preserveDraft: true });
       }
     });
     root.append(form);
     if (selected) {
       root.append(button("停用此自定义模板", async () => {
-        if (busy || !window.confirm(`停用“${selected.name}”？新上传将无法选择，历史文档与版本不会删除。`)) return;
-        busy = true;
+        if (busy || pending || !window.confirm(`停用“${selected.name}”？新上传将无法选择，历史文档与版本不会删除。`)) return;
         const savedViewVersion = viewVersion;
         try {
-          const updated = await businessApi.disableTemplate(selected.code);
-          const refreshWarning = await refreshAfterWrite(updated);
-          if (savedViewVersion === viewVersion) {
-            message = `${selected.name} 已停用；历史版本仍可读取。${refreshWarning}`;
-            error = "";
-          }
+          const record = { requestKey: crypto.randomUUID(), action: "disable", code: selected.code, body: null };
+          if (!savePendingTemplate(record)) throw new Error("无法保存模板请求键；为避免重复停用，本次没有发送请求。");
+          pending = record;
+          await performWrite(record, savedViewVersion);
         } catch (cause) {
           if (savedViewVersion === viewVersion) error = cause.message;
-        } finally {
-          busy = false;
-          if (savedViewVersion === viewVersion) render();
+          if (savedViewVersion === viewVersion) render({ preserveDraft: true });
         }
       }));
     }

@@ -11,6 +11,7 @@ import sqlite3
 import time
 import uuid
 from contextlib import closing
+from dataclasses import replace
 from pathlib import Path
 
 from ...doclib.locators import parse_content_cursor
@@ -44,7 +45,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 15
+_SCHEMA_VERSION = 16
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -62,6 +63,10 @@ class ExtractionRequestConflict(BusinessStoreError):
 
 class TaskRetryRequestConflict(BusinessStoreError):
     """An idempotency key was reused for another task retry."""
+
+
+class TemplateRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for another template write."""
 
 
 def _now_ms() -> int:
@@ -123,7 +128,7 @@ class BusinessStore:
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
-                    "extraction_requests", "task_retry_requests",
+                    "extraction_requests", "task_retry_requests", "template_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -228,6 +233,16 @@ class BusinessStore:
                         fields_json TEXT NOT NULL,
                         created_at_ms INTEGER NOT NULL,
                         PRIMARY KEY (code, version)
+                    );
+                    CREATE TABLE template_requests (
+                        request_key TEXT PRIMARY KEY,
+                        action TEXT NOT NULL CHECK(action IN ('create', 'update', 'disable')),
+                        code TEXT NOT NULL,
+                        payload_sha256 TEXT NOT NULL,
+                        version INTEGER NOT NULL,
+                        enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+                        created_at_ms INTEGER NOT NULL,
+                        FOREIGN KEY (code, version) REFERENCES template_versions(code, version) ON DELETE RESTRICT
                     );
                     CREATE TABLE extraction_runs (
                         id TEXT PRIMARY KEY,
@@ -335,7 +350,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 15")
+                database.execute("PRAGMA user_version = 16")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -366,21 +381,70 @@ class BusinessStore:
             (code, name, BusinessStore._fields_json(fields), now),
         )
 
-    def create_template(self, *, code: str, name: str, fields: tuple[TemplateField, ...]) -> TemplateVersion:
+    @staticmethod
+    def _template_request_hash(action: str, code: str, name: str, fields: tuple[TemplateField, ...]) -> str:
+        payload = [action, code, name, [vars(field) for field in fields]]
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _check_template_request(
+        database: sqlite3.Connection, request_key: str | None, action: str, code: str, payload_hash: str,
+    ) -> sqlite3.Row | None:
+        if request_key is None:
+            return None
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid template idempotency key")
+        row = database.execute("SELECT * FROM template_requests WHERE request_key=?", (request_key,)).fetchone()
+        if row is not None and (row["action"], row["code"], row["payload_sha256"]) != (
+            action, code, payload_hash,
+        ):
+            raise TemplateRequestConflict("Template idempotency key belongs to another write")
+        return row
+
+    @staticmethod
+    def _save_template_request(
+        database: sqlite3.Connection, request_key: str | None, action: str, code: str,
+        payload_hash: str, version: int, enabled: bool,
+    ) -> None:
+        if request_key is not None:
+            database.execute(
+                "INSERT INTO template_requests VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (request_key, action, code, payload_hash, version, int(enabled), _now_ms()),
+            )
+
+    def _template_request_result(self, code: str, version: int, enabled: bool) -> TemplateVersion:
+        template = self.get_template(code, version=version)
+        assert template is not None
+        return replace(template, enabled=enabled)
+
+    def create_template(
+        self, *, code: str, name: str, fields: tuple[TemplateField, ...], request_key: str | None = None,
+    ) -> TemplateVersion:
         validate_template(code, name, fields)
+        payload_hash = self._template_request_hash("create", code, name, fields)
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            replay = self._check_template_request(database, request_key, "create", code, payload_hash)
+            if replay is not None:
+                return self._template_request_result(code, replay["version"], bool(replay["enabled"]))
             if database.execute("SELECT 1 FROM templates WHERE code=?", (code,)).fetchone():
                 raise BusinessStoreError("Template code already exists")
             self._insert_template(database, code=code, name=name, fields=fields, built_in=False)
+            self._save_template_request(database, request_key, "create", code, payload_hash, 1, True)
         template = self.get_template(code)
         assert template is not None
         return template
 
-    def update_template(self, code: str, *, name: str, fields: tuple[TemplateField, ...]) -> TemplateVersion:
+    def update_template(
+        self, code: str, *, name: str, fields: tuple[TemplateField, ...], request_key: str | None = None,
+    ) -> TemplateVersion:
         validate_template(code, name, fields)
+        payload_hash = self._template_request_hash("update", code, name, fields)
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            replay = self._check_template_request(database, request_key, "update", code, payload_hash)
+            if replay is not None:
+                return self._template_request_result(code, replay["version"], bool(replay["enabled"]))
             row = database.execute("SELECT * FROM templates WHERE code=?", (code,)).fetchone()
             if row is None:
                 raise BusinessStoreError("Template not found")
@@ -396,18 +460,36 @@ class BusinessStore:
             database.execute(
                 "UPDATE templates SET name=?, current_version=? WHERE code=?", (name, next_version, code)
             )
+            self._save_template_request(database, request_key, "update", code, payload_hash, next_version, True)
         template = self.get_template(code)
         assert template is not None
         return template
 
-    def disable_template(self, code: str) -> TemplateVersion:
+    def disable_template(self, code: str, *, request_key: str | None = None) -> TemplateVersion:
+        payload_hash = self._template_request_hash("disable", code, "", ())
         with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            replay = self._check_template_request(database, request_key, "disable", code, payload_hash)
+            if replay is not None:
+                return self._template_request_result(code, replay["version"], bool(replay["enabled"]))
+            row = database.execute("SELECT current_version FROM templates WHERE code=?", (code,)).fetchone()
             cursor = database.execute("UPDATE templates SET enabled=0 WHERE code=? AND built_in=0", (code,))
             if cursor.rowcount != 1:
                 raise BusinessStoreError("Only custom templates can be disabled")
+            assert row is not None
+            self._save_template_request(database, request_key, "disable", code, payload_hash, row["current_version"], False)
         template = self.get_template(code)
         assert template is not None
         return template
+
+    def get_template_request(self, request_key: str) -> TemplateVersion | None:
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid template idempotency key")
+        with closing(self._connect()) as database:
+            row = database.execute("SELECT * FROM template_requests WHERE request_key=?", (request_key,)).fetchone()
+        if row is None:
+            return None
+        return self._template_request_result(row["code"], row["version"], bool(row["enabled"]))
 
     def get_template(self, code: str, *, version: int | None = None) -> TemplateVersion | None:
         with closing(self._connect()) as database:
