@@ -739,7 +739,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "业务 Web 无 npm 运行时依赖，准备机预置 Node 即可离线构建八个静态资源；隔离区只导入已构建文件，不要求 Node。新增独立 Web 制品包：绑定干净 master 精确提交、拒绝旧 dist、逐文件哈希及接收端源码/实际安装目录校验；Mac 合成测试已通过。麒麟目标的批准介质传输与镜像构建未实测，保持未完成。见 dev-docs/evidence/2026-09-25-offline-web-bundle.md"
     },
     {
       "id": "INF-021",
