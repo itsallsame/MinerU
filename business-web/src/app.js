@@ -31,6 +31,7 @@ const state = {
   sourceStatus: "idle",
   sourceError: "",
   sourceRequest: 0,
+  uncertainCancelTasks: new Map(),
 };
 const review = createReviewWorkbench(byId("workbench"), {
   onEvidenceNavigate: (evidence) => {
@@ -270,7 +271,7 @@ function showAcceptedUpload(node, file, result) {
   node.className = `feedback-item ${result?.task?.status ? "success" : "warning"}`;
 }
 
-function isUnknownUploadError(error) {
+function isUnknownWriteError(error) {
   return error?.status === 0 || error?.status === 408 || error?.status >= 500 || error instanceof SyntaxError;
 }
 
@@ -301,7 +302,7 @@ function showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved
       }
       await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
     } catch (error) {
-      if (isUnknownUploadError(error)) {
+      if (isUnknownWriteError(error)) {
         showUnknownUpload(node, file, { tier, templateCode, requestKey }, saved);
         retryStillUnknown = true;
       } else {
@@ -379,7 +380,7 @@ function showPendingUpload(record) {
       await refreshDocuments({ acceptedWriteMessage: "上传请求已受理" });
     } catch (error) {
       if (current !== operation || settled) return;
-      node.firstChild.textContent = isUnknownUploadError(error)
+      node.firstChild.textContent = isUnknownWriteError(error)
         ? `${record.name} · 结果仍未确认；请再次核对原请求，不要创建新请求。 `
         : `${record.name} · 原键重试失败：${error.message}。请核对是否选了原文件。 `;
     } finally {
@@ -675,7 +676,7 @@ function renderDetail() {
           ? acceptedWriteMessage : "" });
       } catch (error) {
         if (selectionRequest !== state.selectionRequest) return;
-        if (!checkOnly && isUnknownUploadError(error)) {
+        if (!checkOnly && isUnknownWriteError(error)) {
           try {
             const latest = await businessApi.task(task.id);
             if (selectionRequest === state.selectionRequest) {
@@ -699,21 +700,61 @@ function renderDetail() {
     actions.append(retry);
   }
   if (task && ["uploaded", "submitting", "submitted", "failed", "cancel_requested"].includes(task.status)) {
-    const cancel = element("button", "secondary-button", task.status === "cancel_requested" ? "继续核对取消结果" : "取消业务任务");
+    const cancellationState = state.uncertainCancelTasks.get(task.id);
+    let checkOnly = task.status === "cancel_requested" || cancellationState === "probe";
+    const cancel = element("button", "secondary-button", checkOnly ? "核对取消状态"
+      : cancellationState === "known" ? "再次取消（上次结果未确认）" : "取消业务任务");
     cancel.type = "button";
     cancel.addEventListener("click", async () => {
-      if (task.status !== "cancel_requested" && !window.confirm(
-        "取消后将停止跟踪这个业务任务；共享或已经运行的底层计算可能继续。确认取消？",
+      if (!checkOnly && !window.confirm(
+        cancellationState === "known"
+          ? "上次取消请求结果未确认，再次发送可能重复请求。确认仍要取消此业务任务？"
+          : "取消后将停止跟踪这个业务任务；共享或已经运行的底层计算可能继续。确认取消？",
       )) return;
       cancel.disabled = true;
       const selectionRequest = state.selectionRequest;
       try {
+        if (checkOnly) {
+          const latest = await businessApi.task(task.id);
+          if (["cancelled", "done"].includes(latest.status)) state.uncertainCancelTasks.delete(task.id);
+          else if (state.uncertainCancelTasks.has(task.id)) state.uncertainCancelTasks.set(task.id, "known");
+          if (selectionRequest === state.selectionRequest) {
+            await refreshDocuments({ acceptedWriteMessage: `已核对任务当前状态：${taskLabel(latest.status)}` });
+          }
+          return;
+        }
         const result = await businessApi.cancel(task.id);
+        if (result?.id !== task.id || typeof result.status !== "string") {
+          throw new SyntaxError("取消响应缺少任务身份或状态");
+        }
+        state.uncertainCancelTasks.delete(task.id);
         if (selectionRequest === state.selectionRequest) clearError();
         await refreshDocuments({ acceptedWriteMessage: selectionRequest === state.selectionRequest
           ? (result.status === "cancel_requested" ? "取消请求已记录，结果尚未确认" : "业务任务已取消") : "" });
       } catch (error) {
-        if (selectionRequest === state.selectionRequest) showError(`取消结果未知，请刷新任务状态核对：${error.message}`);
+        if (selectionRequest !== state.selectionRequest) return;
+        if (!checkOnly && isUnknownWriteError(error)) {
+          checkOnly = true;
+          state.uncertainCancelTasks.set(task.id, "probe");
+          cancel.textContent = "核对取消状态";
+          try {
+            const latest = await businessApi.task(task.id);
+            if (["cancelled", "done"].includes(latest.status)) state.uncertainCancelTasks.delete(task.id);
+            else state.uncertainCancelTasks.set(task.id, "known");
+            if (selectionRequest === state.selectionRequest) {
+              await refreshDocuments({ acceptedWriteMessage: `取消响应未确认；已核对任务当前状态：${taskLabel(latest.status)}` });
+            }
+          } catch (probeError) {
+            if (selectionRequest === state.selectionRequest) {
+              showError(`取消结果未确认，任务状态也暂不可读：${probeError.message}。请先只读核对，不要重复取消。`);
+            }
+          }
+        } else if (checkOnly) {
+          showError(`任务状态暂不可读：${error.message}。请稍后再次核对，不要重复取消。`);
+        } else {
+          showError(`取消请求未受理：${error.message}`);
+        }
+      } finally {
         cancel.disabled = false;
       }
     });
@@ -1030,7 +1071,7 @@ async function submitFiles(event) {
       accepted += 1;
       showAcceptedUpload(resultNode, file, result);
     } catch (error) {
-      if (requestKey && isUnknownUploadError(error)) {
+      if (requestKey && isUnknownWriteError(error)) {
         showUnknownUpload(resultNode, file, { tier, templateCode, requestKey }, saved);
       } else {
         if (requestKey) forgetUpload(requestKey);

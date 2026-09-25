@@ -1224,3 +1224,11 @@ Changes: Require a complete matching response on cancel/extract; unknown results
 Verification: Focused Skill contract 16 passed, including read-back failure and 409 boundaries; full Mac business 367 passed/2 skipped/2 dependency warnings; Ruff and diff checks passed. Real isolated network faults, Kylin/NVIDIA and annotated samples remain untested.
 Evidence: dev-docs/evidence/2026-09-25-skill-write-uncertainty.md
 Next: Run target-network fault tests and bound four-class sample evaluation once inputs exist; retain Goal active.
+
+=== 2026-09-25 Session 138 (Web cancel/extraction unknown-write recovery) ===
+Status: In progress; FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Web cancellation and manual extraction did not reconcile lost POST responses before offering another write. Two Playwright regressions reproduced the missing read-only recovery path before the fix.
+Changes: Unknown cancel/extraction POST results now trigger only GET of the same task or revision runs. Failed read-back exposes read-only check controls; a later repeated write requires an explicit duplicate-risk confirmation. Current-tab state survives list refresh or document reselection. No auth, schema, model or business API change.
+Verification: Web unit 13 passed; eight offline assets built; full Chromium browser suite 26 passed on final build; business API/server regression 14 passed. Real network faults, cross-session recovery, annotated samples and isolated Kylin/NVIDIA browser remain untested.
+Evidence: dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md
+Next: Continue FE-047 cross-session recovery and target fault matrix when possible; retain Goal active.

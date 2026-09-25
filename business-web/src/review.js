@@ -8,6 +8,10 @@ const issueLabels = {
 };
 const runLabels = { queued: "等待提取", running: "正在提取", done: "待人工复核", failed: "提取失败" };
 
+function isUnknownWriteError(error) {
+  return error?.status === 0 || error?.status === 408 || error?.status >= 500 || error instanceof SyntaxError;
+}
+
 function element(tag, className = "", content = "") {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -55,6 +59,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     revisionLoading: false, runLoading: false,
     revisionLoadFailed: false, runLoadFailed: false, evidenceLoadFailed: false,
     evidenceLoading: false, targetRunId: null, contextVersion: 0,
+    uncertainExtractionRevisions: new Set(), extractionProbeFailed: false,
   };
   const currentRevision = () => state.revisions.find((item) => item.id === state.revisionId);
 
@@ -83,6 +88,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.evidenceLoadFailed = false;
     state.evidenceLoading = false;
     state.targetRunId = null;
+    state.extractionProbeFailed = false;
     state.busy = false;
     state.error = "";
     root.replaceChildren();
@@ -175,6 +181,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.contextVersion += 1;
     state.busy = false;
     state.revisionId = revisionId;
+    state.extractionProbeFailed = false;
     state.targetRunId = targetRunId;
     state.runId = null;
     state.extraction = null;
@@ -253,6 +260,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.evidenceLoadFailed = false;
     state.evidenceLoading = false;
     state.targetRunId = null;
+    state.extractionProbeFailed = false;
     state.reading = null;
     state.outline = null;
     state.structure = null;
@@ -275,10 +283,50 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   async function startExtraction() {
+    if (state.extractionProbeFailed) {
+      await perform(async (isCurrent) => {
+        const revisionId = state.revisionId;
+        try {
+          const runs = await businessApi.extractions(revisionId);
+          if (!isCurrent()) return;
+          state.runs = runs;
+          state.extractionProbeFailed = false;
+          state.error = "上次字段提取提交结果未确认；已读取当前运行列表，但无法归因于那次请求。再次生成可能创建重复运行。";
+        } catch (error) {
+          if (isCurrent()) state.error = `字段提取提交结果未确认，运行列表仍不可读：${error.message}。请先只读核对，不要重复提交。`;
+        }
+      });
+      return;
+    }
+    if (state.uncertainExtractionRevisions.has(state.revisionId) && !window.confirm(
+      "上次字段提取提交结果未确认，再次生成可能创建重复运行。确认仍要发起新的提取？",
+    )) return;
     await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
-      const created = await businessApi.enqueueExtraction(revisionId);
+      let created;
+      try {
+        created = await businessApi.enqueueExtraction(revisionId);
+        if (typeof created?.id !== "string" || created.revision_id !== revisionId || typeof created.status !== "string") {
+          throw new SyntaxError("字段提取响应缺少运行身份或状态");
+        }
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (!isUnknownWriteError(error)) throw error;
+        state.uncertainExtractionRevisions.add(revisionId);
+        try {
+          state.runs = await businessApi.extractions(revisionId);
+          if (!isCurrent()) return;
+          state.extractionProbeFailed = false;
+          state.error = "上次字段提取提交结果未确认；已读取当前运行列表，但无法归因于那次请求。再次生成可能创建重复运行。";
+        } catch (probeError) {
+          if (!isCurrent()) return;
+          state.extractionProbeFailed = true;
+          state.error = `字段提取提交结果未确认，运行列表暂不可读：${probeError.message}。请先只读核对，不要重复提交。`;
+        }
+        return;
+      }
       if (!isCurrent()) return;
+      state.uncertainExtractionRevisions.delete(revisionId);
       state.runId = created.id;
       state.targetRunId = created.id;
       state.runs = [created, ...state.runs.filter((run) => run.id !== created.id)];
@@ -955,7 +1003,9 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       tools.append(runSelect);
     }
     tools.append(button(
-      state.runs.length ? "重新生成字段候选" : "生成字段候选",
+      state.extractionProbeFailed ? "核对提取运行"
+        : state.uncertainExtractionRevisions.has(state.revisionId) ? "再次生成字段候选（上次结果未确认）"
+          : state.runs.length ? "重新生成字段候选" : "生成字段候选",
       startExtraction,
       state.busy || state.revisionLoading || state.runLoading || state.runLoadFailed
         || !state.document.template_code || ["queued", "running"].includes(state.extraction?.run.status),
