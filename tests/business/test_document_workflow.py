@@ -653,3 +653,21 @@ def test_changed_source_is_not_accepted_on_retry(tmp_path: Path) -> None:
     task = store.get_task(submitted.task.id)
     assert task is not None
     assert task.error_code == "source_integrity_failed"
+
+
+def test_changed_source_fails_before_unavailable_doclib_is_called(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = ServerNotRunningError()
+    workflow, store, shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Original</h1>"), filename="report.html")
+    source = shared / initial.document.storage_key
+    source.chmod(0o600)
+    source.write_bytes(b"<h1>Corrupted</h1>")
+    client.ensure_parse.reset_mock(side_effect=True)
+    client.ensure_parse.side_effect = ServerNotRunningError()
+
+    with pytest.raises(DocumentWorkflowError, match="integrity"):
+        workflow.retry(initial.task.id)
+    task = store.get_task(initial.task.id)
+    assert task is not None and task.error_code == "source_integrity_failed"
+    client.ensure_parse.assert_not_called()

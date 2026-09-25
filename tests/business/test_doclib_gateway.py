@@ -167,3 +167,15 @@ def test_gateway_detects_source_identity_mismatch(tmp_path: Path) -> None:
 
     with pytest.raises(DocumentIntegrityError):
         DoclibGateway(client, shared_root=root).submit(source)
+
+
+def test_gateway_rejects_changed_source_before_doclib_submission(tmp_path: Path) -> None:
+    root = tmp_path / "shared"
+    root.mkdir()
+    source = root / "report.html"
+    source.write_text("changed after registration")
+    client = Mock(spec=DoclibInterface)
+
+    with pytest.raises(DocumentIntegrityError, match="business source"):
+        DoclibGateway(client, shared_root=root).submit(source, expected_sha256="0" * 64)
+    client.ensure_parse.assert_not_called()

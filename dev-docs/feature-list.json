@@ -1045,7 +1045,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "原文件在上传时记录 SHA-256；提交网关现在会在调用 Doclib 前对照该注册哈希，损坏则终止为 source_integrity_failed，即使 Doclib 不可用也不会误记为可重试的 Doclib 提交失败或发送损坏原件；调用后仍检查前后哈希及 Doclib 响应身份。Mac Mock 回归已通过；真实四类样本与目标麒麟/NVIDIA 验收尚缺，保持未通过。见 dev-docs/evidence/2026-09-25-pre-submit-source-integrity.md。"
     },
     {
       "id": "DOC-005",

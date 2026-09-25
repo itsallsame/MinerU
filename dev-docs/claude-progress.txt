@@ -1200,3 +1200,11 @@ Changes: Treat httpx.RequestError as an unknown transport result within the exis
 Verification: Focused workflow/recovery worker 36 passed; full Mac business 361 passed/2 skipped/2 dependency warnings; Ruff lint passed. Real network drop, Kylin restart and GPU parse remain untested.
 Evidence: dev-docs/evidence/2026-09-25-doclib-read-timeout-recovery.md
 Next: Run controlled target-machine restart and network failure matrix when access exists; retain Goal active.
+
+=== 2026-09-25 Session 135 (pre-submit source integrity) ===
+Status: In progress; DOC-004 and real-sample/Kylin/NVIDIA acceptance gates remain open
+Discovery: The gateway hashed a retained original before Doclib submission, but the business registration hash was checked only after Doclib responded. A tampered original with Doclib unavailable was misclassified as a retryable submission failure.
+Changes: Pass the registered source SHA-256 to the gateway and compare it before calling Doclib. Mismatch now persists terminal source_integrity_failed without sending the changed file; post-submit hash and response checks remain. No schema, model, auth or user/role/permission change.
+Verification: New gateway/workflow regressions failed before the fix and pass after it; focused 37 passed; full Mac business 363 passed/2 skipped/2 dependency warnings; Ruff passed. User currently has neither annotated four-class samples nor access to the isolated Kylin/NVIDIA target, so no real-document or target-machine acceptance is claimed.
+Evidence: dev-docs/evidence/2026-09-25-pre-submit-source-integrity.md
+Next: Obtain samples/annotations and target access when available; retain Goal active.

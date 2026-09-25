@@ -124,6 +124,7 @@ class DocumentWorkflow:
                 force=task.submission_force,
                 consumer_key=f"business:{task.id}",
                 submission_attempt=task.submission_attempt,
+                expected_sha256=expected_sha256,
             )
             if submitted.sha256 != expected_sha256:
                 raise DocumentIntegrityError("Doclib submission no longer matches the business source")
