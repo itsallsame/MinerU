@@ -46,6 +46,7 @@ def test_public_business_api_contract_has_no_auth_or_doclib_routes(tmp_path: Pat
         "/api/business/tasks/{task_id}/cancel": {"post"},
         "/api/business/revisions/{revision_id}/content": {"get"},
         "/api/business/revisions/{revision_id}/extractions": {"get", "post"},
+        "/api/business/extraction-requests/{request_key}": {"get"},
         "/api/business/extractions/{run_id}/confirm": {"post"},
         "/api/business/extractions/{run_id}/results": {"get"},
         "/api/business/templates": {"get", "post"},

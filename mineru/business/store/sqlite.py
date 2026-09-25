@@ -44,7 +44,7 @@ from ..domain import (
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 13
+_SCHEMA_VERSION = 14
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -54,6 +54,10 @@ class BusinessStoreError(ValueError):
 
 class UploadRequestConflict(BusinessStoreError):
     """An idempotency key was reused for a different upload intent."""
+
+
+class ExtractionRequestConflict(BusinessStoreError):
+    """An idempotency key was reused for another extraction revision."""
 
 
 def _now_ms() -> int:
@@ -115,6 +119,7 @@ class BusinessStore:
                     "documents", "tasks", "revisions", "evidence", "templates", "template_versions",
                     "extraction_runs", "field_candidates", "quality_issues", "field_decisions",
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
+                    "extraction_requests",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -235,6 +240,12 @@ class BusinessStore:
                     CREATE INDEX extraction_runs_revision_created ON extraction_runs(revision_id, created_at_ms);
                     CREATE UNIQUE INDEX extraction_runs_one_active_revision
                         ON extraction_runs(revision_id) WHERE status IN ('queued', 'running');
+                    CREATE TABLE extraction_requests (
+                        request_key TEXT PRIMARY KEY,
+                        revision_id TEXT NOT NULL REFERENCES revisions(id) ON DELETE RESTRICT,
+                        run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+                        created_at_ms INTEGER NOT NULL
+                    );
                     CREATE TABLE field_candidates (
                         id TEXT PRIMARY KEY,
                         run_id TEXT NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
@@ -315,7 +326,7 @@ class BusinessStore:
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 13")
+                database.execute("PRAGMA user_version = 14")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -431,13 +442,48 @@ class BusinessStore:
             database.rollback()
         return result
 
-    def enqueue_extraction(self, revision_id: str) -> ExtractionRun:
-        """Persist a run; repeated requests share one active run per revision."""
+    def enqueue_extraction(self, revision_id: str, *, request_key: str | None = None) -> ExtractionRun:
+        """Persist a run and optionally bind one durable request key in the same transaction."""
+        if request_key is not None and _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid extraction idempotency key")
         with closing(self._connect()) as database, database:
             database.execute("BEGIN IMMEDIATE")
+            if request_key is not None:
+                prior = database.execute(
+                    "SELECT revision_id, run_id FROM extraction_requests WHERE request_key=?", (request_key,)
+                ).fetchone()
+                if prior is not None:
+                    if prior["revision_id"] != revision_id:
+                        raise ExtractionRequestConflict("Idempotency key belongs to a different extraction")
+                    existing = database.execute(
+                        "SELECT * FROM extraction_runs WHERE id=?", (prior["run_id"],)
+                    ).fetchone()
+                    if existing is None or existing["revision_id"] != revision_id:
+                        raise BusinessStoreError("Idempotent extraction record is incomplete")
+                    return ExtractionRun(**dict(existing))
             run = self._enqueue_extraction_in_transaction(database, revision_id, automatic=False)
             assert run is not None
+            if request_key is not None:
+                database.execute(
+                    "INSERT INTO extraction_requests VALUES (?, ?, ?, ?)",
+                    (request_key, revision_id, run.id, _now_ms()),
+                )
         return run
+
+    def get_extraction_request(self, request_key: str) -> ExtractionRun | None:
+        """Read a prior keyed write outcome without creating another extraction run."""
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid extraction idempotency key")
+        with closing(self._connect()) as database:
+            request = database.execute(
+                "SELECT revision_id, run_id FROM extraction_requests WHERE request_key=?", (request_key,)
+            ).fetchone()
+            if request is None:
+                return None
+            row = database.execute("SELECT * FROM extraction_runs WHERE id=?", (request["run_id"],)).fetchone()
+        if row is None or row["revision_id"] != request["revision_id"]:
+            raise BusinessStoreError("Idempotent extraction record is incomplete")
+        return ExtractionRun(**dict(row))
 
     @staticmethod
     def _enqueue_extraction_in_transaction(

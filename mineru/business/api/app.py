@@ -63,7 +63,7 @@ from ..services import (
     BusinessStructurePage,
     StructureBlock,
 )
-from ..store import BusinessStore, BusinessStoreError, UploadRequestConflict
+from ..store import BusinessStore, BusinessStoreError, ExtractionRequestConflict, UploadRequestConflict
 from .body_limit import UploadBodyLimit
 
 
@@ -835,14 +835,29 @@ def create_app(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/business/revisions/{revision_id}/extractions", response_model=ExtractionRunView, status_code=202)
-    def extract_fields(revision_id: str) -> ExtractionRunView:
+    def extract_fields(
+        revision_id: str,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> ExtractionRunView:
         if field_extraction is None:
             raise HTTPException(status_code=503, detail="Field extraction is not configured")
         try:
-            run = field_extraction.enqueue(revision_id)
+            run = field_extraction.enqueue(revision_id, request_key=request_key)
+        except ExtractionRequestConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except BusinessStoreError as exc:
             status_code = 404 if str(exc) == "Parse revision not found" else 409
             raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        return ExtractionRunView.from_record(run)
+
+    @app.get("/api/business/extraction-requests/{request_key}", response_model=ExtractionRunView)
+    def get_extraction_request(request_key: str) -> ExtractionRunView:
+        try:
+            run = store.get_extraction_request(request_key)
+        except BusinessStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if run is None:
+            raise HTTPException(status_code=404, detail="Extraction request not recorded at lookup")
         return ExtractionRunView.from_record(run)
 
     @app.get("/api/business/revisions/{revision_id}/extractions", response_model=list[ExtractionRunView])

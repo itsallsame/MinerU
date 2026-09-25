@@ -415,6 +415,26 @@ def test_open_extraction_api_keeps_doclib_parse_id_private(tmp_path: Path) -> No
     assert client.post("/api/business/revisions/missing/extractions").status_code == 404
 
 
+def test_extraction_request_key_recovers_lost_response_after_run_finishes(tmp_path: Path) -> None:
+    store, doclib, extractor, revision_id = _fixture(tmp_path, content="标题：已完成")
+    writer = EvidenceWriter(store=store, doclib=doclib)
+    client = TestClient(create_app(
+        workflow=Mock(), store=store, evidence_reader=EvidenceReader(store=store, doclib=doclib),
+        evidence_writer=writer, field_extraction=extractor,
+    ))
+    key = "manual-extraction-request-0004"
+    first = client.post(f"/api/business/revisions/{revision_id}/extractions", headers={"Idempotency-Key": key})
+    assert first.status_code == 202
+    assert extractor.process_next().status == "done"
+    recovered = client.get(f"/api/business/extraction-requests/{key}")
+    assert recovered.status_code == 200 and recovered.json()["id"] == first.json()["id"]
+    replay = client.post(f"/api/business/revisions/{revision_id}/extractions", headers={"Idempotency-Key": key})
+    assert replay.status_code == 202 and replay.json()["id"] == first.json()["id"]
+    assert replay.json()["status"] == "done"
+    assert len(client.get(f"/api/business/revisions/{revision_id}/extractions").json()) == 1
+    assert client.get("/api/business/extraction-requests/unknown-but-valid-key").status_code == 404
+
+
 def test_api_lifespan_worker_processes_queued_run_without_blocking_post(tmp_path: Path) -> None:
     store, doclib, extractor, revision_id = _fixture(tmp_path, content="标题：后台完成")
     writer = EvidenceWriter(store=store, doclib=doclib)

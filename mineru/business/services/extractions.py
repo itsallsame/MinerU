@@ -25,8 +25,8 @@ class FieldExtraction:
         self._doclib = doclib
         self._evidence_writer = evidence_writer
 
-    def enqueue(self, revision_id: str) -> ExtractionRun:
-        return self._store.enqueue_extraction(revision_id)
+    def enqueue(self, revision_id: str, *, request_key: str | None = None) -> ExtractionRun:
+        return self._store.enqueue_extraction(revision_id, request_key=request_key)
 
     def process_next(self) -> ExtractionRun | None:
         run = self._store.claim_next_extraction()

@@ -1232,3 +1232,11 @@ Changes: Unknown cancel/extraction POST results now trigger only GET of the same
 Verification: Web unit 13 passed; eight offline assets built; full Chromium browser suite 26 passed on final build; business API/server regression 14 passed. Real network faults, cross-session recovery, annotated samples and isolated Kylin/NVIDIA browser remain untested.
 Evidence: dev-docs/evidence/2026-09-25-web-cancel-extraction-unknown.md
 Next: Continue FE-047 cross-session recovery and target fault matrix when possible; retain Goal active.
+
+=== 2026-09-25 Session 139 (manual extraction request key foundation) ===
+Status: In progress; Web/Skill client binding, four-class real-sample and Kylin/NVIDIA gates remain open
+Discovery: Manual extraction deduplicated only active runs. A lost POST response followed by a terminal run left no durable way to attribute or safely retry that request.
+Changes: Added optional Idempotency-Key on the business extraction POST, an atomic SQLite key/revision/run mapping, terminal replay, cross-revision 409, and read-only key lookup. Business schema is now 14; backup validation and docs require the new table and reject old schema without migration or deletion. Web and Skill do not yet send this key. No auth/user/role/permission or model change.
+Verification: New regressions failed before implementation and pass after it, including concurrent same-key requests and terminal replay. Full Mac business suite 371 passed/2 skipped/2 dependency warnings; after the final backup negative test, backup suite 12 passed. Ruff, JSON and diff checks passed. No real network-fault, four-class sample or isolated Kylin/NVIDIA acceptance.
+Evidence: dev-docs/evidence/2026-09-25-extraction-request-idempotency.md
+Next: Bind and persist extraction request keys in Web and self-owned Skill, test cross-session unknown-write recovery, then obtain samples/target machine when available. Keep Goal active.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,55 @@ def test_enqueue_is_idempotent_while_active_and_persists_across_restart(tmp_path
     assert claimed.status == "running" and claimed.attempts == 1
     assert claimed.claim_token and claimed.lease_until_ms
     assert reopened.enqueue_extraction(revision_id).id == first.id
+
+
+def test_request_key_replays_terminal_extraction_without_creating_another_run(tmp_path: Path) -> None:
+    store, revision_id, _evidence_id = _queued(tmp_path)
+    request_key = "manual-extraction-request-0001"
+    first = store.enqueue_extraction(revision_id, request_key=request_key)
+    claimed = store.claim_next_extraction()
+    assert claimed is not None and claimed.id == first.id and claimed.claim_token is not None
+    terminal = store.fail_extraction(claimed.id, claim_token=claimed.claim_token, error_code="test_failure")
+    assert terminal.status == "failed"
+
+    reopened = BusinessStore(tmp_path / "business.sqlite3")
+    assert reopened.get_extraction_request(request_key) == terminal
+    assert reopened.enqueue_extraction(revision_id, request_key=request_key) == terminal
+    another = reopened.enqueue_extraction(revision_id, request_key="manual-extraction-request-0002")
+    assert another.id != first.id
+    assert len(reopened.list_extractions(revision_id)) == 2
+
+
+def test_request_key_cannot_be_reused_for_another_revision(tmp_path: Path) -> None:
+    store, revision_id, _evidence_id = _queued(tmp_path)
+    key = "manual-extraction-request-0003"
+    first = store.enqueue_extraction(revision_id, request_key=key)
+    prior = store.get_revision(revision_id)
+    assert prior is not None
+    other = store.add_completed_revision(
+        prior.document_id,
+        parse=ParseInfo(
+            id=4, sha256=prior.sha256, short_id=prior.short_id, tier=prior.tier, page_range="1",
+            status="done", privacy="local", created_at=3, updated_at=4, done_at=4,
+        ),
+        producer_version="4.0.6",
+    )
+    with pytest.raises(BusinessStoreError, match="different extraction"):
+        store.enqueue_extraction(other.id, request_key=key)
+    assert store.get_extraction_request(key) == first
+
+
+def test_parallel_extraction_request_key_creates_one_run(tmp_path: Path) -> None:
+    store, revision_id, _evidence_id = _queued(tmp_path)
+    key = "manual-extraction-request-0005"
+    reopened = BusinessStore(tmp_path / "business.sqlite3")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(store.enqueue_extraction, revision_id, request_key=key)
+        second = pool.submit(reopened.enqueue_extraction, revision_id, request_key=key)
+        results = [first.result(timeout=5), second.result(timeout=5)]
+    assert results[0].id == results[1].id
+    assert store.get_extraction_request(key).id == results[0].id
+    assert len(store.list_extractions(revision_id)) == 1
 
 
 def test_expired_lease_reclaims_same_run_without_old_partial_candidates(

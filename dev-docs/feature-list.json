@@ -1,10 +1,10 @@
 {
   "project": "基于 MinerU 4 的离线业务文档平台",
   "created_at": "2026-09-23",
-  "last_updated": "2026-09-24",
+  "last_updated": "2026-09-25",
   "repository": "git@github.com:itsallsame/MinerU.git",
   "branch": "master",
-  "total_features": 241,
+  "total_features": 242,
   "completed_features": 81,
   "build_commands": {
     "setup": "uv venv .venv && uv pip install -e '.[dev,test]'",
@@ -166,7 +166,8 @@
         "BE-067",
         "BE-068",
         "BE-069",
-        "BE-070"
+        "BE-070",
+        "BE-071"
       ]
     },
     {
@@ -3458,6 +3459,31 @@
       "notes": ""
     },
     {
+      "id": "BE-071",
+      "phase": "P3",
+      "category": "backend",
+      "priority": "P1",
+      "name": "手动提取请求键幂等与只读核对",
+      "description": "同一次手动字段提取请求以持久请求键跨运行结束和响应丢失重放，且可只读按键找回运行",
+      "dependencies": [
+        "BE-026"
+      ],
+      "files": [
+        "mineru/business/store",
+        "mineru/business/services/extractions.py",
+        "mineru/business/api/app.py",
+        "scripts/business_state_backup.py",
+        "tests/business"
+      ],
+      "steps": [
+        "实现：请求键与修订/提取运行同事务绑定，同键异修订冲突，完成后重放不新增运行",
+        "验证：.venv/bin/python -m pytest tests/business"
+      ],
+      "passes": false,
+      "completed_at": null,
+      "notes": "Mac 后端存储/API 契约与备份 schema 14 校验已实现；Web/Skill 尚未传入该键，麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md。"
+    },
+    {
       "id": "FE-001",
       "phase": "P4",
       "category": "frontend",
@@ -5798,7 +5824,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已提供停服后 schema 13 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md"
+      "notes": "已提供停服后 schema 14 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传和手动提取请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
     },
     {
       "id": "QA-034",
