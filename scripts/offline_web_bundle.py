@@ -128,13 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "create":
             record = create_bundle(repo=args.repo, web_dist=args.web_dist, output=args.output)
+            action = "created"
         else:
             record = verify_bundle(
                 bundle_dir=args.bundle_dir,
                 target_repo=args.target_repo,
                 installed_dist=args.installed_dist,
             )
-        print(f"Business Web bundle verified for source {record['source_revision']}; image build remains separate")
+            action = "verified"
+        print(f"Business Web bundle {action} for source {record['source_revision']}; image build remains separate")
     except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"Offline Web bundle error: {exc}", file=sys.stderr)
         return 1

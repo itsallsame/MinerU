@@ -1392,3 +1392,11 @@ Changes: Added a phase-level evidence/gap table linked from execution.md. It sep
 Verification: Re-ran actual Mac Doclib-contract and review-result tests together: 48 passed, 2 dependency warnings. This does not verify target GPU, real four-class accuracy or offline Compose startup. Markdown/diff links checked; no runtime code changed.
 Evidence: dev-docs/2026-09-25-stage-gates.md
 Next: Act on the FE-033 choice if provided; otherwise pursue remaining phase-level work only where current inputs permit meaningful verification. Do not declare P1/P6 complete without their target gates. Keep Goal active.
+
+=== 2026-09-25 Session 159 (source-bound offline Web asset transfer) ===
+Status: In progress; P1/P6 target acceptance remains open. FE-033 choice has been requested, not assumed.
+Discovery: Source Git bundles intentionally omit ignored `business-web/dist`; the previous handoff said to transfer it separately, but had no stand-alone recipient-side bundle verifier before image build. Final release verification could detect a stale Web build only later.
+Changes: Added an independent Web bundle creator/verifier bound to clean master revision and existing per-asset hashes. Recipient can verify package, matching imported source and the actual installed dist path; stale, wrong-commit, linked, extra or altered assets fail. Deployment instructions now define the separate Web import and retention of the old dist. No model, schema, API or permission change.
+Verification: Focused P1/release tests 47 passed/1 skipped; Ruff lint/format and JSON/diff checks passed. Current fork at 1605ca37 built eight assets and generated a roughly 200 KiB Web package; a temporary same-revision target accepted package and installed-dir verification, remaining Git-clean. No Docker/麒麟 image or physical-transfer claim.
+Evidence: dev-docs/evidence/2026-09-25-offline-web-bundle.md
+Next: Pair source and Web transfer with target base image/wheelhouse/model build when isolated host exists; continue only Mac-verifiable main delivery work meanwhile. Keep Goal active.
