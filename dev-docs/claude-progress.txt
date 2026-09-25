@@ -1288,3 +1288,11 @@ Changes: Registered remote_disabled as a request error; offline mode rejects new
 Verification: Focused no-coverage Mac tests 3 passed for offline paths and 23 passed for existing remote/error behavior. Full business suite 381 passed/2 skipped/2 dependency warnings; core Ruff, diff and feature-list JSON checks passed. Target physical isolation, model loading and real samples remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-offline-remote-intent-guard.md
 Next: Continue phase work and target verification when inputs become available. Keep Goal active.
+
+=== 2026-09-25 Session 146 (bind Web dist to selected source revision) ===
+Status: In progress; P1 target acceptance and real-sample/Kylin/NVIDIA gates remain open
+Discovery: Release records and imported artifact reports hashed the Web dist, but did not prove it came from the recorded clean source revision. Two stale-Web regressions failed before the fix.
+Changes: Require release CLI to compare HTML/CSS/JS dist set and hashes with the checked-out Git root's business-web/src. Imported-release CLI now requires --source-tree, verifies its revision/cleanliness, then compares dist to source before writing a report. Updated deployment guidance and INF-001 evidence. No model, auth, user, role or permission change.
+Verification: Current Web unit 13 passed, eight offline assets rebuilt and matched to current source; release/import tests 29 passed; full business suite 382 passed/2 skipped/2 dependency warnings. Static checks pending final handoff. Target Docker build, GPU/model and real samples remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-web-source-release-binding.md
+Next: Continue release/rollback and phase validation when target inputs become available. Keep Goal active.

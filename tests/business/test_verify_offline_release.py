@@ -232,6 +232,11 @@ def test_imported_release_rejects_wrong_architecture_and_missing_chain(tmp_path:
 
 def test_verify_cli_writes_report_only_after_all_checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     artifacts = _release(tmp_path)
+    source_tree = tmp_path / "source"
+    web_source = source_tree / "business-web" / "src"
+    web_source.mkdir(parents=True)
+    (web_source / "index.html").write_bytes((artifacts["web_dist"] / "index.html").read_bytes())
+    monkeypatch.setattr(verify_offline_release, "_verify_source_tree", lambda *_: None)
     output = tmp_path / "verification.json"
     images = {"worker:local": artifacts["worker"], "business:local": artifacts["business"], "base:local": artifacts["base"]}
     monkeypatch.setattr(release_manifest, "_image_info", lambda reference: images[reference])
@@ -253,9 +258,17 @@ def test_verify_cli_writes_report_only_after_all_checks(tmp_path: Path, monkeypa
         str(artifacts["model_dir"]),
         "--web-dist",
         str(artifacts["web_dist"]),
+        "--source-tree",
+        str(source_tree),
         "--output",
         str(output),
     ]
+    source_index = argv.index("--source-tree")
+    monkeypatch.setattr(sys, "argv", argv[:source_index] + argv[source_index + 2:])
+    with pytest.raises(SystemExit) as missing_source:
+        verify_offline_release.main()
+    assert missing_source.value.code == 2
+    assert not output.exists()
     monkeypatch.setattr(sys, "argv", argv)
     assert verify_offline_release.main() == 0
     report = json.loads(output.read_text())
@@ -266,6 +279,28 @@ def test_verify_cli_writes_report_only_after_all_checks(tmp_path: Path, monkeypa
     assert output.read_bytes() == original
     (artifacts["model_dir"] / MINERU_4_MODELS_TORCH.local_name / "weights.bin").write_bytes(b"wrong")
     output.unlink()
+    assert verify_offline_release.main() == 1
+    assert not output.exists()
+
+
+def test_verify_cli_rejects_web_dist_not_from_selected_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    artifacts = _release(tmp_path)
+    source_tree = tmp_path / "source"
+    web_source = source_tree / "business-web" / "src"
+    web_source.mkdir(parents=True)
+    (web_source / "index.html").write_text("stale page")
+    monkeypatch.setattr(verify_offline_release, "_verify_source_tree", lambda *_: None)
+    images = {"worker:local": artifacts["worker"], "business:local": artifacts["business"], "base:local": artifacts["base"]}
+    monkeypatch.setattr(release_manifest, "_image_info", lambda reference: images[reference])
+    output = tmp_path / "artifact-report.json"
+    monkeypatch.setattr(sys, "argv", [
+        "verify_offline_release.py",
+        "--release", str(artifacts["release_path"]),
+        "--worker-image", "worker:local", "--business-image", "business:local", "--base-image", "base:local",
+        "--wheelhouse", str(artifacts["wheelhouse"]),
+        "--model-manifest", str(artifacts["model_manifest"]), "--model-dir", str(artifacts["model_dir"]),
+        "--web-dist", str(artifacts["web_dist"]), "--source-tree", str(source_tree), "--output", str(output),
+    ])
     assert verify_offline_release.main() == 1
     assert not output.exists()
 
@@ -293,6 +328,8 @@ def test_verify_cli_refuses_report_inside_artifacts(tmp_path: Path, monkeypatch:
             str(artifacts["model_dir"]),
             "--web-dist",
             str(artifacts["web_dist"]),
+            "--source-tree",
+            str(tmp_path / "source"),
             "--output",
             str(artifacts["model_dir"] / "verification.json"),
         ],

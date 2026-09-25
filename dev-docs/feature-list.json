@@ -321,7 +321,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": ""
+      "notes": "两个代码镜像已有源码修订标签与基础镜像身份标签；离线发布清单 CLI 现核对干净 Git 提交的 Web 源码与构建产物逐文件一致，导入校验强制 --source-tree 并核对源码提交及 Web 字节，过期页面拒绝发布。Mac 构建、合成发布与导入负例通过。麒麟 amd64 镜像实构建、标签及目标导入仍未验证，保持未完成。证据：dev-docs/evidence/2026-09-25-web-source-release-binding.md"
     },
     {
       "id": "INF-002",

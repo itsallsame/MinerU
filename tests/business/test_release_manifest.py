@@ -251,6 +251,10 @@ def test_release_record_rejects_wheelhouse_files_excluded_from_docker_context(
 
 def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    web_source = tmp_path / "business-web" / "src"
+    web_source.mkdir(parents=True)
+    (web_source / "index.html").write_bytes((web_dist / "index.html").read_bytes())
+    monkeypatch.chdir(tmp_path)
     output = tmp_path / "release.json"
     images = {
         "worker:test": _image(IMAGE_ID, revision=REVISION),
@@ -263,6 +267,8 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
             return ""
         if args == ("git", "rev-parse", "HEAD"):
             return REVISION
+        if args == ("git", "rev-parse", "--show-toplevel"):
+            return str(tmp_path)
         if args[:3] == ("docker", "image", "inspect"):
             return json.dumps(images[args[3]])
         raise AssertionError(f"Unexpected command: {args}")
@@ -296,6 +302,11 @@ def test_release_cli_requires_and_records_both_code_images(tmp_path: Path, monke
     assert record["worker_image_id"] == IMAGE_ID
     assert record["business_image_id"] == BUSINESS_ID
     assert record["business_web"]["manifest_sha256"] == web_sha256
+    (web_source / "index.html").write_text("stale source")
+    stale_output = tmp_path / "stale-release.json"
+    monkeypatch.setattr(sys, "argv", [*sys.argv[:-1], str(stale_output)])
+    assert release_manifest.main() == 1
+    assert not stale_output.exists()
 
 
 def test_release_output_cannot_clobber_existing_artifacts(tmp_path: Path) -> None:

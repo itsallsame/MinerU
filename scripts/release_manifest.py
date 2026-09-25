@@ -106,6 +106,20 @@ def _validated_web_assets(web_dist: Path) -> tuple[str, dict[str, str]]:
     return _sha256(manifest_path), data
 
 
+def _validate_web_source_match(web_dist: Path, source_dir: Path) -> None:
+    """Reject stale Web assets even if their dist manifest is internally consistent."""
+    _manifest_sha256, files = _validated_web_assets(web_dist)
+    if not source_dir.is_dir() or source_dir.is_symlink():
+        raise ValueError("Business Web source directory is missing or is a symlink")
+    source_files = {path.name for path in source_dir.iterdir() if path.suffix in {".html", ".css", ".js"}}
+    if source_files != set(files):
+        raise ValueError("Business Web source files differ from the built asset list")
+    for name, digest in files.items():
+        path = source_dir / name
+        if not path.is_file() or path.is_symlink() or _sha256(path) != digest:
+            raise ValueError(f"Business Web built asset differs from checked-out source: {name}")
+
+
 def build_release_record(
     *,
     revision: str,
@@ -231,6 +245,8 @@ def main() -> int:
         if _command("git", "status", "--porcelain"):
             raise ValueError("Release source tree must be clean")
         revision = _command("git", "rev-parse", "HEAD")
+        source_root = Path(_command("git", "rev-parse", "--show-toplevel"))
+        _validate_web_source_match(args.web_dist, source_root / "business-web" / "src")
         record = build_release_record(
             revision=revision,
             worker=_image_info(args.worker_image),

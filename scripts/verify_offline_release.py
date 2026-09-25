@@ -107,7 +107,7 @@ def main() -> int:
     parser.add_argument("--model-dir", required=True, type=Path)
     parser.add_argument("--web-dist", required=True, type=Path)
     parser.add_argument("--previous-release", type=Path)
-    parser.add_argument("--source-tree", type=Path)
+    parser.add_argument("--source-tree", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     try:
@@ -132,8 +132,10 @@ def main() -> int:
             web_dist=args.web_dist,
             previous_release=args.previous_release,
         )
-        if args.source_tree is not None:
-            _verify_source_tree(args.source_tree, report["source_revision"])
+        _verify_source_tree(args.source_tree, report["source_revision"])
+        release_manifest._validate_web_source_match(
+            args.web_dist, args.source_tree / "business-web" / "src",
+        )
         if args.output is not None:
             release_manifest._write_new_release(args.output, report)
         print("Offline release artifacts verified; runtime and GPU acceptance remain separate")
