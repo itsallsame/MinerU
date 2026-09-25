@@ -10,6 +10,7 @@ from threading import Barrier, Event
 from unittest.mock import Mock
 
 import pytest
+from httpx import ReadTimeout
 
 from mineru.business.documents import DoclibGateway, ImmutableUploadStore
 from mineru.business.services import DocumentSubmission, DocumentWorkflow, DocumentWorkflowError
@@ -133,6 +134,64 @@ def test_cancel_retries_unknown_doclib_result_after_restart(tmp_path: Path) -> N
     assert cancelled.status == "cancelled" and cancelled.cancel_effect == "queued_skipped"
     assert store.list_revisions(submitted.document.id) == ()
     assert client.release_parse_consumer.call_count == 2
+
+
+def test_doclib_read_timeout_keeps_submission_generation_recoverable(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    requests: list[ParseRequest] = []
+
+    def submit(request: ParseRequest) -> ParseResponse:
+        requests.append(request)
+        if len(requests) == 1:
+            raise ReadTimeout("response lost after upload")
+        return _parse_response(request.path)
+
+    client.ensure_parse.side_effect = submit
+    workflow, store, shared = _workflow(tmp_path, client)
+    initial = workflow.submit(io.BytesIO(b"<h1>Timeout</h1>"), filename="timeout.html")
+    assert initial.task.status == "failed" and initial.task.error_code == "doclib_submission_failed"
+    reopened = DocumentWorkflow(
+        uploads=ImmutableUploadStore(shared, max_bytes=1024),
+        store=BusinessStore(tmp_path / "business" / "business.sqlite3"),
+        gateway=DoclibGateway(client, shared_root=shared), doclib=client, producer_version="4.0.6",
+    )
+    recovered = reopened.retry(initial.task.id)
+    assert recovered.status == "submitted" and recovered.parse_ids == (7,)
+    assert [(request.submission_attempt, request.force) for request in requests] == [(1, False), (1, False)]
+    assert store.list_revisions(initial.document.id) == ()
+
+
+def test_doclib_read_timeout_during_poll_or_cancel_preserves_task_intent(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"<h1>Poll timeout</h1>"), filename="poll.html")
+    client.get_parse.side_effect = [ReadTimeout("parse poll timed out"), _parse_info(submitted.document.sha256)]
+    assert workflow.refresh(submitted.task.id).status == "submitted"
+    assert workflow.refresh(submitted.task.id).status == "done"
+    assert len(store.list_revisions(submitted.document.id)) == 1
+
+    another = workflow.submit(io.BytesIO(b"<h1>Cancel timeout</h1>"), filename="cancel.html")
+    client.release_parse_consumer.side_effect = [
+        ReadTimeout("release response lost"), _released(another.task.id, (7, "skipped", "skipped")),
+    ]
+    assert workflow.cancel(another.task.id).status == "cancel_requested"
+    assert workflow.refresh(another.task.id).status == "cancelled"
+
+
+def test_doclib_read_timeout_during_pdf_coverage_keeps_submitted_task(tmp_path: Path) -> None:
+    client = Mock(spec=DoclibInterface)
+    client.ensure_parse.side_effect = lambda request: _parse_response(request.path)
+    workflow, store, _shared = _workflow(tmp_path, client)
+    submitted = workflow.submit(io.BytesIO(b"%PDF-1.7\ncontent"), filename="report.pdf", tier="flash")
+    client.get_parse.return_value = _parse_info(submitted.document.sha256)
+    doc = Mock(page_count=1)
+    client.get_doc.side_effect = [ReadTimeout("document metadata timed out"), doc]
+
+    assert workflow.refresh(submitted.task.id).status == "submitted"
+    assert store.list_revisions(submitted.document.id) == ()
+    assert workflow.refresh(submitted.task.id).status == "done"
+    assert len(store.list_revisions(submitted.document.id)) == 1
 
 
 def test_cancel_during_doclib_submission_prevents_late_submitted_state(tmp_path: Path) -> None:

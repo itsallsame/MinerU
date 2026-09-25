@@ -2380,7 +2380,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "业务 API 已接入后台文档任务恢复扫描：uploaded/submitting/提交响应未知、submitted、cancel_requested 无需浏览器逐项 GET 即可推进；独立 Doclib 客户端与提交世代支持本地崩溃重放。Mac Mock 和真实 Doclib 联调已测；目标麒麟容器重启、磁盘/模型故障和回退尚未验收，保持未通过。见 dev-docs/evidence/2026-09-24-document-task-recovery-worker.md。"
+      "notes": "业务 API 已接入后台文档任务恢复扫描：uploaded/submitting/提交响应未知、submitted、cancel_requested 无需浏览器逐项 GET 即可推进；独立 Doclib 客户端与提交世代支持本地崩溃重放。连接建立后发生 httpx 读取超时，也会按同一世代重交提交、保留 submitted 或 cancel_requested，不误生成修订。Mac Mock 和真实 Doclib 联调已测；目标麒麟容器重启、真实网络断线、磁盘/模型故障和回退尚未验收，保持未通过。见 dev-docs/evidence/2026-09-24-document-task-recovery-worker.md、dev-docs/evidence/2026-09-25-doclib-read-timeout-recovery.md。"
     },
     {
       "id": "BE-028",

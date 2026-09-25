@@ -1192,3 +1192,11 @@ Changes: Focus a visibly outlined pending source status, then the replacement so
 Verification: Final Web unit suite 13 passed, eight offline assets built, all 24 Playwright Chromium regressions passed. The intermediate first full run found the pre-existing upload test timing race, which was corrected and rerun. Real screen reader, complete keyboard traversal, target Kylin browser and four-class real documents remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-source-retry-keyboard-focus.md
 Next: Resolve FE-033 structure editing scope with user; continue P4 accessibility/recovery checks and obtain real samples/target machine when available. Keep Goal active.
+
+=== 2026-09-25 Session 134 (Doclib read-timeout recovery) ===
+Status: In progress; BE-027 and target Kylin/NVIDIA failure gates remain open
+Discovery: DoclibClient can raise httpx.ReadTimeout after connection establishment; the business task workflow did not normalize that transport failure during submission, parse/PDF metadata polling or cancellation. New tests first reproduced uncaught exceptions.
+Changes: Treat httpx.RequestError as an unknown transport result within the existing persisted task state machine. Same submission generation is retried after workflow reconstruction; submitted polls and cancel intent remain pending until the same operation can be checked again. No schema, model or user/role/permission change.
+Verification: Focused workflow/recovery worker 36 passed; full Mac business 361 passed/2 skipped/2 dependency warnings; Ruff lint passed. Real network drop, Kylin restart and GPU parse remain untested.
+Evidence: dev-docs/evidence/2026-09-25-doclib-read-timeout-recovery.md
+Next: Run controlled target-machine restart and network failure matrix when access exists; retain Goal active.

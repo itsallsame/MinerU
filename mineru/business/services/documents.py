@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
+from httpx import RequestError
+
 from ...doclib import DoclibInterface
 from ...doclib.types import ParseInfo, ParseReleaseRequest
 from ...errors import MineruError
@@ -132,7 +134,7 @@ class DocumentWorkflow:
                 task.id, error_code="source_integrity_failed", expected_submission_attempt=task.submission_attempt
             )
             raise DocumentWorkflowError("Source integrity failed during Doclib submission") from exc
-        except (MineruError, OSError, ValueError, DocumentWorkflowError):
+        except (MineruError, RequestError, OSError, ValueError, DocumentWorkflowError):
             return self._store.mark_task_failed(
                 task.id, error_code="doclib_submission_failed", expected_submission_attempt=task.submission_attempt
             )
@@ -155,7 +157,7 @@ class DocumentWorkflow:
             return task
         try:
             released = self._doclib.release_parse_consumer(ParseReleaseRequest(consumer_key=f"business:{task_id}"))
-        except (MineruError, OSError):
+        except (MineruError, RequestError, OSError):
             return task  # The result is unknown; a later cancel call retries the same stable intent.
         return self._store.finish_task_cancel(task_id, released)
 
@@ -181,7 +183,7 @@ class DocumentWorkflow:
             return task
         try:
             parses = [self._doclib.get_parse(parse_id) for parse_id in task.parse_ids]
-        except MineruError:
+        except (MineruError, RequestError):
             return task  # A transient worker outage must not erase a submitted task.
         if any(parse.status in ("failed", "superseded", "skipped") for parse in parses):
             return self._store.fail_submitted_task_if_current(
@@ -195,7 +197,7 @@ class DocumentWorkflow:
         if document.original_name.lower().endswith(".pdf"):
             try:
                 doc = self._doclib.get_doc(document.sha256)
-            except MineruError:
+            except (MineruError, RequestError):
                 return task
             covered_pages = set().union(*(parse_page_range_set(parse.page_range) for parse in parses))
             if not isinstance(doc.page_count, int) or doc.page_count < 1 or covered_pages != set(range(1, doc.page_count + 1)):
