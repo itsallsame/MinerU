@@ -105,7 +105,9 @@ def _verify_live_skill(origin: str) -> None:
     assert isinstance(overview, dict)
     revision = overview["revision"]
     assert revision["tier"] == "flash"
-    assert overview["draft"] is None
+    assert overview["draft"] is not None
+    assert overview["draft"]["state"] == "machine_unconfirmed"
+    assert overview["draft"]["run"]["revision_id"] == revision["id"]
     assert overview["confirmed_for_latest_run"] is None
     locator = f"doc:{revision['short_id']}/tier:{revision['tier']}/page:1"
     read = _skill(origin, "read", revision["id"], locator)
@@ -216,7 +218,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                 web_result_receipt = home / "web-confirmed-result.json"
                 subprocess.run(
                     [
-                        "python3",
+                        os.environ.get("MINERU_BROWSER_PYTHON", "python3"),
                         str(ROOT / "business-web" / "tests" / "live_business_smoke.py"),
                         origin,
                         str(SAMPLE),

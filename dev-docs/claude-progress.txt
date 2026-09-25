@@ -1368,3 +1368,11 @@ Changes: Confirmation API requires caller-observed latest field-decision IDs and
 Verification: Focused confirmation tests 19 passed; full Mac business suite 401 passed/2 skipped. Web unit 13 passed, eight offline assets built, 29 Chromium regressions passed including stale-tab conflict plus keyed response recovery. Changed Python Ruff, diff and feature-list JSON checks passed. This is synthetic concurrency evidence, not real network, annotated-document or target-machine acceptance.
 Evidence: dev-docs/evidence/2026-09-25-review-snapshot-precondition.md
 Next: Continue FE-046/FE-047/P4 and P1/P6 acceptance preparation. Obtain four annotated real-document samples and isolated Kylin x86_64+NVIDIA access when available. Keep Goal active.
+
+=== 2026-09-25 Session 156 (recheck real Mac Web/API/Doclib/Skill main flow) ===
+Status: In progress; user flagged excessive edge-case hardening. This session returned to the end-to-end product flow. Real annotated samples and isolated Kylin/NVIDIA access are unavailable.
+Discovery: The opt-in real smoke failed before browser startup under `uv run` because its `python3` child resolved to the project environment without Playwright. With the correct browser interpreter, the Web/API/Doclib/Skill flow worked but the Skill subtest still expected no draft after a templated upload, contradicting the implemented automatic extraction contract.
+Changes: Make the browser interpreter explicit via `MINERU_BROWSER_PYTHON` and update the live assertion to require an unconfirmed auto-extraction draft. Document the test command and actual validation scope. No production API, model, schema, authorization or deployment behavior changed.
+Verification: `MINERU_BROWSER_PYTHON=/opt/homebrew/bin/python3 MINERU_RUN_LIVE_BROWSER=1 PYTHONPATH=. uv run --no-sync pytest -q -o addopts='' tests/business/test_live_web_smoke.py --tb=short` passed 1 in 23.40 seconds; changed test Ruff and diff checks passed. Actual business API routes were not mocked. This does not prove target hardware or sample quality.
+Evidence: dev-docs/evidence/2026-09-25-live-main-flow-recheck.md
+Next: Prioritize phase-level offline delivery and genuine acceptance gates over further minor UI/error-path polishing. FE-033 structure-edit scope remains a separate product decision. Keep Goal active.
