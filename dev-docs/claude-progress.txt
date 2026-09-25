@@ -1264,3 +1264,11 @@ Changes: Persist task ID and pending cancellation probe/known state in same-orig
 Verification: Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed including reload and storage-write failure. Focused server cancellation tests 6 passed/33 deselected/1 dependency warning. Real network faults, annotated samples and isolated Kylin/NVIDIA target remain unverified.
 Evidence: dev-docs/evidence/2026-09-25-cancel-reload-recovery.md
 Next: Continue FE-047 remaining async/error and accessibility checks; run real-sample and target validation when inputs become available. Keep Goal active.
+
+=== 2026-09-25 Session 143 (task action keyboard focus) ===
+Status: In progress; FE-046/FE-047 and real-sample/Kylin/NVIDIA gates remain open
+Discovery: After an unknown cancellation, keyboard activation of read-only task check replaced the button and lost focus. A new browser assertion failed before the fix. User currently has neither annotated samples nor target-machine access, so these acceptance gates cannot be claimed.
+Changes: Keep cancel/retry action buttons focusable while busy with aria-disabled and an explicit duplicate-trigger guard. On detail redraw restore focus to the corresponding task action, or to visible status if the action disappeared. Added Chromium focus regressions and evidence. No model, auth, user, role or permission change.
+Verification: Web unit 13 passed, eight offline assets built, full Chromium suite 26 passed on the fresh build. Ruff/JSON/diff checks pending final handoff. Old-dist runs immediately after source edits were invalid and are not treated as fix evidence.
+Evidence: dev-docs/evidence/2026-09-25-task-action-keyboard-focus.md
+Next: Continue P4 async/accessibility checks and bound real-sample/target validation when inputs become available. Keep Goal active.

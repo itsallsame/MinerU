@@ -4521,7 +4521,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "文档列表、复核写入、模板入口、skip link 和上传批次的关键焦点已有 Playwright 回归。原件重试现将焦点先交给可见核验状态，完成后在用户未移走焦点的前提下交给新链接/重试按钮；背景列表刷新保留原件操作焦点，图片解码失败也回到重试按钮。完整键盘遍历、真实屏幕阅读器和麒麟目标浏览器仍待验收，不标通过。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md、dev-docs/evidence/2026-09-23-template-keyboard-status.md、dev-docs/evidence/2026-09-24-skip-link-focus.md、dev-docs/evidence/2026-09-24-upload-keyboard-focus.md、dev-docs/evidence/2026-09-25-source-retry-keyboard-focus.md"
+      "notes": "文档列表、复核写入、模板入口、skip link 和上传批次的关键焦点已有 Playwright 回归。原件重试现将焦点先交给可见核验状态，完成后在用户未移走焦点的前提下交给新链接/重试按钮；背景列表刷新保留原件操作焦点，图片解码失败也回到重试按钮。取消只读核对、取消终态和受理重试的异步重绘已续接任务操作焦点或落到可见状态区域，忙碌按钮可聚焦且拦截重复触发。完整键盘遍历、真实屏幕阅读器和麒麟目标浏览器仍待验收，不标通过。证据：dev-docs/evidence/2026-09-23-web-keyboard-quality-race.md、dev-docs/evidence/2026-09-23-review-keyboard-focus.md、dev-docs/evidence/2026-09-23-template-keyboard-status.md、dev-docs/evidence/2026-09-24-skip-link-focus.md、dev-docs/evidence/2026-09-24-upload-keyboard-focus.md、dev-docs/evidence/2026-09-25-source-retry-keyboard-focus.md、dev-docs/evidence/2026-09-25-task-action-keyboard-focus.md"
     },
     {
       "id": "FE-047",

@@ -69,6 +69,11 @@ def main(base_url: str) -> None:
             page.get_by_text("业务任务已取消；共享、运行中或已完成的底层计算可能继续。").wait_for()
             assert cancel_calls == 1
             assert page.get_by_role("button", name="取消业务任务").count() == 0
+            status_section = page.locator("#detail-content .detail-section").first
+            assert status_section.evaluate("node => document.activeElement === node"), (
+                "terminal cancellation lost keyboard focus"
+            )
+            assert status_section.evaluate("node => getComputedStyle(node).outlineStyle !== 'none'")
             assert not errors, errors
             print("Playwright business cancellation passed: explicit confirm and truthful shared-work result")
         finally:

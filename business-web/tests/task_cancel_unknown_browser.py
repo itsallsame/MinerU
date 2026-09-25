@@ -79,8 +79,19 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="核对取消状态").wait_for()
             assert calls["cancel"] == 1, "reload must not offer an unguarded cancellation POST"
             probe_available["value"] = True
-            page.get_by_role("button", name="核对取消状态").click()
-            page.get_by_role("button", name="再次取消（上次结果未确认）").wait_for()
+            page.get_by_role("button", name="核对取消状态").focus()
+            page.keyboard.press("Enter")
+            repeated = page.get_by_role("button", name="再次取消（上次结果未确认）")
+            repeated.wait_for()
+            focused = page.evaluate("""() => ({
+                tag: document.activeElement?.tagName,
+                text: document.activeElement?.textContent,
+                action: document.activeElement?.dataset.taskActionFocus,
+            })""")
+            assert repeated.evaluate("node => document.activeElement === node"), (
+                f"cancellation check lost keyboard focus: {focused}"
+            )
+            assert repeated.evaluate("node => getComputedStyle(node).outlineStyle !== 'none'")
             assert calls == {"cancel": 1, "probe": 2}, "read-only check repeated cancellation POST"
             saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingCancellations.v1'))")
             assert saved == [{"taskId": task["id"], "state": "known"}]

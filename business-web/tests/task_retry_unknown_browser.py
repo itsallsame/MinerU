@@ -77,6 +77,8 @@ def main(base_url: str) -> None:
             page.get_by_role("button", name="查看 retry.pdf，失败").click()
             page.get_by_role("button", name="重新提交任务").click()
             page.get_by_role("button", name="查看 retry.pdf，解析中").wait_for()
+            status_section = page.locator("#detail-content .detail-section").first
+            assert status_section.evaluate("node => document.activeElement === node"), "accepted retry lost keyboard focus"
             assert calls == {"retry": 1, "probe": 1}
             assert len(keys[0]) == 32
             assert page.get_by_text("重试失败", exact=False).count() == 0

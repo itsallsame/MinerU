@@ -703,6 +703,7 @@ function renderDetail() {
   const { document: record, task } = item;
   const root = byId("detail-content");
   const sourceFocus = root.contains(document.activeElement) ? document.activeElement.dataset.sourceFocus : null;
+  const taskActionFocus = root.contains(document.activeElement) ? document.activeElement.dataset.taskActionFocus : null;
   root.className = "";
   root.replaceChildren();
   const top = element("div", "detail-topline");
@@ -710,6 +711,7 @@ function renderDetail() {
   root.append(top, element("h2", "", record.original_name));
   root.append(element("p", "detail-subline", `原文件 SHA-256：${record.sha256.slice(0, 16)}…`));
   const summary = element("section", "detail-section");
+  summary.tabIndex = -1;
   summary.append(element("h3", "", "处理状态"));
   const grid = element("div", "detail-grid");
   const template = state.templates.find((entry) => entry.code === record.template_code);
@@ -759,8 +761,10 @@ function renderDetail() {
       }
     };
     const submitRetry = async (button, priorKey = null) => {
+      if (button.dataset.busy === "true") return;
       if (priorKey && !window.confirm("上次任务重试结果未确认。确认用同一请求键重试，不创建新的提交请求？")) return;
-      button.disabled = true;
+      button.dataset.busy = "true";
+      button.setAttribute("aria-disabled", "true");
       let requestKey;
       try {
         requestKey = priorKey || newRequestKey();
@@ -784,24 +788,34 @@ function renderDetail() {
           if (selectionRequest === state.selectionRequest) showError(`重试请求未受理：${error.message}`);
         }
       } finally {
-        button.disabled = false;
+        delete button.dataset.busy;
+        button.removeAttribute("aria-disabled");
       }
     };
     if (pendingRetry) {
       const check = element("button", "", "按原请求键核对重试");
       check.type = "button";
+      check.dataset.taskActionFocus = "retry-check";
       check.addEventListener("click", async () => {
-        check.disabled = true;
-        await probeRetry(pendingRetry.requestKey);
-        check.disabled = false;
+        if (check.dataset.busy === "true") return;
+        check.dataset.busy = "true";
+        check.setAttribute("aria-disabled", "true");
+        try {
+          await probeRetry(pendingRetry.requestKey);
+        } finally {
+          delete check.dataset.busy;
+          check.removeAttribute("aria-disabled");
+        }
       });
       const retry = element("button", "secondary-button", "用原键重试任务");
       retry.type = "button";
+      retry.dataset.taskActionFocus = "retry";
       retry.addEventListener("click", () => submitRetry(retry, pendingRetry.requestKey));
       actions.append(check, retry);
     } else {
       const retry = element("button", "", task.status === "uploaded" ? "提交待处理任务" : "重新提交任务");
       retry.type = "button";
+      retry.dataset.taskActionFocus = "retry";
       retry.addEventListener("click", () => submitRetry(retry));
       actions.append(retry);
     }
@@ -812,13 +826,16 @@ function renderDetail() {
     const cancel = element("button", "secondary-button", checkOnly ? "核对取消状态"
       : cancellationState === "known" ? "再次取消（上次结果未确认）" : "取消业务任务");
     cancel.type = "button";
+    cancel.dataset.taskActionFocus = "cancel";
     cancel.addEventListener("click", async () => {
+      if (cancel.dataset.busy === "true") return;
       if (!checkOnly && !window.confirm(
         cancellationState === "known"
           ? "上次取消请求结果未确认，再次发送可能重复请求。确认仍要取消此业务任务？"
           : "取消后将停止跟踪这个业务任务；共享或已经运行的底层计算可能继续。确认取消？",
       )) return;
-      cancel.disabled = true;
+      cancel.dataset.busy = "true";
+      cancel.setAttribute("aria-disabled", "true");
       const selectionRequest = state.selectionRequest;
       try {
         if (checkOnly) {
@@ -876,7 +893,8 @@ function renderDetail() {
           showError(`取消请求未受理：${error.message}`);
         }
       } finally {
-        cancel.disabled = false;
+        delete cancel.dataset.busy;
+        cancel.removeAttribute("aria-disabled");
       }
     });
     actions.append(cancel);
@@ -991,6 +1009,11 @@ function renderDetail() {
   }
   root.append(revisions);
   if (sourceFocus) root.querySelector(`[data-source-focus="${sourceFocus}"]`)?.focus({ preventScroll: true });
+  if (taskActionFocus) {
+    (root.querySelector(`[data-task-action-focus="${taskActionFocus}"]`)
+      || (taskActionFocus === "retry-check" && root.querySelector('[data-task-action-focus="retry"]'))
+      || summary).focus({ preventScroll: true });
+  }
 }
 
 async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
