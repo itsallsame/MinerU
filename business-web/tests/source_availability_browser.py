@@ -62,19 +62,36 @@ def main(base_url: str) -> None:
             assert page.locator("#detail-content iframe.source-preview").count() == 0
             assert page.locator("#detail-content a[href$='/source']").count() == 0
             source_status[documents[0]["id"]] = 200
-            page.get_by_role("button", name="重试核验原件").click()
+            retry_source = page.get_by_role("button", name="重试核验原件")
+            retry_source.focus()
+            page.keyboard.press("Enter")
             page.locator("#detail-content iframe.source-preview").wait_for()
             assert page.locator("#detail-content a[href$='/source']").count() == 1
+            assert page.get_by_role("link", name="在新窗口打开原文").evaluate(
+                "node => document.activeElement === node"
+            ), "keyboard source retry lost focus after the detail panel was replaced"
+            page.evaluate("""() => {
+                document.querySelector('[data-source-primary]').dataset.oldSourceLink = 'true';
+                document.getElementById('refresh').click();
+            }""")
+            page.wait_for_function("!document.querySelector('[data-source-primary]')?.dataset.oldSourceLink")
+            assert page.get_by_role("link", name="在新窗口打开原文").evaluate(
+                "node => document.activeElement === node"
+            ), "background document refresh lost focus on the source action"
 
             page.get_by_role("button", name="查看 scan.png，无任务").click()
             page.get_by_text("业务文档已不存在，原件无法读取").wait_for()
             assert page.locator("#detail-content img.source-preview").count() == 0
             assert page.locator("#detail-content a[href$='/source']").count() == 0
             source_status[documents[1]["id"]] = 200
-            page.get_by_role("button", name="重试核验原件").click()
+            page.get_by_role("button", name="重试核验原件").focus()
+            page.keyboard.press("Enter")
             page.get_by_text("浏览器无法加载原图").wait_for()
             assert page.locator("#detail-content img.source-preview").count() == 0
             assert page.locator("#detail-content a[href$='/source']").count() == 0
+            assert page.get_by_role("button", name="重试核验原件").evaluate(
+                "node => document.activeElement === node"
+            ), "image decode failure did not return focus to the retry action"
 
             page.get_by_role("button", name="查看 letter.html，无任务").click()
             page.get_by_text("原件暂不可用（503）").wait_for()

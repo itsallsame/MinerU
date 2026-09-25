@@ -589,11 +589,14 @@ function detailRow(label, value) {
   return row;
 }
 
-async function checkSource(id) {
+async function checkSource(id, { focusResult = false } = {}) {
   const requestNumber = ++state.sourceRequest;
   state.sourceStatus = "checking";
   state.sourceError = "";
   renderDetail();
+  const pendingStatus = focusResult
+    ? byId("detail-content").querySelector("[data-source-check-status]") : null;
+  pendingStatus?.focus({ preventScroll: true });
   try {
     await businessApi.sourceAvailable(id);
     if (requestNumber !== state.sourceRequest || id !== state.selectedId) return;
@@ -607,7 +610,13 @@ async function checkSource(id) {
         ? "业务文档已不存在，原件无法读取。"
         : `原件暂不可用（${error.status || "连接失败"}），请检查业务服务后重试。`;
   }
+  const keepFocus = focusResult && document.activeElement === pendingStatus;
   renderDetail();
+  if (keepFocus) {
+    byId("detail-content").querySelector(
+      state.sourceStatus === "available" ? "[data-source-primary]" : "[data-source-retry]",
+    )?.focus({ preventScroll: true });
+  }
 }
 
 function renderDetail() {
@@ -616,6 +625,7 @@ function renderDetail() {
   if (!item) return;
   const { document: record, task } = item;
   const root = byId("detail-content");
+  const sourceFocus = root.contains(document.activeElement) ? document.activeElement.dataset.sourceFocus : null;
   root.className = "";
   root.replaceChildren();
   const top = element("div", "detail-topline");
@@ -717,17 +727,26 @@ function renderDetail() {
   const sourceUrl = businessApi.sourceUrl(record.id);
   const kind = sourcePreviewKind(record.original_name);
   if (state.sourceStatus !== "available") {
-    source.append(element("p", state.sourceStatus === "unavailable" ? "error-banner" : "review-hint",
-      state.sourceStatus === "unavailable" ? state.sourceError : "正在核验原件完整性…"));
+    const sourceStatus = element("p", state.sourceStatus === "unavailable" ? "error-banner" : "review-hint",
+      state.sourceStatus === "unavailable" ? state.sourceError : "正在核验原件完整性…");
+    sourceStatus.classList.add("source-check-status");
+    sourceStatus.dataset.sourceCheckStatus = "true";
+    sourceStatus.dataset.sourceFocus = "status";
+    sourceStatus.tabIndex = -1;
+    source.append(sourceStatus);
     if (state.sourceStatus === "unavailable") {
       const retrySource = element("button", "secondary-button", "重试核验原件");
       retrySource.type = "button";
-      retrySource.addEventListener("click", () => checkSource(record.id));
+      retrySource.dataset.sourceRetry = "true";
+      retrySource.dataset.sourceFocus = "retry";
+      retrySource.addEventListener("click", () => checkSource(record.id, { focusResult: true }));
       source.append(retrySource);
     }
   } else {
     const download = element("a", "", kind === "download" ? "下载原文件 ↓" : "在新窗口打开原文 ↗");
     download.href = sourceUrl;
+    download.dataset.sourcePrimary = "true";
+    download.dataset.sourceFocus = "primary";
     if (kind === "download") download.download = record.original_name;
     else {
       download.target = "_blank";
@@ -771,9 +790,11 @@ function renderDetail() {
       preview.alt = `${record.original_name} 原图`;
       preview.addEventListener("error", () => {
         if (state.selectedId !== record.id || state.sourceStatus !== "available") return;
+        const sourceActionFocused = document.activeElement === download;
         state.sourceStatus = "unavailable";
         state.sourceError = "浏览器无法加载原图；原件可能已变化或图片格式无法解码。请重试核验。";
         renderDetail();
+        if (sourceActionFocused) byId("detail-content").querySelector("[data-source-retry]")?.focus({ preventScroll: true });
       });
       source.append(preview);
       const findFields = element("button", "secondary-button", "查找此图的关联字段");
@@ -807,6 +828,7 @@ function renderDetail() {
     revisions.append(element("p", "preview-note", task?.status === "done" ? "暂无可用修订记录。" : "解析完成后显示修订记录。"));
   }
   root.append(revisions);
+  if (sourceFocus) root.querySelector(`[data-source-focus="${sourceFocus}"]`)?.focus({ preventScroll: true });
 }
 
 async function selectDocument(id, searchDocument = null, reviewTarget = {}) {

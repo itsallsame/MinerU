@@ -1184,3 +1184,11 @@ Changes: Receiver imports an incremental bundle into a temporary shared-object b
 Verification: Focused offline source tests 11 passed, including an internally consistent transient-weight bundle rejected without adding the new commit object to target. Full Mac business 358 passed/2 skipped/2 dependency warnings; Ruff lint passed. No real Kylin/GPU transfer or Docker build proof.
 Evidence: dev-docs/evidence/2026-09-25-source-bundle-import-model-boundary.md
 Next: Obtain target machine and real samples when available; run actual code-only transfer/build, model mount and bound acceptance. Keep Goal active.
+
+=== 2026-09-25 Session 133 (source retry keyboard focus continuity) ===
+Status: In progress; FE-033 scope and FE-046 full accessibility/target gates remain open
+Discovery: Keyboard retry of an unavailable original replaced its own focused button and later the detail panel, leaving focus outside the new source action. A new browser assertion reproduced the failure before the fix.
+Changes: Focus a visibly outlined pending source status, then the replacement source link or retry button only if the user did not move elsewhere; preserve source-action focus across background detail rerenders and image decode failure. Stabilized an older upload focus assertion to wait for asynchronous document refresh completion. No auth/user/role/permission, model or database change.
+Verification: Final Web unit suite 13 passed, eight offline assets built, all 24 Playwright Chromium regressions passed. The intermediate first full run found the pre-existing upload test timing race, which was corrected and rerun. Real screen reader, complete keyboard traversal, target Kylin browser and four-class real documents remain unverified.
+Evidence: dev-docs/evidence/2026-09-25-source-retry-keyboard-focus.md
+Next: Resolve FE-033 structure editing scope with user; continue P4 accessibility/recovery checks and obtain real samples/target machine when available. Keep Goal active.

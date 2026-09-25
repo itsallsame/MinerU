@@ -60,6 +60,7 @@ def main(base_url: str) -> None:
             page.keyboard.press("Enter")
             page.wait_for_function("document.querySelectorAll('#upload-feedback .feedback-item').length === 4"
                                    " && !document.querySelector('#files').disabled")
+            page.wait_for_function("document.activeElement?.id === 'upload-feedback'")
             assert page.evaluate("document.activeElement?.id === 'upload-feedback'"), "batch feedback lost keyboard focus"
             assert page.evaluate("getComputedStyle(document.activeElement).outlineStyle !== 'none'")
             feedback = page.locator("#upload-feedback").inner_text()
