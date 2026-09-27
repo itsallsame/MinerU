@@ -2,6 +2,8 @@
 
 状态：完成源码/配置骨架与 Mac 单测；**尚未在麒麟或 NVIDIA 上构建、启动或验收**。
 
+实施分工与现场回传格式见 [2026-09-27 部署交接单](2026-09-27-deployment-handoff.md)：开发侧维护本仓库代码、工具和文档，实际物理隔离麒麟＋NVIDIA 部署由另一团队执行。该分工不降低下述现场门禁。
+
 ## 制品边界
 
 - 代码镜像：从本 fork 的确定提交分别构建 `docker/worker/Dockerfile` 与 `docker/business-api/Dockerfile`。`.dockerignore` 采用构建必需文件白名单，未知名称的模型/业务数据目录不会发送给 Docker daemon；即使误放在已放行的 `mineru/` 树下，常见模型目录、权重/词表后缀、文档和数据库也显式排除。两个镜像只复制源码和预先准备的 `wheelhouse/`，不得放入模型权重；业务镜像还复制由 `business-web/` 构建的静态 `dist/`，并设置 `MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist`，不依赖 Python 安装后文件所在路径推算页面位置。依赖安装层在源码复制前，源码变更通常只产生较小的后续层。必须提供已导入本机、与目标驱动兼容的 amd64 NVIDIA/vLLM 基础镜像；构建命令使用 `--pull=false --network=none`。当前两个 Dockerfile 可共用这一基础镜像及锁定依赖，但业务 API 不挂模型、不申请 GPU。

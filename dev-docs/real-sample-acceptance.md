@@ -4,6 +4,8 @@
 
 仓库公共 `demo/pdfs/demo1.pdf` 及临时生成的 DOCX/PPTX/XLSX 已用于 Mac 的真实 Web→业务 API→Doclib Flash 解析/历史页读取冒烟（见 [PDF 联通证据](evidence/2026-09-24-live-web-pdf-smoke.md)与 [Office 联通证据](evidence/2026-09-24-live-web-office-smoke.md)）。这些都没有四类业务人工标注，也不使用 NVIDIA/VLM 模型；不能纳入下述四类准确率或生产验收分母。
 
+2026-09-27 对工作区现有 PDF/图片的用途与限制已单列在[样本盘点](2026-09-27-existing-samples.md)。它们能支持联通冒烟或探索性识别，但不改变本页四类真实业务样本与人工标注的要求。
+
 ## 样本准备
 
 在仓库外的受控目录放置公文、论文、研究报告、报纸各至少一份脱敏**真实**原文及 `suite.json`。不得把原文、人工标注、业务 API 返回正文或含敏感内容的运行日志提交到 Git。`suite.json` 的 `schema` 固定为 `1`，`cases` 为数组；每个 case 必须有：

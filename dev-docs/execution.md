@@ -1,6 +1,6 @@
 # 业务文档平台执行规范
 
-日期：2026-09-23。分支：`master`。设计依据：[deepdive](deepdive.md)、[架构](2026-09-23-business-platform-design.md)、[计划](2026-09-23-business-platform-plan.md)。任务真值为 [feature-list.json](feature-list.json)；代码存在、Mac 验证与最终现场门禁须分开阅读，当前阶段差距见 [阶段门禁现状](2026-09-25-stage-gates.md)。
+日期：2026-09-23。分支：`master`。设计依据：[deepdive](deepdive.md)、[架构](2026-09-23-business-platform-design.md)、[计划](2026-09-23-business-platform-plan.md)。任务真值为 [feature-list.json](feature-list.json)；代码存在、Mac 验证与最终现场门禁须分开阅读，当前阶段差距见 [阶段门禁现状](2026-09-25-stage-gates.md)。2026-09-27 的目标部署分工和现有样本分别见[交接单](2026-09-27-deployment-handoff.md)与[样本盘点](2026-09-27-existing-samples.md)。
 
 ## 固定前提
 
