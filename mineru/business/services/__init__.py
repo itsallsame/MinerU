@@ -6,7 +6,7 @@ from .discovery import (
     BusinessDiscovery, BusinessSearchHit, BusinessSearchPage, DiscoveryError, HistoricalRead,
     RevisionSearchHit, RevisionSearchPage, RevisionBlockHit, RevisionBlockSearchPage,
     RevisionHeading, RevisionOutlinePage,
-    BusinessStructurePage, StructureBlock, RevisionDiffItem, RevisionDiffPage,
+    BusinessStructurePage, StructureBlock, BusinessStructureNodeText, RevisionDiffItem, RevisionDiffPage,
 )
 from .evidence import EvidenceCaptureError, EvidenceInspection, EvidenceReader, EvidenceWriter, NavigationStatus
 from .extractions import FieldExtraction
@@ -30,6 +30,7 @@ __all__ = [
     "RevisionOutlinePage",
     "BusinessStructurePage",
     "StructureBlock",
+    "BusinessStructureNodeText",
     "RevisionDiffItem",
     "RevisionDiffPage",
     "EvidenceCaptureError",

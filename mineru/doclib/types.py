@@ -325,6 +325,21 @@ class ParseStructureResponse(DoclibModel):
     blocks: list[ParseBlockSummary] = Field(default_factory=list)
 
 
+class ParseStructureNodeTextResponse(DoclibModel):
+    """Complete plain text for an editable historical node, never a preview."""
+
+    sha256: str
+    short_id: str
+    tier: Tier
+    page_no: int
+    path: list[int]
+    type: str
+    block_no: int | None
+    locator: str
+    editable: bool
+    text: str | None
+
+
 class ParseBlockMatch(DoclibModel):
     block_no: int
     locator: str

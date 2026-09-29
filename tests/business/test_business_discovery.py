@@ -16,7 +16,7 @@ from mineru.business.store import BusinessStore
 from mineru.doclib import DoclibInterface, ParseInfo, SearchResponse
 from mineru.doclib.types import (
     ContentNextRequest, ContentRequestScope, DocContentResponse, ParseBlockMatch, ParseBlockSearchResponse,
-    ParseBlockSummary, ParseStructureResponse, SearchResult,
+    ParseBlockSummary, ParseStructureResponse, ParseStructureNodeTextResponse, SearchResult,
 )
 from mineru.errors import InvalidRequestError, ServerNotRunningError
 
@@ -425,6 +425,26 @@ def test_native_structure_is_routed_to_the_historical_page_batch_and_sanitized(t
     assert response.json()["blocks"][0]["children"][0]["path"] == [0, 0]
     assert "parse_id" not in response.text and "/private/" not in response.text
     assert api.get(f"/api/business/revisions/{revision.id}/structure", params={"page_no": 3}).status_code == 422
+
+    doclib.read_parse_structure_node_text.return_value = ParseStructureNodeTextResponse(
+        sha256=sha, short_id=short_id, tier="flash", page_no=2, path=[0, 0],
+        type="paragraph_title", block_no=3, locator=block_locator,
+        editable=True, text="Historical section",
+    )
+    node_url = f"/api/business/revisions/{revision.id}/structure/node-text"
+    node_response = api.get(node_url, params={"page_no": 2, "path": "0.0"})
+    assert node_response.status_code == 200 and node_response.json()["text"] == "Historical section"
+    assert node_response.json()["state"] == "historical_parse_unconfirmed"
+    assert "parse_id" not in node_response.text
+    doclib.read_parse_structure_node_text.assert_called_once_with(9, 2, "0.0")
+    assert api.get(node_url, params={"page_no": 2, "path": "0.1"}).status_code == 422
+    assert api.get(node_url, params={"page_no": 2, "path": "01"}).status_code == 422
+    doclib.read_parse_structure_node_text.return_value = ParseStructureNodeTextResponse(
+        sha256=sha, short_id=short_id, tier="flash", page_no=2, path=[0, 0],
+        type="paragraph_title", block_no=4, locator=block_locator,
+        editable=True, text="Historical section",
+    )
+    assert api.get(node_url, params={"page_no": 2, "path": "0.0"}).status_code == 409
 
     doclib.read_parse_structure.return_value = ParseStructureResponse(
         sha256="0" * 64, short_id=short_id, tier="flash", page_no=2,

@@ -59,6 +59,7 @@ from .types import (
     ParseResponse,
     ParseBlockSearchResponse,
     ParseStructureResponse,
+    ParseStructureNodeTextResponse,
     ParseStatus,
     ParsingRuleInfo,
     ParsingRuleListResponse,
@@ -297,6 +298,15 @@ class DoclibClient(DoclibInterface):
     def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         return self._request_model(
             ParseStructureResponse, path_params={"parse_id": parse_id}, params={"page_no": page_no},
+        )
+
+    @route("GET", "/parses/{parse_id}/structure/node-text", tags=("parse",))
+    def read_parse_structure_node_text(
+        self, parse_id: int, page_no: int, path: str
+    ) -> ParseStructureNodeTextResponse:
+        return self._request_model(
+            ParseStructureNodeTextResponse, path_params={"parse_id": parse_id},
+            params={"page_no": page_no, "path": path},
         )
 
     @route("GET", "/parses/{parse_id}/block-search", tags=("parse",))

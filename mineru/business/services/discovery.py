@@ -134,6 +134,19 @@ class BusinessStructurePage:
     blocks: tuple[StructureBlock, ...]
 
 
+@dataclass(frozen=True)
+class BusinessStructureNodeText:
+    document_id: str
+    revision_id: str
+    page_no: int
+    path: tuple[int, ...]
+    type: str
+    block_no: int | None
+    locator: str
+    editable: bool
+    text: str | None
+
+
 class BusinessDiscovery:
     """Never expose Doclib-only documents, paths, parse IDs, or mutable hits as reviewed evidence."""
 
@@ -453,10 +466,55 @@ class BusinessDiscovery:
             blocks.append(check_block(block, path=(position,)))
         return BusinessStructurePage(revision.document_id, revision_id, page_no, tuple(blocks))
 
+    def structure_node_text(self, revision_id: str, page_no: int, path: str) -> BusinessStructureNodeText:
+        if len(path) > 127 or re.fullmatch(r"(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15}", path) is None:
+            raise DiscoveryError("invalid_structure_path")
+        positions = tuple(int(part) for part in path.split("."))
+        if any(position > 1999 for position in positions):
+            raise DiscoveryError("invalid_structure_path")
+        page = self.structure(revision_id, page_no)
+        nodes = page.blocks
+        node: StructureBlock | None = None
+        for position in positions:
+            if position >= len(nodes):
+                raise DiscoveryError("invalid_structure_path")
+            node = nodes[position]
+            nodes = node.children
+        if node is None:
+            raise DiscoveryError("invalid_structure_path")
+        revision = self._store.get_revision(revision_id)
+        if revision is None:
+            raise DiscoveryError("revision_not_found")
+        parse_id = revision.parse_id_for_page(page_no)
+        if parse_id is None:
+            raise DiscoveryError("invalid_structure_page")
+        try:
+            response = self._doclib.read_parse_structure_node_text(parse_id, page_no, path)
+        except ServerNotRunningError as exc:
+            raise DiscoveryError("doclib_unavailable") from exc
+        except MineruError as exc:
+            raise DiscoveryError("historical_structure_unavailable") from exc
+        if (
+            response.sha256 != revision.sha256 or response.short_id.lower() != revision.short_id.lower()
+            or response.tier != revision.tier or response.page_no != page_no
+            or tuple(response.path) != positions or response.type != node.type
+            or response.block_no != node.block_no or response.locator != node.locator
+            or response.editable != (response.text is not None)
+            or (response.text is not None and (
+                len(response.text) > 100_000
+                or re.sub(r"\s+", " ", response.text).strip()[:200] != node.preview
+            ))
+        ):
+            raise DiscoveryError("historical_structure_mismatch")
+        return BusinessStructureNodeText(
+            page.document_id, revision_id, page_no, positions, node.type, node.block_no,
+            node.locator, response.editable, response.text,
+        )
+
 
 __all__ = [
     "BusinessDiscovery", "BusinessSearchHit", "BusinessSearchPage", "DiscoveryError", "HistoricalRead",
     "RevisionSearchHit", "RevisionSearchPage", "RevisionBlockHit", "RevisionBlockSearchPage",
     "RevisionHeading", "RevisionOutlinePage",
-    "BusinessStructurePage", "StructureBlock",
+    "BusinessStructurePage", "StructureBlock", "BusinessStructureNodeText",
 ]

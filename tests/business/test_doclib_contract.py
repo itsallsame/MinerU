@@ -529,6 +529,8 @@ def test_parse_id_content_read_does_not_substitute_a_newer_batch(live_doclib: tu
     assert "Current Lantern" in client.read_content(locator).content
     assert any(block.preview == "Historical Lantern" for block in client.read_parse_structure(first_id, 1).blocks)
     assert any(block.preview == "Current Lantern" for block in client.read_parse_structure(second_id, 1).blocks)
+    assert client.read_parse_structure_node_text(first_id, 1, "0").text == "Historical Lantern"
+    assert client.read_parse_structure_node_text(second_id, 1, "0").text == "Current Lantern"
     historical_hits = client.search_parse_blocks(first_id, 1, "Historical Lantern")
     assert len(historical_hits.matches) == 1
     assert historical_hits.matches[0].block_no == 1
@@ -577,19 +579,44 @@ def test_native_structure_preserves_nested_model_blocks_without_child_locator_cl
         str(home / "doclib"), submitted.sha256, "flash", parse.page_range, parse.done_at,
     ))
     middle = json.loads(middle_path.read_text(encoding="utf-8"))
+    long_text = "Long historical body \n" * 24
     middle["pages"][0]["blocks"] = [{
         "type": "list", "index": 0,
         "content": [{"type": "text", "content": [{"type": "text", "content": "Nested item"}]}],
+    }, {
+        "type": "paragraph_title", "index": 1, "level": 2,
+        "content": [{"type": "text", "content": long_text}],
+    }, {
+        "type": "text", "index": 2,
+        "content": [{"type": "text", "content": "Formula "}, {"type": "equation_inline", "content": "x+y"}],
     }]
     middle_path.write_text(json.dumps(middle), encoding="utf-8")
     tree = client.read_parse_structure(parse.id, 1)
-    assert len(tree.blocks) == 1
+    assert len(tree.blocks) == 3
     parent = tree.blocks[0]
     assert parent.type == "list" and parent.path == [0]
     assert len(parent.children) == 1
     child = parent.children[0]
     assert child.type == "text" and child.path == [0, 0] and child.preview == "Nested item"
     assert child.locator == parent.locator and child.block_no == parent.block_no
+    nested_text = client.read_parse_structure_node_text(parse.id, 1, "0.0")
+    assert nested_text.path == [0, 0] and nested_text.editable and nested_text.text == "Nested item"
+    assert nested_text.locator == parent.locator and nested_text.block_no == parent.block_no
+    parent_text = client.read_parse_structure_node_text(parse.id, 1, "0")
+    assert not parent_text.editable and parent_text.text is None
+    body_text = client.read_parse_structure_node_text(parse.id, 1, "1")
+    assert body_text.editable and body_text.text == long_text
+    assert len(tree.blocks[1].preview) == 200 and len(body_text.text) > 200
+    mixed_text = client.read_parse_structure_node_text(parse.id, 1, "2")
+    assert not mixed_text.editable and mixed_text.text is None
+    with pytest.raises(MineruError):
+        client.read_parse_structure_node_text(parse.id, 1, "0.1")
+    with pytest.raises(MineruError):
+        client.read_parse_structure_node_text(parse.id, 1, "01")
+    with pytest.raises(MineruError):
+        client.read_parse_structure_node_text(parse.id, 2, "0")
+    with pytest.raises(MineruError):
+        client.read_parse_structure_node_text(999999, 1, "0")
     matches = client.search_parse_blocks(parse.id, 1, "Nested item")
     assert len(matches.matches) == 1
     assert matches.matches[0].locator == parent.locator
@@ -861,6 +888,16 @@ def test_local_pdf_through_real_business_api_and_doclib(live_doclib: tuple[Docli
     assert page["page_no"] == 1
     assert page["blocks"]
     assert all(block["state"] == "historical_parse_unconfirmed" for block in page["blocks"])
+    first = page["blocks"][0]
+    node = client.get(
+        f"/api/business/revisions/{revisions[0]['id']}/structure/node-text",
+        params={"page_no": 1, "path": ".".join(map(str, first["path"]))},
+    )
+    assert node.status_code == 200, node.text
+    assert node.json()["document_id"] == document_id
+    assert node.json()["revision_id"] == revisions[0]["id"]
+    assert node.json()["locator"] == first["locator"]
+    assert node.json()["state"] == "historical_parse_unconfirmed"
 
 
 @pytest.mark.parametrize("extension", ["docx", "pptx", "xlsx"])

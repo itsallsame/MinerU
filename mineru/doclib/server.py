@@ -142,6 +142,7 @@ from .types import (
     ParseBlockMatch,
     ParseBlockSearchResponse,
     ParseStructureResponse,
+    ParseStructureNodeTextResponse,
     ParseServerStatus,
     ParseStatus,
     ParsingRuleInfo,
@@ -755,6 +756,55 @@ class DoclibServer(AsyncDoclibInterface):
         return ParseStructureResponse(
             sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"],
             page_no=page_no, blocks=blocks,
+        )
+
+    @route("GET", "/parses/{parse_id}/structure/node-text", tags=("parse",))
+    async def read_parse_structure_node_text(
+        self, parse_id: int, page_no: int, path: str
+    ) -> ParseStructureNodeTextResponse:
+        """Return complete editable plain text without rewriting the historical model tree."""
+        if page_no < 1 or len(path) > 127 or re.fullmatch(r"(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,15}", path) is None:
+            raise InvalidRequestError("invalid_request", "Invalid structure page or node path.", "path")
+        positions = [int(part) for part in path.split(".")]
+        if any(position > 1999 for position in positions):
+            raise InvalidRequestError("invalid_request", "Node path exceeds structure bounds.", "path")
+        row = await self.state.db.fetchone(
+            "SELECT p.*, d.short_id AS short_id FROM parses p JOIN docs d ON d.sha256=p.sha256 WHERE p.id=?",
+            (parse_id,),
+        )
+        if row is None or row["status"] not in (PARSE_STATUS_DONE, PARSE_STATUS_SUPERSEDED) or row["done_at"] is None:
+            raise NotFoundError("not_cached", f"Completed parse {parse_id} is not cached.", "parse_id")
+        if page_no not in parse_page_range_set(row["page_range"]):
+            raise InvalidRequestError("invalid_request", "Page does not belong to this parse batch.", "page_no")
+        loaded = load_pages_from_done_batches(
+            _effective_data_dir(self.state), row["sha256"], row["tier"], cast(list[ParseBatchRow], [row]),
+            requested_page_numbers={page_no},
+        )
+        page = next((item for item in loaded if item.page_idx + 1 == page_no), None)
+        if page is None:
+            raise NotFoundError("not_cached", "Requested historical page is not cached.", "page_no")
+        if len(page.blocks) > 500 or positions[0] >= len(page.blocks):
+            raise InvalidRequestError("invalid_structure_path", "Node path does not exist on this page.", "path")
+        top = page.blocks[positions[0]]
+        node = top
+        for position in positions[1:]:
+            content = getattr(node, "content", None)
+            children = [child for child in content if isinstance(child, BlockBase)] if isinstance(content, list) else []
+            if position >= len(children):
+                raise InvalidRequestError("invalid_structure_path", "Node path does not exist on this page.", "path")
+            node = children[position]
+        block_no = top.index + 1 if top.index is not None else None
+        locator = (
+            block_ref(row["short_id"], row["tier"], page_no, block_no)
+            if block_no is not None else page_ref(row["short_id"], row["tier"], page_no)
+        )
+        node_text = _editable_structure_text(node)
+        if node_text is not None and len(node_text) > 100_000:
+            raise InvalidRequestError("structure_text_too_long", "Node text exceeds the editable limit.", "path")
+        return ParseStructureNodeTextResponse(
+            sha256=row["sha256"], short_id=row["short_id"], tier=row["tier"], page_no=page_no,
+            path=positions, type=node.type.value, block_no=block_no, locator=locator,
+            editable=node_text is not None, text=node_text,
         )
 
     @route("GET", "/parses/{parse_id}/block-search", tags=("parse",))
@@ -2155,6 +2205,26 @@ def _structure_text_preview(spans: Any) -> str:
         elif isinstance(content, list):
             parts.append(_structure_text_preview(content))
     return re.sub(r"\s+", " ", "".join(parts)).strip()[:200]
+
+
+def _editable_structure_text(block: BlockBase) -> str | None:
+    """Extract exact plain text only when no non-text inline payload would be lost."""
+    if block.type == BlockType.CODE_BODY:
+        return block.content if isinstance(block.content, str) else None
+    if block.type not in {
+        BlockType.TEXT, BlockType.REF_TEXT, BlockType.DOC_TITLE, BlockType.PARAGRAPH_TITLE,
+        BlockType.HEADER, BlockType.FOOTER, BlockType.PAGE_NUMBER, BlockType.ASIDE_TEXT,
+        BlockType.PAGE_FOOTNOTE, BlockType.IMAGE_CAPTION, BlockType.IMAGE_FOOTNOTE,
+        BlockType.TABLE_CAPTION, BlockType.TABLE_FOOTNOTE, BlockType.CHART_CAPTION,
+        BlockType.CHART_FOOTNOTE, BlockType.CODE_CAPTION, BlockType.CODE_FOOTNOTE,
+        BlockType.ALGORITHM_BODY,
+    }:
+        return None
+    content = getattr(block, "content", None)
+    if not isinstance(content, list) or any(getattr(span, "type", None) != "text" for span in content):
+        return None
+    parts = [getattr(span, "content", None) for span in content]
+    return "".join(parts) if all(isinstance(part, str) for part in parts) else None
 
 
 def _structure_search_text(block: BlockBase, *, budget: list[int], depth: int = 1) -> str:

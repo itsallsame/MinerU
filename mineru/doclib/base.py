@@ -43,6 +43,7 @@ from .types import (
     ParseResponse,
     ParseBlockSearchResponse,
     ParseStructureResponse,
+    ParseStructureNodeTextResponse,
     ParseStatus,
     ParsingRuleInfo,
     ParsingRuleListResponse,
@@ -321,6 +322,12 @@ class DoclibInterface(ABC):
 
     def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         """Read native top-level block summaries from one retained parse batch and page."""
+        raise NotImplementedError()
+
+    def read_parse_structure_node_text(
+        self, parse_id: int, page_no: int, path: str
+    ) -> ParseStructureNodeTextResponse:
+        """Read complete editable text at a native node path, bound to one historical batch."""
         raise NotImplementedError()
 
     def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:
@@ -723,6 +730,12 @@ class AsyncDoclibInterface(ABC):
 
     async def read_parse_structure(self, parse_id: int, page_no: int) -> ParseStructureResponse:
         """Async version of ``DoclibInterface.read_parse_structure``."""
+        raise NotImplementedError()
+
+    async def read_parse_structure_node_text(
+        self, parse_id: int, page_no: int, path: str
+    ) -> ParseStructureNodeTextResponse:
+        """Async version of ``DoclibInterface.read_parse_structure_node_text``."""
         raise NotImplementedError()
 
     async def search_parse_blocks(self, parse_id: int, page_no: int, query: str) -> ParseBlockSearchResponse:

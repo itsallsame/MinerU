@@ -63,6 +63,7 @@ from ..services import (
     RevisionOutlinePage,
     BusinessStructurePage,
     StructureBlock,
+    BusinessStructureNodeText,
 )
 from ..store import (
     BusinessStore, BusinessStoreError, ExtractionRequestConflict, ReviewRequestConflict, TaskCancelRequestConflict,
@@ -593,6 +594,23 @@ class BusinessStructureView(BaseModel):
         )
 
 
+class BusinessStructureNodeTextView(BaseModel):
+    document_id: str
+    revision_id: str
+    page_no: int
+    path: tuple[int, ...]
+    type: str
+    block_no: int | None
+    locator: str
+    editable: bool
+    text: str | None
+    state: Literal["historical_parse_unconfirmed"] = "historical_parse_unconfirmed"
+
+    @classmethod
+    def from_record(cls, record: BusinessStructureNodeText) -> BusinessStructureNodeTextView:
+        return cls(**vars(record))
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -781,6 +799,25 @@ def create_app(
             raise HTTPException(status_code=503, detail="Business discovery is not configured")
         try:
             return BusinessStructureView.from_page(discovery.structure(revision_id, page_no))
+        except DiscoveryError as exc:
+            status_code = (
+                404 if exc.code == "revision_not_found" else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get(
+        "/api/business/revisions/{revision_id}/structure/node-text", response_model=BusinessStructureNodeTextView
+    )
+    def get_revision_structure_node_text(
+        revision_id: str, page_no: Annotated[int, Query(ge=1)],
+        path: Annotated[str, Query(min_length=1, max_length=127)],
+    ) -> BusinessStructureNodeTextView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return BusinessStructureNodeTextView.from_record(discovery.structure_node_text(revision_id, page_no, path))
         except DiscoveryError as exc:
             status_code = (
                 404 if exc.code == "revision_not_found" else
