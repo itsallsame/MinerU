@@ -13,6 +13,7 @@ import pytest
 
 from mineru.business.store import BusinessStore
 from mineru.business.documents import StoredUpload
+from mineru.doclib import ParseInfo
 from scripts import business_state_backup as backup
 
 
@@ -133,6 +134,21 @@ def test_backup_refuses_current_schema_missing_review_request_table(tmp_path: Pa
         )
 
 
+def test_backup_refuses_current_schema_missing_structure_versions_table(tmp_path: Path) -> None:
+    business, doclib, shared, release = _state(tmp_path)
+    with closing(sqlite3.connect(business / "business.sqlite3")) as database, database:
+        database.execute("DROP TABLE structure_versions")
+    with pytest.raises(backup.BackupError, match="schema or integrity"):
+        backup.create_backup(
+            business_dir=business,
+            doclib_dir=doclib,
+            shared_documents_dir=shared,
+            release_manifest=release,
+            output=tmp_path / "backup",
+            check_stopped=lambda: None,
+        )
+
+
 def test_backup_refuses_current_schema_missing_template_request_table(tmp_path: Path) -> None:
     business, doclib, shared, release = _state(tmp_path)
     with closing(sqlite3.connect(business / "business.sqlite3")) as database, database:
@@ -152,8 +168,18 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
     business, doclib, shared, release = _state(tmp_path)
     prior = BusinessStore(business / "business.sqlite3").get_upload_request("backup-replay-request-key")
     assert prior is not None
-    cancelled_intent = BusinessStore(business / "business.sqlite3").request_task_cancel(prior[1].id)
+    active_store = BusinessStore(business / "business.sqlite3")
+    cancelled_intent = active_store.request_task_cancel(prior[1].id)
     assert cancelled_intent.status == "cancel_requested"
+    parse = ParseInfo(
+        id=19, sha256=prior[0].sha256, short_id=prior[0].sha256[:12], tier="flash", page_range="1",
+        status="done", privacy="local", created_at=1, updated_at=2, done_at=2,
+    )
+    revision = active_store.add_completed_revision(prior[0].id, parse=parse, producer_version="4.0.6")
+    saved_structure = active_store.append_structure_version(
+        revision.id, 1, expected_version=0, nodes=[], operation={"op": "delete", "node_id": "test"},
+        source="api", reason="Backup round trip", request_key="backup-structure-001",
+    )
     output = tmp_path / "backup"
     stopped_checks = 0
 
@@ -169,7 +195,7 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
         output=output,
         check_stopped=stopped,
     )
-    assert stopped_checks == 1 and record["business_schema"] == 18
+    assert stopped_checks == 1 and record["business_schema"] == 19
     assert backup.verify_backup(output) == record
     assert (output / "COMPLETE").is_file()
     assert (output / "shared_documents" / "opaque.html").read_bytes() == b"<h1>Business original</h1>"
@@ -186,11 +212,12 @@ def test_backup_verifies_and_restores_only_into_new_directories(tmp_path: Path) 
     assert (restored / "shared" / "opaque.html").read_bytes() == (shared / "opaque.html").read_bytes()
     assert (restored / "doclib" / "parsed-result.bin").read_bytes() == (doclib / "parsed-result.bin").read_bytes()
     with closing(sqlite3.connect(restored / "business" / "business.sqlite3")) as database:
-        assert database.execute("PRAGMA user_version").fetchone()[0] == 18
+        assert database.execute("PRAGMA user_version").fetchone()[0] == 19
         assert database.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     recovered_store = BusinessStore(restored / "business" / "business.sqlite3")
     recovered_store.initialize()
     assert recovered_store.get_task(prior[1].id) == cancelled_intent
+    assert recovered_store.get_structure_request("backup-structure-001") == saved_structure
     original = b"<h1>Business original</h1>"
     _document, _task, created = recovered_store.create_or_reuse_document_with_task(
         StoredUpload(

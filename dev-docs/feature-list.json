@@ -3482,7 +3482,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "Mac 后端存储/API 契约与备份当前 schema 18 校验已实现；Web 已在 POST 前把键持久化于同源浏览器本地存储，未知结果只按键核对，明确确认后才同键重试；自有 Skill 已传键、输出键并支持只读按键核对与显式同键重试。合成 Mac 回归通过；麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md。"
+      "notes": "Mac 后端存储/API 契约与备份校验已实现；当前业务库 schema 19 保留请求键表。Web 已在 POST 前把键持久化于同源浏览器本地存储，未知结果只按键核对，明确确认后才同键重试；自有 Skill 已传键、输出键并支持只读按键核对与显式同键重试。合成 Mac 回归通过；麒麟目标机与真实网络故障未验收，保持未完成。见 dev-docs/evidence/2026-09-25-extraction-request-idempotency.md、dev-docs/evidence/2026-09-25-extraction-client-key-binding.md。"
     },
     {
       "id": "BE-072",
@@ -4235,7 +4235,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "2026-09-29 用户选择 B：含完整文字修改、拆分/合并、重排、父子关系与显式人工节点。已补按历史批次/页/路径读取完整可编辑纯文字的 Doclib＋业务 API 只读契约；原生树仍只读。接下来补版本化派生树与有限写入操作，再做 Web/自有 Skill 入口。详见 dev-docs/2026-09-24-structure-edit-scope.md。保持未完成。"
+      "notes": "2026-09-29 用户选择 B：含完整文字修改、拆分/合并、重排、父子关系与显式人工节点。Doclib 历史全文只读契约及业务 schema 19 的派生页版本/有限操作 API 已通过 Mac 测试；原生树、证据和确认成果仍不变。Web/自有 Skill 入口、结构导出与浏览器真实写入回读未完成，故本项保持 false。见 dev-docs/2026-09-24-structure-edit-scope.md 和 dev-docs/evidence/2026-09-29-structure-versioned-operations.md。"
     },
     {
       "id": "FE-034",
@@ -5852,7 +5852,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "已提供停服后 schema 18 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验上传、手动提取、任务重试、任务取消、模板写入和人工复核写入请求键表。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md、dev-docs/evidence/2026-09-25-review-request-idempotency.md、dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
+      "notes": "已提供停服后 schema 19 业务 SQLite、Doclib 与共享原件的全量备份/校验/新目录恢复工具；现校验六个请求键表及结构派生版本表，并已用含结构版本/请求键的合成库做备份恢复回读。除所选 Compose 服务，还在复制前扫描所有运行中 Docker 容器的可写挂载，拒绝与状态/恢复目标目录重叠。Mac 合成回归通过；宿主机进程及检查后的新容器仍须维护窗口控制，目标麒麟隔离机和真实业务数据演练未做，保持未完成。证据：dev-docs/evidence/2026-09-29-structure-versioned-operations.md、dev-docs/evidence/2026-09-25-task-retry-request-idempotency.md、dev-docs/evidence/2026-09-25-task-cancel-request-idempotency.md、dev-docs/evidence/2026-09-25-review-request-idempotency.md、dev-docs/evidence/2026-09-24-offline-state-backup.md、dev-docs/evidence/2026-09-24-backup-global-container-quiescence.md、dev-docs/evidence/2026-09-25-extraction-request-idempotency.md"
     },
     {
       "id": "QA-034",

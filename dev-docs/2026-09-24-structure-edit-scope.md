@@ -33,4 +33,10 @@ FE-033 需经过后端不变量测试、业务 API 测试、浏览器写入/重�
 
 第一关口已实现只读历史节点全文的 Doclib 与业务 API 契约，验证及明确限制见[证据记录](evidence/2026-09-29-structure-node-text.md)。这不是 FE-033 的人工结构编辑完成声明；派生结构版本、写入操作、Web/Skill 入口仍待实现。
 
+第二关口已实现业务侧 schema 19 的 `structure_versions` 追加式页版本与有限操作 API，验证见[派生结构证据](evidence/2026-09-29-structure-versioned-operations.md)。`GET /api/business/revisions/{revision_id}/structure/derived?page_no=N[&version=V]` 的 v0 是未写入的原生结构视图；首次写入得 v1，后续每次成功操作追加 v2、v3 等。`POST /api/business/revisions/{revision_id}/structure/operations` 必须提交 `page_no`、`expected_version`、`operation`、`source` 和 `reason`；来源限 `web/skill/api`，不代表个人身份。旧版本写入返回 409，不自动合并。可带 `Idempotency-Key` 并用 `GET /api/business/structure-requests/{key}` 查原响应；同键同意图重放不增加版本，同键异意图冲突。客户端在响应未知时不得换新键自动重试。
+
+原生节点 ID 由修订/页/原生路径稳定生成；拆分、合并、人工插入生成新 ID。每个节点保留来源路径、顶层定位器和机器原值预览；`text_override` 是人工完整文字，不是原始解析文字。`content_changed=true` 或多个来源时，原生定位器仅是来源锚点。合并仅允许相邻同级且类型/标题级别相同的纯文字叶节点；移动仅限本页，`index` 按移除旧位置后的目标子列表计算，禁止移动到自身后代。拆分偏移按 Python Unicode 字符位置计，必须两侧均有非空文字。单页最多 500 顶层/2000 总节点、深度 16、派生文字总计 50 万字符；单节点文字上限 10 万字符。人工新增限正文/文档标题/段落标题。页版本 JSON 与操作 JSON 都有 SHA-256 检查，发现单侧损坏时拒绝读取；这不是防数据库管理员同时篡改内容和哈希的签名。旧字段证据和确认成果不会随结构版本变化。
+
+Web 与自有 Skill 的编辑/读取入口、人工结构导出格式及浏览器写入回读仍是下一关口；不能因后端 API 能写而将 FE-033 标完成。
+
 2026-09-29 的[报纸 PDF 冒烟](evidence/2026-09-29-downloads-sample-smoke.md)给出一个直观用例：一大段正文被机器标成 `paragraph_title`。首版应能把该块改为正文；若另有识别错字、多栏文章错序或错归属，则可用 B 的文字、拆分/合并和树结构操作修正。每种修正都只形成业务派生版本，不修改 MinerU 原始解析文件，也不自动改写已有引用和成果。

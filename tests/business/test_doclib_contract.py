@@ -898,6 +898,32 @@ def test_local_pdf_through_real_business_api_and_doclib(live_doclib: tuple[Docli
     assert node.json()["revision_id"] == revisions[0]["id"]
     assert node.json()["locator"] == first["locator"]
     assert node.json()["state"] == "historical_parse_unconfirmed"
+    if os.getenv("MINERU_TEST_STRUCTURE_EDIT") == "1":
+        derived_url = f"/api/business/revisions/{revisions[0]['id']}/structure/derived"
+        baseline = client.get(derived_url, params={"page_no": 1})
+        assert baseline.status_code == 200 and baseline.json()["version"] == 0
+        target = baseline.json()["nodes"][0]
+        new_type = "text" if target["type"] == "paragraph_title" else "paragraph_title"
+        operation = {"op": "set_type", "node_id": target["node_id"], "type": new_type}
+        if new_type == "paragraph_title":
+            operation["level"] = 2
+        saved = client.post(
+            f"/api/business/revisions/{revisions[0]['id']}/structure/operations",
+            headers={"Idempotency-Key": "local-sample-structure-001"},
+            json={
+                "page_no": 1, "expected_version": 0, "operation": operation,
+                "source": "api", "reason": "Offline local sample integration probe",
+            },
+        )
+        assert saved.status_code == 201, saved.text
+        assert saved.json()["version"] == 1
+        assert saved.json()["nodes"][0]["type"] == new_type
+        receipt = client.get("/api/business/structure-requests/local-sample-structure-001")
+        assert receipt.status_code == 200 and receipt.json() == saved.json()
+        assert client.get(derived_url, params={"page_no": 1}).json()["version"] == 1
+        assert client.get(derived_url, params={"page_no": 1, "version": 0}).json()["nodes"][0]["type"] == first["type"]
+        native = client.get(f"/api/business/revisions/{revisions[0]['id']}/structure", params={"page_no": 1})
+        assert native.status_code == 200 and native.json()["blocks"][0]["type"] == first["type"]
 
 
 @pytest.mark.parametrize("extension", ["docx", "pptx", "xlsx"])

@@ -13,6 +13,7 @@ import uuid
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from ...doclib.locators import parse_content_cursor
 from ...doclib.types import ParseInfo, ParseReleaseResponse
@@ -41,11 +42,12 @@ from ..domain import (
     TemplateField,
     TemplateVersion,
     TaskStatus,
+    StructurePageVersion,
     validate_template,
 )
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SCHEMA_VERSION = 18
+_SCHEMA_VERSION = 19
 _REQUEST_KEY_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
 
 
@@ -75,6 +77,10 @@ class ReviewRequestConflict(BusinessStoreError):
 
 class TemplateRequestConflict(BusinessStoreError):
     """An idempotency key was reused for another template write."""
+
+
+class StructureVersionConflict(BusinessStoreError):
+    """The structure page changed since the caller read its version."""
 
 
 def _now_ms() -> int:
@@ -138,6 +144,7 @@ class BusinessStore:
                     "issue_resolutions", "confirmed_results", "audit_events", "ingest_requests",
                     "extraction_requests", "task_retry_requests", "task_cancel_requests", "template_requests",
                     "review_requests",
+                    "structure_versions",
                 }:
                     raise BusinessStoreError("Business schema version does not match its tables")
                 return
@@ -368,11 +375,28 @@ class BusinessStore:
                         created_at_ms INTEGER NOT NULL
                     );
                     CREATE INDEX audit_events_run_created ON audit_events(run_id, created_at_ms);
+                    CREATE TABLE structure_versions (
+                        revision_id TEXT NOT NULL REFERENCES revisions(id) ON DELETE RESTRICT,
+                        page_no INTEGER NOT NULL CHECK(page_no > 0),
+                        version INTEGER NOT NULL CHECK(version > 0),
+                        nodes_json TEXT NOT NULL,
+                        nodes_sha256 TEXT NOT NULL,
+                        operation_json TEXT NOT NULL,
+                        operation_sha256 TEXT NOT NULL,
+                        source TEXT NOT NULL CHECK(source IN ('web', 'skill', 'api')),
+                        reason TEXT NOT NULL,
+                        request_key TEXT UNIQUE,
+                        intent_sha256 TEXT,
+                        created_at_ms INTEGER NOT NULL,
+                        CHECK ((request_key IS NULL AND intent_sha256 IS NULL) OR
+                               (request_key IS NOT NULL AND intent_sha256 IS NOT NULL)),
+                        PRIMARY KEY (revision_id, page_no, version)
+                    );
                     """
                 )
                 for code, name, fields in BUILTIN_TEMPLATES:
                     self._insert_template(database, code=code, name=name, fields=fields, built_in=True)
-                database.execute("PRAGMA user_version = 18")
+                database.execute("PRAGMA user_version = 19")
                 database.execute("COMMIT")
 
     @staticmethod
@@ -1809,6 +1833,107 @@ class BusinessStore:
         with closing(self._connect()) as database:
             row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
         return self._revision_from_row(row) if row is not None else None
+
+    def get_structure_version(
+        self, revision_id: str, page_no: int, version: int | None = None
+    ) -> StructurePageVersion | None:
+        if page_no < 1 or (version is not None and version < 1):
+            raise BusinessStoreError("Invalid structure page or version")
+        with closing(self._connect()) as database:
+            row = database.execute(
+                "SELECT s.*, r.document_id FROM structure_versions s JOIN revisions r ON r.id=s.revision_id "
+                "WHERE s.revision_id=? AND s.page_no=? "
+                + ("ORDER BY s.version DESC LIMIT 1" if version is None else "AND s.version=?"),
+                (revision_id, page_no) if version is None else (revision_id, page_no, version),
+            ).fetchone()
+        if row is None:
+            return None
+        if hashlib.sha256(row["nodes_json"].encode("utf-8")).hexdigest() != row["nodes_sha256"] or (
+            hashlib.sha256(row["operation_json"].encode("utf-8")).hexdigest() != row["operation_sha256"]
+        ):
+            raise BusinessStoreError("Structure version checksum mismatch")
+        nodes = json.loads(row["nodes_json"])
+        operation = json.loads(row["operation_json"])
+        if not isinstance(nodes, list) or not isinstance(operation, dict):
+            raise BusinessStoreError("Structure version payload is invalid")
+        return StructurePageVersion(
+            document_id=row["document_id"], revision_id=revision_id, page_no=page_no,
+            version=row["version"], nodes=nodes, operation=operation, source=row["source"],
+            reason=row["reason"], created_at_ms=row["created_at_ms"],
+        )
+
+    def append_structure_version(
+        self, revision_id: str, page_no: int, *, expected_version: int,
+        nodes: list[dict[str, Any]], operation: dict[str, Any], source: ReviewSource, reason: str,
+        request_key: str | None = None,
+    ) -> StructurePageVersion:
+        if page_no < 1 or expected_version < 0 or source not in ("web", "skill", "api") or not (1 <= len(reason) <= 500):
+            raise BusinessStoreError("Invalid structure version request")
+        if request_key is not None and _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid structure idempotency key")
+        nodes_json = json.dumps(nodes, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        operation_json = json.dumps(operation, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        if len(nodes_json.encode("utf-8")) > 4_000_000 or len(operation_json.encode("utf-8")) > 200_000:
+            raise BusinessStoreError("Structure version payload exceeds limits")
+        checksum = hashlib.sha256(nodes_json.encode("utf-8")).hexdigest()
+        operation_checksum = hashlib.sha256(operation_json.encode("utf-8")).hexdigest()
+        intent_json = json.dumps(
+            [revision_id, page_no, expected_version, operation, source, reason],
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        )
+        intent_checksum = hashlib.sha256(intent_json.encode("utf-8")).hexdigest()
+        with closing(self._connect()) as database, database:
+            database.execute("BEGIN IMMEDIATE")
+            if request_key is not None:
+                existing = database.execute(
+                    "SELECT revision_id, page_no, version, intent_sha256 FROM structure_versions WHERE request_key=?",
+                    (request_key,),
+                ).fetchone()
+                if existing is not None:
+                    if existing["intent_sha256"] != intent_checksum:
+                        raise StructureVersionConflict("Structure idempotency key reused for another intent")
+                    saved = self.get_structure_version(existing["revision_id"], existing["page_no"], existing["version"])
+                    if saved is None:
+                        raise BusinessStoreError("Structure request record is incomplete")
+                    return saved
+            revision_row = database.execute("SELECT * FROM revisions WHERE id=?", (revision_id,)).fetchone()
+            if revision_row is None:
+                raise BusinessStoreError("Parse revision not found")
+            revision = self._revision_from_row(revision_row)
+            if revision.parse_id_for_page(page_no) is None:
+                raise BusinessStoreError("Page does not belong to parse revision")
+            current = database.execute(
+                "SELECT COALESCE(MAX(version), 0) FROM structure_versions WHERE revision_id=? AND page_no=?",
+                (revision_id, page_no),
+            ).fetchone()[0]
+            if current != expected_version:
+                raise StructureVersionConflict("Structure page version changed")
+            now = _now_ms()
+            database.execute(
+                "INSERT INTO structure_versions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (revision_id, page_no, current + 1, nodes_json, checksum, operation_json,
+                 operation_checksum, source, reason, request_key,
+                 intent_checksum if request_key is not None else None, now),
+            )
+        return StructurePageVersion(
+            document_id=revision.document_id, revision_id=revision_id, page_no=page_no,
+            version=current + 1, nodes=nodes, operation=operation, source=source, reason=reason,
+            created_at_ms=now,
+        )
+
+    def get_structure_request(self, request_key: str) -> StructurePageVersion | None:
+        if _REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessStoreError("Invalid structure idempotency key")
+        with closing(self._connect()) as database:
+            row = database.execute(
+                "SELECT revision_id, page_no, version FROM structure_versions WHERE request_key=?", (request_key,)
+            ).fetchone()
+        if row is None:
+            return None
+        saved = self.get_structure_version(row["revision_id"], row["page_no"], row["version"])
+        if saved is None:
+            raise BusinessStoreError("Structure request record is incomplete")
+        return saved
 
     def list_revisions(self, document_id: str) -> tuple[ParseRevision, ...]:
         with closing(self._connect()) as database:

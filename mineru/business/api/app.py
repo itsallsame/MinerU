@@ -6,12 +6,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ...filetypes import (
     FLASH_ONLY_PARSE_EXTENSIONS,
@@ -41,6 +41,7 @@ from ..domain import (
     TemplateField,
     TemplateVersion,
     TaskStatus,
+    StructurePageVersion,
 )
 from ..services import (
     BusinessDiscovery,
@@ -64,6 +65,8 @@ from ..services import (
     BusinessStructurePage,
     StructureBlock,
     BusinessStructureNodeText,
+    StructureEditor,
+    StructureEditError,
 )
 from ..store import (
     BusinessStore, BusinessStoreError, ExtractionRequestConflict, ReviewRequestConflict, TaskCancelRequestConflict,
@@ -611,6 +614,55 @@ class BusinessStructureNodeTextView(BaseModel):
         return cls(**vars(record))
 
 
+class StructureOriginView(BaseModel):
+    path: list[int]
+    locator: str
+    type: str
+    preview: str
+    bbox: list[float] | None
+
+
+class DerivedStructureNodeView(BaseModel):
+    node_id: str
+    type: str
+    level: int | None
+    preview: str
+    text_override: str | None
+    content_changed: bool
+    origins: list[StructureOriginView]
+    children: list[DerivedStructureNodeView]
+
+
+class DerivedStructurePageView(BaseModel):
+    document_id: str
+    revision_id: str
+    page_no: int
+    version: int
+    state: Literal["historical_parse_unconfirmed", "human_edited_structure"]
+    nodes: list[DerivedStructureNodeView]
+    operation: dict[str, Any] | None
+    source: ReviewSource | None
+    reason: str | None
+    created_at_ms: int | None
+
+    @classmethod
+    def from_record(cls, record: StructurePageVersion) -> DerivedStructurePageView:
+        return cls(
+            **vars(record),
+            state="historical_parse_unconfirmed" if record.version == 0 else "human_edited_structure",
+        )
+
+
+class StructureEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    page_no: int = Field(ge=1)
+    expected_version: int = Field(ge=0)
+    operation: dict[str, Any]
+    source: ReviewSource
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class EvidenceView(BaseModel):
     id: str
     revision_id: str
@@ -825,6 +877,64 @@ def create_app(
                 503 if exc.code == "doclib_unavailable" else 409
             )
             raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/revisions/{revision_id}/structure/derived", response_model=DerivedStructurePageView)
+    def get_derived_structure(
+        revision_id: str, page_no: Annotated[int, Query(ge=1)],
+        version: Annotated[int | None, Query(ge=0)] = None,
+    ) -> DerivedStructurePageView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return DerivedStructurePageView.from_record(
+                StructureEditor(store=store, discovery=discovery).get(revision_id, page_no, version)
+            )
+        except StructureEditError as exc:
+            status_code = (
+                404 if exc.code in ("revision_not_found", "structure_version_not_found") else
+                422 if exc.code.startswith("invalid_") else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.post(
+        "/api/business/revisions/{revision_id}/structure/operations",
+        response_model=DerivedStructurePageView, status_code=201,
+    )
+    def edit_derived_structure(
+        revision_id: str, request: StructureEditRequest,
+        request_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> DerivedStructurePageView:
+        if discovery is None:
+            raise HTTPException(status_code=503, detail="Business discovery is not configured")
+        try:
+            return DerivedStructurePageView.from_record(
+                StructureEditor(store=store, discovery=discovery).apply(
+                    revision_id, request.page_no, expected_version=request.expected_version,
+                    operation=request.operation, source=request.source, reason=request.reason,
+                    request_key=request_key,
+                )
+            )
+        except StructureEditError as exc:
+            status_code = (
+                404 if exc.code in ("revision_not_found", "structure_version_not_found") else
+                422 if exc.code.startswith("invalid_") or exc.code in (
+                    "structure_node_not_found", "structure_node_not_editable", "structure_limit_exceeded",
+                ) else
+                503 if exc.code == "doclib_unavailable" else 409
+            )
+            raise HTTPException(status_code=status_code, detail=exc.code) from exc
+
+    @app.get("/api/business/structure-requests/{request_key}", response_model=DerivedStructurePageView)
+    def get_structure_request(request_key: str) -> DerivedStructurePageView:
+        try:
+            saved = store.get_structure_request(request_key)
+        except BusinessStoreError as exc:
+            status_code = 422 if str(exc) == "Invalid structure idempotency key" else 409
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        if saved is None:
+            raise HTTPException(status_code=404, detail="Structure request not found")
+        return DerivedStructurePageView.from_record(saved)
 
     @app.post(
         "/api/business/extractions/{run_id}/fields/{field_code}/decisions",

@@ -11,6 +11,7 @@ from .discovery import (
 from .evidence import EvidenceCaptureError, EvidenceInspection, EvidenceReader, EvidenceWriter, NavigationStatus
 from .extractions import FieldExtraction
 from .extraction_worker import ExtractionWorker
+from .structure_edit import StructureEditor, StructureEditError
 
 __all__ = [
     "DocumentSubmission",
@@ -40,4 +41,5 @@ __all__ = [
     "ExtractionWorker",
     "FieldExtraction",
     "NavigationStatus",
+    "StructureEditor", "StructureEditError",
 ]

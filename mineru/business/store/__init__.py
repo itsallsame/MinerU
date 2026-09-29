@@ -4,6 +4,7 @@ from .sqlite import (
     BusinessStore, BusinessStoreError, ExtractionRequestConflict, ReviewRequestConflict, TaskCancelRequestConflict,
     TaskRetryRequestConflict,
     TemplateRequestConflict,
+    StructureVersionConflict,
     UploadRequestConflict,
 )
 
@@ -12,5 +13,6 @@ __all__ = [
     "TaskCancelRequestConflict",
     "TaskRetryRequestConflict",
     "TemplateRequestConflict",
+    "StructureVersionConflict",
     "UploadRequestConflict",
 ]

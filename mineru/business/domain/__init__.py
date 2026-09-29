@@ -5,6 +5,7 @@ from .records import BusinessDocument, EvidenceSnapshot, IngestTask, ParseBatch,
 from .review import (
     AuditEvent, AuditPage, AuditRecord, ConfirmedField, ConfirmedResult, FieldDecision, IssueResolution, ReviewSource,
 )
+from .structure import StructurePageVersion
 from .templates import BUILTIN_TEMPLATES, FieldType, TemplateField, TemplateVersion, validate_template
 
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "ConfirmedField", "ConfirmedResult",
     "EvidenceSnapshot", "ExtractionRun", "FieldCandidate", "FieldDecision", "FieldType", "IngestTask",
     "IssueResolution", "ParseBatch", "ParseRevision", "QualityIssue", "ReviewSource", "TaskStatus",
+    "StructurePageVersion",
     "TemplateField", "TemplateVersion", "validate_template",
 ]
