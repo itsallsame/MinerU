@@ -1,6 +1,6 @@
 ---
 name: business-documents
-description: "Use this deployment's open MinerU business document platform to submit and search documents, read a historical revision by locator, inspect frozen evidence, and distinguish machine drafts from confirmed results. Use for this project's business workflow, not the upstream MinerU CLI or official Skill."
+description: "Use this deployment's open MinerU business document platform to submit/search documents, read historical revisions, review or explicitly edit versioned document structure, inspect frozen evidence, and distinguish machine drafts from confirmed results. Use for this project's business workflow, not the upstream MinerU CLI or official Skill."
 ---
 
 # Business Documents
@@ -32,6 +32,10 @@ python3 skills/business-documents/scripts/business_documents.py search-pages REV
 python3 skills/business-documents/scripts/business_documents.py search-blocks REVISION_ID "年度通知"
 python3 skills/business-documents/scripts/business_documents.py outline REVISION_ID
 python3 skills/business-documents/scripts/business_documents.py structure REVISION_ID 1
+python3 skills/business-documents/scripts/business_documents.py structure-derived REVISION_ID 1
+python3 skills/business-documents/scripts/business_documents.py structure-node-text REVISION_ID 1 0.1
+python3 skills/business-documents/scripts/business_documents.py structure-edit REVISION_ID 1 0 '{"op":"set_type","node_id":"NODE_ID","type":"paragraph_title","level":2}' --reason '人工核对标题层级' --confirm-write
+python3 skills/business-documents/scripts/business_documents.py structure-request REQUEST_KEY
 python3 skills/business-documents/scripts/business_documents.py read REVISION_ID 'doc:SHORT_ID/tier:flash/page:1'
 python3 skills/business-documents/scripts/business_documents.py evidence EVIDENCE_ID
 python3 skills/business-documents/scripts/business_documents.py results RUN_ID
@@ -60,6 +64,12 @@ Each upload uses an opaque `request_key`, returned in success JSON and included 
 For a long document, read progressively instead of dumping every page into context. Example: first run `revisions DOCUMENT_ID` and choose the returned historical `REVISION_ID`; run `outline REVISION_ID` for the first 25-page window and, only if its response has `next_page`, run `outline REVISION_ID --start-page NEXT_PAGE`. Search a specific question with `search-blocks REVISION_ID "risk term"`; continue using that response's `next_page` when necessary. Read a returned locator with `read REVISION_ID 'RETURNED_LOCATOR'`, then follow `next_locator` only when more of that passage is needed. Keep the same revision ID throughout, do not manufacture locators or interpret an unscanned window as no match. These are unconfirmed machine reads; for a final supported claim, ask the user to review/freeze the relevant passage in the Web, then use `evidence EVIDENCE_ID` or a reviewed `result RESULT_ID`.
 
 `structure` reads the native parent/child model block tree for one page of the specified historical parse revision. Each node has a structural `path`, type, optional heading level, short text preview and available bbox. Children inherit their top-level block's locator; this is an **ancestor anchor**, not an exact child locator. Inspect the top-level block with `read` and use frozen evidence for final citations. All nodes are machine-parsed, not reviewed evidence.
+
+`structure-derived REVISION_ID PAGE_NO` reads the current business overlay (v0 is the immutable machine tree); `--version N` reads a specific saved version. Each node has a stable `node_id` within that revision/page, original `origins` and possibly a full `text_override`. `structure-node-text REVISION_ID PAGE_NO PATH` reads complete native text for a single origin path such as `0.1`; it explicitly reports whether that pure-text node is editable. A short preview is never enough to overwrite full text. Neither derived structure nor native text is frozen evidence or a confirmed field result.
+
+Only use `structure-edit` after the user explicitly approves **the particular correction**. It submits one operation with the version just read, a meaningful reason and source `skill`. Supported `op` values and fields are `set_type` (`node_id`, `type`, optional `level`), `set_text` (`node_id`, full `text`), `split` (`node_id`, character `offset`), `merge` (`first_id`, adjacent `second_id`, optional `separator`), `move` (`node_id`, `parent_id` or null, zero-based `index`), `insert` (`parent_id` or null, `index`, `type`, full `text`, optional `level`) and `delete` (`node_id`). Insert accepts only text, document title and paragraph title. Read the complete text before `set_text` or `split`; an opaque/mixed node cannot be text-edited. Never supply an entire replacement tree, invent a native origin or treat an Agent-suggested change as human confirmation. The response is a new **human-edited structure** version, not a field confirmation or mutation of Doclib.
+
+Each edit returns its `request_key`. If POST has an unknown outcome, the client only looks up that key, without automatically resubmitting. `structure-request KEY` is a read-only later check; `not_recorded_at_lookup` is unresolved, not proof of rejection. Do not generate a new key for an uncertain retry. Only when the user explicitly asks to retry the same operation and expected version, rerun `structure-edit` with the identical JSON, reason, revision/page and `--request-key KEY --confirm-write`. HTTP 409 means stale version or changed source; fetch the latest derived page and obtain a fresh human decision before any new edit. No authentication or permission is implied by the flag or request key.
 
 Current boundary: the tree reflects nodes actually present in MinerU's model schema; do not invent table cells or exact child coordinates the model did not provide. Do not silently fall back to Doclib/official Skill; tell the user when requested evidence is unavailable.
 

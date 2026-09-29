@@ -608,6 +608,63 @@ def test_skill_evidence_link_uses_the_same_validated_business_web_origin() -> No
     assert connection.calls == [("GET", "/api/business/evidence/evidence-1")]
 
 
+def test_skill_structure_edit_reads_and_writes_only_business_api() -> None:
+    script = _script()
+    key = "structure-edit-request-key-0001"
+    page = {
+        "revision_id": "rev-1", "page_no": 1, "version": 1, "state": "human_edited_structure", "nodes": [],
+        "operation": {"op": "delete", "node_id": "n_1"}, "source": "skill", "reason": "人工核对",
+    }
+    connection = _Connection({
+        ("GET", "/api/business/revisions/rev-1/structure/derived?page_no=1"): _Response({**page, "version": 0}),
+        ("GET", "/api/business/revisions/rev-1/structure/node-text?page_no=1&path=0.1"): _Response({
+            "revision_id": "rev-1", "page_no": 1, "path": [0, 1], "editable": True, "text": "complete",
+        }),
+        ("POST", "/api/business/revisions/rev-1/structure/operations"): _Response(page),
+        ("GET", f"/api/business/structure-requests/{key}"): _Response(page),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    parse = script.parser().parse_args
+    assert script.run(parse(["structure-derived", "rev-1", "1"]), client)["version"] == 0
+    assert script.run(parse(["structure-node-text", "rev-1", "1", "0.1"]), client)["text"] == "complete"
+    args = parse(["structure-edit", "rev-1", "1", "0", '{"op":"delete","node_id":"n_1"}',
+                  "--reason", "人工核对", "--request-key", key, "--confirm-write"])
+    assert script.run(args, client)["version"] == 1
+    assert json.loads(connection.body.getvalue()) == {
+        "page_no": 1, "expected_version": 0, "operation": {"op": "delete", "node_id": "n_1"},
+        "source": "skill", "reason": "人工核对",
+    }
+    assert ("Idempotency-Key", key) in connection.headers
+    assert script.run(parse(["structure-request", key]), client)["request_state"] == "accepted"
+
+
+def test_skill_structure_edit_unknown_outcome_checks_same_key_without_reposting() -> None:
+    script = _script()
+    key = "structure-edit-request-key-0002"
+    path = "/api/business/revisions/rev-1/structure/operations"
+    receipt_path = f"/api/business/structure-requests/{key}"
+    connection = _Connection({
+        ("POST", path): _Response({"detail": "unavailable"}, status=503),
+        ("GET", receipt_path): _Response({"detail": "not found"}, status=404),
+    })
+    client = script.BusinessClient("http://127.0.0.1:8080")
+    client._connect = lambda: connection
+    args = script.parser().parse_args(["structure-edit", "rev-1", "1", "0", '{"op":"delete","node_id":"n_1"}',
+                                       "--reason", "人工核对", "--request-key", key, "--confirm-write"])
+    assert script.run(args, client) == {"state": "not_recorded_at_lookup", "request_key": key}
+    assert connection.calls == [("POST", path), ("GET", receipt_path)]
+    connection.responses[("GET", receipt_path)] = _Response({
+        "revision_id": "rev-1", "page_no": 1, "version": 1, "nodes": [],
+    })
+    assert script.run(script.parser().parse_args(["structure-request", key]), client)["version"] == 1
+    assert connection.calls.count(("POST", path)) == 1
+    no_confirm = script.parser().parse_args(["structure-edit", "rev-1", "1", "0", '{"op":"delete"}',
+                                             "--reason", "test"])
+    with pytest.raises(script.BusinessAPIError, match="requires --confirm-write"):
+        script.run(no_confirm, client)
+
+
 def test_skill_upload_and_read_use_the_real_open_business_api(tmp_path: Path) -> None:
     script = _script()
     shared = tmp_path / "shared"

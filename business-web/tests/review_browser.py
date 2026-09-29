@@ -99,16 +99,62 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
                 "items": [{"level": 1, "title": "年度通知目录", "page_no": 1,
                            "locator": evidence["locator"], "state": "historical_parse_unconfirmed"}],
             }))
-            page.route("**/api/business/revisions/rev-1/structure?*", lambda route: fulfill(route, {
-                "document_id": document["id"], "revision_id": "rev-1", "page_no": 1,
-                "blocks": [{"type": "list", "block_no": 1, "locator": f"{evidence['locator']}/block:1",
-                            "path": [0], "preview": "", "level": None, "bbox": [1, 2, 3, 4],
-                            "children": [{"type": "doc_title", "block_no": 1,
-                                          "locator": f"{evidence['locator']}/block:1", "path": [0, 0],
-                                          "preview": "年度通知原生标题", "level": 1, "bbox": None,
-                                          "children": [], "state": "historical_parse_unconfirmed"}],
-                            "state": "historical_parse_unconfirmed"}],
+            structure_page = {
+                "document_id": document["id"], "revision_id": "rev-1", "page_no": 1, "version": 0,
+                "state": "historical_parse_unconfirmed", "operation": None, "source": None,
+                "reason": None, "created_at_ms": None,
+                "nodes": [{"node_id": "n_parent", "type": "list", "level": None, "preview": "",
+                           "text_override": None, "content_changed": False,
+                           "origins": [{"path": [0], "locator": f"{evidence['locator']}/block:1",
+                                        "type": "list", "preview": "", "bbox": [1, 2, 3, 4]}],
+                           "children": [{"node_id": "n_title", "type": "doc_title", "level": 1,
+                                         "preview": "年度通知原生标题", "text_override": None,
+                                         "content_changed": False,
+                                         "origins": [{"path": [0, 0], "locator": f"{evidence['locator']}/block:1",
+                                                      "type": "doc_title", "preview": "年度通知原生标题",
+                                                      "bbox": None}], "children": []}]}],
+            }
+            page.route("**/api/business/revisions/rev-1/structure/derived?*", lambda route: fulfill(route, structure_page))
+            page.route("**/api/business/revisions/rev-1/structure/node-text?*", lambda route: fulfill(route, {
+                "document_id": document["id"], "revision_id": "rev-1", "page_no": 1, "path": [0, 0],
+                "type": "doc_title", "block_no": 1, "locator": f"{evidence['locator']}/block:1",
+                "editable": True, "text": "年度通知原生标题", "state": "historical_parse_unconfirmed",
             }))
+
+            structure_mode = {"value": "normal"}
+            structure_receipts: dict[str, dict[str, object]] = {}
+
+            def structure_edit(route: object) -> None:
+                body = json.loads(route.request.post_data)
+                assert body["expected_version"] == structure_page["version"]
+                assert body["source"] == "web"
+                key = route.request.headers["idempotency-key"]
+                assert key
+                if structure_mode["value"] == "conflict":
+                    fulfill(route, {"detail": "structure_version_conflict"}, status=409)
+                    return
+                if structure_mode["value"] == "missing":
+                    fulfill(route, {"detail": "unavailable"}, status=503)
+                    return
+                structure_page["version"] += 1
+                structure_page["state"] = "human_edited_structure"
+                structure_page["operation"] = body["operation"]
+                structure_page["source"] = "web"
+                structure_page["reason"] = body["reason"]
+                structure_page["nodes"][0]["children"][0]["type"] = body["operation"]["type"]
+                structure_page["nodes"][0]["children"][0]["level"] = body["operation"]["level"]
+                structure_receipts[key] = json.loads(json.dumps(structure_page))
+                if structure_mode["value"] == "unknown":
+                    fulfill(route, {"detail": "unavailable"}, status=503)
+                    return
+                fulfill(route, structure_page, status=201)
+
+            page.route("**/api/business/revisions/rev-1/structure/operations", structure_edit)
+            def structure_receipt(route: object) -> None:
+                receipt = structure_receipts.get(route.request.url.rsplit("/", 1)[-1])
+                fulfill(route, receipt or {"detail": "not found"}, 200 if receipt else 404)
+
+            page.route("**/api/business/structure-requests/*", structure_receipt)
             page.route("**/api/business/revisions/rev-1/content?*", lambda route: fulfill(route, {
                 "document_id": document["id"], "revision_id": "rev-1", "locator": evidence["locator"],
                 "tier": "basic", "content": "# 年度通知目录", "truncated": False, "next_locator": None,
@@ -245,10 +291,34 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_text("年度通知目录 · 第 1 页").wait_for()
             page.get_by_role("button", name="读取所在页").click()
             page.locator(".historical-content").get_by_text("# 年度通知目录").wait_for()
-            structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="原生解析块结构"))
+            structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="文档块结构复核"))
             structure.get_by_role("button", name="查看本页块").click()
             structure.get_by_text("年度通知原生标题").wait_for()
-            assert structure.get_by_text("doc_title · 标题级别 1 · 块 1 · 父块定位").count() == 1
+            assert structure.get_by_text("doc_title · 标题级别 1 · n_title").count() == 1
+            structure.get_by_role("button", name="选择编辑此节点").last.click()
+            structure.get_by_label("新类型").fill("paragraph_title")
+            structure.get_by_label("段落标题级别（其他类型留空）").fill("2")
+            structure.get_by_label("编辑原因").fill("人工核对标题级别")
+            structure.get_by_role("button", name="保存结构编辑").click()
+            structure.get_by_text("版本 v1").wait_for()
+            assert structure.get_by_text("paragraph_title · 标题级别 2 · n_title").count() == 1
+            structure.get_by_role("button", name="查看本页块").click()
+            structure.get_by_text("版本 v1").wait_for()
+            structure_mode["value"] = "conflict"
+            structure.get_by_role("button", name="选择编辑此节点").last.click()
+            structure.get_by_label("新类型").fill("doc_title")
+            structure.get_by_label("段落标题级别（其他类型留空）").fill("")
+            structure.get_by_label("编辑原因").fill("冲突检查")
+            structure.get_by_role("button", name="保存结构编辑").click()
+            page.get_by_text("结构版本已变化；已刷新本页").wait_for()
+            assert structure.get_by_text("版本 v1").count() == 1
+            structure_mode["value"] = "unknown"
+            structure.get_by_role("button", name="选择编辑此节点").last.click()
+            structure.get_by_label("新类型").fill("doc_title")
+            structure.get_by_label("段落标题级别（其他类型留空）").fill("")
+            structure.get_by_label("编辑原因").fill("结果不明回查")
+            structure.get_by_role("button", name="保存结构编辑").click()
+            structure.get_by_text("版本 v2").wait_for()
             confirm_button = page.get_by_role("button", name="确认并生成不可变成果版本")
             assert confirm_button.is_disabled()
             assert page.get_by_text("必填字段「标题」尚未作出复核决定").count() == 1
@@ -342,6 +412,27 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             assert page.locator(".field-review.active").get_attribute("data-field-code") == "title"
             page.get_by_role("button", name="尝试跳转当前原文页").click()
             assert page.locator("img.source-preview").count() == 1
+            structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="文档块结构复核"))
+            structure.get_by_role("button", name="查看本页块").click()
+            structure.get_by_text("版本 v2").wait_for()
+            structure_mode["value"] = "missing"
+            structure.get_by_role("button", name="选择编辑此节点").last.click()
+            structure.get_by_label("新类型").fill("paragraph_title")
+            structure.get_by_label("段落标题级别（其他类型留空）").fill("3")
+            structure.get_by_label("编辑原因").fill("等待同键恢复")
+            structure.get_by_role("button", name="保存结构编辑").click()
+            page.get_by_text("原请求键本次未查到记录").wait_for()
+            saved = page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingStructureWrites.v1'))")
+            assert len(saved) == 1 and saved[0]["pageNo"] == 1
+            page.reload(wait_until="networkidle")
+            page.get_by_role("button", name="查看 scan.png，已解析").click()
+            structure.get_by_role("button", name="打开第 1 页核对原请求").click()
+            structure.get_by_role("button", name="用原键重试结构编辑").wait_for()
+            structure_mode["value"] = "normal"
+            page.once("dialog", lambda dialog: dialog.accept())
+            structure.get_by_role("button", name="用原键重试结构编辑").click()
+            structure.get_by_text("版本 v3").wait_for()
+            assert page.evaluate("JSON.parse(localStorage.getItem('mineru.business.pendingStructureWrites.v1'))") == []
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             assert not errors, errors

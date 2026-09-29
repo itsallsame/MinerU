@@ -96,10 +96,23 @@ class BusinessClient:
             raise BusinessAPIError(str(detail or "Business API request failed"), status=response.status)
         return body
 
-    def request(self, method: str, path: str, *, headers: dict[str, str] | None = None) -> Any:
+    def request(
+        self, method: str, path: str, *, headers: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> Any:
         connection = self._connect()
         try:
-            connection.request(method, f"/api/business{path}", headers={"Accept": "application/json", **(headers or {})})
+            request_headers = {"Accept": "application/json", **(headers or {})}
+            if body is None:
+                connection.request(method, f"/api/business{path}", headers=request_headers)
+            else:
+                payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+                connection.putrequest(method, f"/api/business{path}")
+                body_headers = {**request_headers, "Content-Type": "application/json", "Content-Length": str(len(payload))}
+                for name, value in body_headers.items():
+                    connection.putheader(name, value)
+                connection.endheaders()
+                connection.send(payload)
             return self._read_response(connection)
         except OSError as exc:
             raise BusinessAPIError(f"Business API unavailable: {exc}") from exc
@@ -229,6 +242,23 @@ def parser() -> argparse.ArgumentParser:
     structure = commands.add_parser("structure")
     structure.add_argument("revision_id")
     structure.add_argument("page_no", type=int)
+    derived = commands.add_parser("structure-derived")
+    derived.add_argument("revision_id")
+    derived.add_argument("page_no", type=int)
+    derived.add_argument("--version", type=int)
+    node_text = commands.add_parser("structure-node-text")
+    node_text.add_argument("revision_id")
+    node_text.add_argument("page_no", type=int)
+    node_text.add_argument("path", help="Dot-separated native path from a derived node origin, for example 0.1")
+    commands.add_parser("structure-request").add_argument("request_key")
+    edit = commands.add_parser("structure-edit")
+    edit.add_argument("revision_id")
+    edit.add_argument("page_no", type=int)
+    edit.add_argument("expected_version", type=int)
+    edit.add_argument("operation_json", help="One bounded operation object, never a complete tree")
+    edit.add_argument("--reason", required=True)
+    edit.add_argument("--request-key", help="Reuse for an explicitly approved same-intent retry")
+    edit.add_argument("--confirm-write", action="store_true")
     read = commands.add_parser("read")
     read.add_argument("revision_id")
     read.add_argument("locator")
@@ -345,6 +375,79 @@ def run(args: argparse.Namespace, client: BusinessClient) -> Any:
     if command == "structure":
         query = urlencode({"page_no": args.page_no})
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/structure?{query}")
+    if command == "structure-derived":
+        params = {"page_no": args.page_no}
+        if args.version is not None:
+            params["version"] = args.version
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/structure/derived?{urlencode(params)}")
+    if command == "structure-node-text":
+        try:
+            path = [int(part) for part in args.path.split(".")]
+        except ValueError as exc:
+            raise BusinessAPIError("Native node path must contain non-negative integers") from exc
+        if not path or any(part < 0 for part in path):
+            raise BusinessAPIError("Native node path must contain non-negative integers")
+        query = urlencode({"page_no": args.page_no, "path": ".".join(map(str, path))})
+        return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/structure/node-text?{query}")
+    if command == "structure-request":
+        if REQUEST_KEY_RE.fullmatch(args.request_key) is None:
+            raise BusinessAPIError("Invalid structure request key")
+        try:
+            result = client.request("GET", f"/structure-requests/{quote(args.request_key, safe='')}")
+        except BusinessAPIError as exc:
+            if exc.status == 404:
+                return {"request_key": args.request_key, "state": "not_recorded_at_lookup"}
+            raise
+        if not isinstance(result, dict) or not isinstance(result.get("version"), int):
+            raise BusinessAPIError("Structure request receipt is incomplete", status=200)
+        return {**result, "request_key": args.request_key, "request_state": "accepted"}
+    if command == "structure-edit":
+        if not args.confirm_write:
+            raise BusinessAPIError("Structure edit requires --confirm-write after explicit user approval")
+        request_key = uuid.uuid4().hex if args.request_key is None else args.request_key
+        if REQUEST_KEY_RE.fullmatch(request_key) is None:
+            raise BusinessAPIError("Invalid structure request key")
+        try:
+            operation = json.loads(args.operation_json)
+        except json.JSONDecodeError as exc:
+            raise BusinessAPIError("Operation must be valid JSON") from exc
+        if not isinstance(operation, dict) or not isinstance(operation.get("op"), str):
+            raise BusinessAPIError("Operation must be one object with an op")
+        if args.page_no < 1 or args.expected_version < 0 or not 1 <= len(args.reason.strip()) <= 500:
+            raise BusinessAPIError("Invalid page, expected version or reason")
+        def matches(result: Any) -> bool:
+            return (
+                isinstance(result, dict) and result.get("revision_id") == args.revision_id
+                and result.get("page_no") == args.page_no and result.get("version") == args.expected_version + 1
+                and result.get("operation") == operation and result.get("source") == "skill"
+                and result.get("reason") == args.reason.strip()
+            )
+
+        path = f"/revisions/{quote(args.revision_id, safe='')}/structure/operations"
+        try:
+            result = client.request("POST", path, headers={"Idempotency-Key": request_key}, body={
+                "page_no": args.page_no, "expected_version": args.expected_version,
+                "operation": operation, "source": "skill", "reason": args.reason,
+            })
+            if not matches(result):
+                raise BusinessAPIError("Structure edit response is incomplete; outcome unknown", status=200)
+            return {**result, "request_key": request_key}
+        except BusinessAPIError as exc:
+            if not _write_outcome_unknown(exc):
+                exc.request_key = request_key
+                raise
+            try:
+                receipt = client.request("GET", f"/structure-requests/{quote(request_key, safe='')}")
+            except BusinessAPIError as lookup_error:
+                if lookup_error.status == 404:
+                    return {"state": "not_recorded_at_lookup", "request_key": request_key}
+                raise BusinessAPIError(
+                    "Structure edit outcome unknown; check this request key before another write",
+                    request_key=request_key,
+                ) from lookup_error
+            if not matches(receipt):
+                raise BusinessAPIError("Structure edit receipt mismatch; stop retrying", request_key=request_key)
+            return {**receipt, "request_key": request_key, "request_state": "accepted_after_lookup"}
     if command == "read":
         query = urlencode({"locator": args.locator, "limit": args.limit})
         return client.request("GET", f"/revisions/{quote(args.revision_id, safe='')}/content?{query}")

@@ -9,6 +9,44 @@ const issueLabels = {
 const runLabels = { queued: "等待提取", running: "正在提取", done: "待人工复核", failed: "提取失败" };
 const pendingExtractionsKey = "mineru.business.pendingExtractions.v1";
 const pendingReviewWritesKey = "mineru.business.pendingReviewWrites.v1";
+const pendingStructureWritesKey = "mineru.business.pendingStructureWrites.v1";
+
+function pendingStructureWrites() {
+  try {
+    const records = JSON.parse(localStorage.getItem(pendingStructureWritesKey) || "[]");
+    return Array.isArray(records) ? records.filter((record) => record
+      && typeof record.revisionId === "string" && Number.isInteger(record.pageNo)
+      && /^[A-Za-z0-9_-]{16,128}$/.test(record.requestKey) && record.payload?.operation) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pendingStructureWrite(revisionId, pageNo) {
+  return pendingStructureWrites().find((record) => record.revisionId === revisionId && record.pageNo === pageNo) || null;
+}
+
+function rememberStructureWrite(record) {
+  const records = pendingStructureWrites();
+  if (records.length >= 100 || pendingStructureWrite(record.revisionId, record.pageNo)) return false;
+  try {
+    localStorage.setItem(pendingStructureWritesKey, JSON.stringify([...records, record]));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function forgetStructureWrite(record) {
+  try {
+    localStorage.setItem(pendingStructureWritesKey, JSON.stringify(pendingStructureWrites().filter(
+      (item) => item.requestKey !== record.requestKey,
+    )));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function pendingReviewWrites() {
   try {
@@ -134,7 +172,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   const state = {
     document: null, revisions: [], revisionId: null, runs: [], runId: null,
     extraction: null, template: null, evidence: [], decisions: [], results: [], audit: [],
-    inspection: null, reading: null, outline: null, structure: null, error: "", busy: false, generation: 0,
+    inspection: null, reading: null, outline: null, structure: null, structureSelection: null,
+    error: "", busy: false, generation: 0,
     diff: null, diffOtherId: null, diffPreview: null,
     selectedFieldCode: null, inspectionHighlightValue: null,
     sourcePageNo: null,
@@ -156,6 +195,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.structureSelection = null;
     state.diff = null;
     state.diffOtherId = null;
     state.diffPreview = null;
@@ -362,6 +402,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.structureSelection = null;
     state.diff = null;
     state.diffOtherId = null;
     state.diffPreview = null;
@@ -434,6 +475,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     state.reading = null;
     state.outline = null;
     state.structure = null;
+    state.structureSelection = null;
     state.diff = null;
     state.diffOtherId = null;
     state.diffPreview = null;
@@ -766,9 +808,100 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   async function loadStructure(pageNo) {
     await perform(async (isCurrent) => {
       const revisionId = state.revisionId;
-      const page = await businessApi.structure(revisionId, pageNo);
-      if (isCurrent()) state.structure = page;
+      const page = await businessApi.derivedStructure(revisionId, pageNo);
+      if (isCurrent()) {
+        state.structure = page;
+        state.structureSelection = null;
+      }
     });
+  }
+
+  async function selectStructureNode(node) {
+    await perform(async (isCurrent) => {
+      let text = node.text_override;
+      let editable = text !== null;
+      if (text === null && node.origins.length === 1) {
+        const result = await businessApi.structureNodeText(
+          state.revisionId, state.structure.page_no, node.origins[0].path.join("."),
+        );
+        if (!isCurrent()) return;
+        editable = result.editable;
+        text = result.text;
+      }
+      if (isCurrent()) state.structureSelection = { node, text, editable };
+    });
+  }
+
+  function structureReceiptMatches(record, receipt) {
+    return receipt?.revision_id === record.revisionId && receipt?.page_no === record.pageNo
+      && receipt?.version === record.payload.expected_version + 1
+      && receipt?.source === "web" && receipt?.reason === record.payload.reason
+      && JSON.stringify(receipt?.operation) === JSON.stringify(record.payload.operation);
+  }
+
+  async function submitStructureWrite(record, isCurrent, { replay = false } = {}) {
+    if (replay) {
+      if (pendingStructureWrite(record.revisionId, record.pageNo)?.requestKey !== record.requestKey) {
+        throw new Error("原结构编辑请求键已变化，请先核对。");
+      }
+    } else if (!rememberStructureWrite(record)) {
+      throw new Error("无法保存待核对的结构编辑请求，或本页已有未确认写入；本次没有发送。");
+    }
+    let result;
+    try {
+      result = await businessApi.editStructure(record.revisionId, record.payload, record.requestKey);
+      if (!structureReceiptMatches(record, result)) throw new SyntaxError("结构编辑响应缺少匹配的版本身份");
+    } catch (error) {
+      if (!isUnknownWriteError(error)) {
+        forgetStructureWrite(record);
+        if (error.status === 409 && isCurrent()) {
+          state.structure = await businessApi.derivedStructure(record.revisionId, record.pageNo);
+          state.structureSelection = null;
+          throw new Error("结构版本已变化；已刷新本页，请重新检查后编辑。");
+        }
+        throw error;
+      }
+      try {
+        result = await businessApi.structureRequest(record.requestKey);
+      } catch (lookupError) {
+        if (lookupError.status === 404) {
+          throw new Error("结构编辑结果未确认；原请求键本次未查到记录，不能断定未受理。请稍后核对或用原键重试。");
+        }
+        throw new Error(`结构编辑结果未确认；原请求键暂不可读：${lookupError.message}。请勿生成新键。`);
+      }
+      if (!structureReceiptMatches(record, result)) throw new Error("原请求键返回了不匹配的结构版本，请停止重试并核对。");
+    }
+    if (!forgetStructureWrite(record)) throw new Error("结构编辑已受理，但无法清除本地待核对请求键。");
+    if (isCurrent()) {
+      state.structure = result;
+      state.structureSelection = null;
+    }
+  }
+
+  function checkStructureWrite() {
+    const record = pendingStructureWrite(state.revisionId, state.structure.page_no);
+    if (!record) return;
+    perform(async (isCurrent) => {
+      let receipt;
+      try {
+        receipt = await businessApi.structureRequest(record.requestKey);
+      } catch (error) {
+        if (error.status === 404) throw new Error("原结构请求键本次未查到记录；不能断定未受理。可稍后再查或同键重试。");
+        throw error;
+      }
+      if (!structureReceiptMatches(record, receipt)) throw new Error("原结构请求键返回不匹配的版本，请停止重试并核对。");
+      if (!forgetStructureWrite(record)) throw new Error("结构请求已受理，但无法清除本地待核对键。");
+      if (isCurrent()) {
+        state.structure = await businessApi.derivedStructure(record.revisionId, record.pageNo);
+        state.structureSelection = null;
+      }
+    });
+  }
+
+  function replayStructureWrite() {
+    const record = pendingStructureWrite(state.revisionId, state.structure.page_no);
+    if (!record || !window.confirm("确认以相同请求键、相同内容重试这次结构编辑？不会创建新的编辑请求。")) return;
+    perform((isCurrent) => submitStructureWrite(record, isCurrent, { replay: true }));
   }
 
   function renderOutline() {
@@ -795,8 +928,8 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
   }
 
   function renderStructure() {
-    const box = section("原生解析块结构");
-    box.append(element("p", "review-hint", "按历史解析批次读取原生父子块树；子节点沿用顶层块定位器，不代表子节点精确定位。机器结果未人工确认。"));
+    const box = section("文档块结构复核");
+    box.append(element("p", "review-hint", "v0 是原生机器解析；v1 起是独立的人工编辑版本。编辑不会改动原始解析、冻结证据或已确认字段成果。来源定位器只表示原始锚点，子块不保证精确定位。"));
     const form = element("form", "read-form");
     const label = element("label", "", "结构页码");
     const input = element("input");
@@ -804,7 +937,7 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
     input.min = "1";
     input.value = String(state.structure?.page_no || Number.parseInt(currentRevision()?.page_range || "1", 10) || 1);
     input.required = true;
-    input.setAttribute("aria-label", "原生结构页码");
+    input.setAttribute("aria-label", "结构页码");
     label.append(input);
     const submit = element("button", "secondary-button", "查看本页块");
     submit.type = "submit";
@@ -816,21 +949,122 @@ export function createReviewWorkbench(root, { onEvidenceNavigate = () => false }
       if (Number.isInteger(pageNo) && pageNo > 0) loadStructure(pageNo);
     });
     box.append(form);
+    for (const record of pendingStructureWrites().filter((item) => item.revisionId === state.revisionId
+      && item.pageNo !== state.structure?.page_no)) {
+      box.append(element("p", "review-hint", `第 ${record.pageNo} 页有待核对的结构编辑请求。`));
+      box.append(button(`打开第 ${record.pageNo} 页核对原请求`, () => loadStructure(record.pageNo), state.busy));
+    }
     if (!state.structure) return box;
-    box.append(element("p", "review-hint", `第 ${state.structure.page_no} 页 · ${state.structure.blocks.length} 个顶层块`));
-    if (!state.structure.blocks.length) box.append(element("p", "review-hint", "此页没有可列出的顶层块。"));
+    box.append(element("p", "review-hint", `第 ${state.structure.page_no} 页 · 版本 v${state.structure.version} · ${state.structure.nodes.length} 个顶层块 · ${state.structure.state === "human_edited_structure" ? "人工编辑结构，尚非确认成果" : "机器解析，未人工确认"}`));
+    const pending = pendingStructureWrite(state.revisionId, state.structure.page_no);
+    if (pending) {
+      box.append(element("p", "review-hint", `本页有待核对编辑请求：${pending.requestKey}。核对前暂停新的结构编辑。`));
+      box.append(button("按原请求键核对结构编辑", checkStructureWrite, state.busy));
+      box.append(button("用原键重试结构编辑", replayStructureWrite, state.busy));
+    }
+    if (!state.structure.nodes.length) box.append(element("p", "review-hint", "此页没有可列出的顶层块。"));
     function appendBlock(block, depth = 0) {
       const row = element("div", "structure-block");
       row.style.marginLeft = `${Math.min(depth, 8) * 18}px`;
-      const labelText = `${block.type}${block.level ? ` · 标题级别 ${block.level}` : ""}${block.block_no ? ` · 块 ${block.block_no}` : " · 页级定位"}${depth ? " · 父块定位" : ""}`;
+      const labelText = `${block.type}${block.level ? ` · 标题级别 ${block.level}` : ""} · ${block.node_id}${block.content_changed ? " · 内容已编辑" : ""}`;
       row.append(element("strong", "", labelText));
       if (block.preview) row.append(element("span", "", block.preview));
-      if (block.bbox) row.append(element("small", "", `坐标：${block.bbox.join(", ")}`));
-      if (!depth) row.append(button("读取此块", () => readHistorical(block.locator), state.busy));
+      if (block.origins.length) row.append(element("small", "", `原始锚点：${block.origins.map((origin) => origin.path.join(".")).join("、")}`));
+      row.append(button("选择编辑此节点", () => selectStructureNode(block), state.busy || !!pending));
+      if (!depth && block.origins[0]) row.append(button("读取原始锚点", () => readHistorical(block.origins[0].locator), state.busy));
       box.append(row);
       for (const child of block.children || []) appendBlock(child, depth + 1);
     }
-    for (const block of state.structure.blocks) appendBlock(block);
+    for (const block of state.structure.nodes) appendBlock(block);
+    if (state.structureSelection && !pending) box.append(renderStructureEditor());
+    return box;
+  }
+
+  function renderStructureEditor() {
+    const selection = state.structureSelection;
+    const node = selection.node;
+    const box = element("div", "structure-editor");
+    box.append(element("h5", "", `编辑节点 ${node.node_id}`));
+    box.append(element("p", "review-hint", selection.editable
+      ? "已读取完整节点文本；请核对原文再做文本编辑。拆分位置按字符偏移，从 1 开始。"
+      : "该节点不是可编辑的单一纯文本；不能改写或拆分其文本，但可调整类型、位置或删除。"));
+    const form = element("form", "structure-edit-form");
+    const action = element("select");
+    action.setAttribute("aria-label", "结构编辑操作");
+    for (const [value, label] of [
+      ["set_type", "修改类型/级别"], ["set_text", "修改完整文本"], ["split", "拆分文本"],
+      ["merge", "合并相邻节点"], ["move", "移动/重排节点"], ["insert", "插入节点"], ["delete", "删除节点"],
+    ]) {
+      const option = element("option", "", label);
+      option.value = value;
+      action.append(option);
+    }
+    form.append(action);
+    const fields = {};
+    function field(name, labelText, value = "", kind = "text") {
+      const label = element("label", "", labelText);
+      const control = element(kind === "textarea" ? "textarea" : "input");
+      if (kind !== "textarea") control.type = kind;
+      control.value = value;
+      control.setAttribute("aria-label", labelText);
+      label.append(control);
+      form.append(label);
+      fields[name] = { label, control };
+    }
+    field("type", "新类型", node.type);
+    field("level", "段落标题级别（其他类型留空）", node.type === "paragraph_title" ? node.level ?? "" : "", "number");
+    field("text", "完整节点文本", selection.text ?? "", "textarea");
+    field("offset", "拆分字符位置", "", "number");
+    field("second", "下一个相邻节点 ID", "");
+    field("parent", "目标父节点 ID（留空为顶层）", "");
+    field("index", "目标位置（从 0 开始）", "0", "number");
+    field("separator", "合并分隔文本", "\n");
+    field("reason", "编辑原因", "");
+    fields.reason.control.required = true;
+    const visibility = {
+      set_type: ["type", "level"], set_text: ["text"], split: ["offset"],
+      merge: ["second", "separator"], move: ["parent", "index"],
+      insert: ["type", "level", "text", "parent", "index"], delete: [],
+    };
+    function updateFields() {
+      const visible = visibility[action.value];
+      for (const [name, entry] of Object.entries(fields)) entry.label.hidden = name !== "reason" && !visible.includes(name);
+      fields.type.control.value = action.value === "insert" ? "text" : node.type;
+      fields.level.control.value = action.value === "insert" || node.type !== "paragraph_title" ? "" : node.level ?? "";
+      fields.text.control.disabled = ["set_text", "split"].includes(action.value) && !selection.editable;
+      submit.disabled = state.busy || (["set_text", "split"].includes(action.value) && !selection.editable);
+    }
+    const submit = element("button", "secondary-button", "保存结构编辑");
+    submit.type = "submit";
+    form.append(submit);
+    action.addEventListener("change", updateFields);
+    updateFields();
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (action.value === "delete" && !window.confirm("确认删除此派生结构节点？原始解析不会被删除。")) return;
+      const value = (name) => fields[name].control.value;
+      const level = value("level") === "" ? null : Number(value("level"));
+      const parentId = value("parent").trim() || null;
+      let operation;
+      switch (action.value) {
+        case "set_type": operation = { op: "set_type", node_id: node.node_id, type: value("type").trim(), level }; break;
+        case "set_text": operation = { op: "set_text", node_id: node.node_id, text: value("text") }; break;
+        case "split": operation = { op: "split", node_id: node.node_id, offset: Number(value("offset")) }; break;
+        case "merge": operation = { op: "merge", first_id: node.node_id, second_id: value("second").trim(), separator: value("separator") }; break;
+        case "move": operation = { op: "move", node_id: node.node_id, parent_id: parentId, index: Number(value("index")) }; break;
+        case "insert": operation = { op: "insert", parent_id: parentId, index: Number(value("index")), type: value("type").trim(), text: value("text"), level }; break;
+        default: operation = { op: "delete", node_id: node.node_id };
+      }
+      const reason = value("reason").trim();
+      if (!reason) return;
+      const record = {
+        revisionId: state.revisionId, pageNo: state.structure.page_no,
+        payload: { page_no: state.structure.page_no, expected_version: state.structure.version, operation, source: "web", reason },
+        requestKey: newExtractionRequestKey(),
+      };
+      perform((isCurrent) => submitStructureWrite(record, isCurrent));
+    });
+    box.append(form);
     return box;
   }
 

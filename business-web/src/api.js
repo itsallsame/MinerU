@@ -80,6 +80,23 @@ export const businessApi = {
   structure: (id, pageNo) => request(
     `/revisions/${encodeURIComponent(id)}/structure?${new URLSearchParams({ page_no: String(pageNo) })}`,
   ),
+  derivedStructure: (id, pageNo, version = null) => request(
+    `/revisions/${encodeURIComponent(id)}/structure/derived?${new URLSearchParams({
+      page_no: String(pageNo), ...(version === null ? {} : { version: String(version) }),
+    })}`,
+  ),
+  structureNodeText: (id, pageNo, path) => request(
+    `/revisions/${encodeURIComponent(id)}/structure/node-text?${new URLSearchParams({
+      page_no: String(pageNo), path,
+    })}`,
+  ),
+  editStructure: (id, payload, requestKey) => request(
+    `/revisions/${encodeURIComponent(id)}/structure/operations`, {
+      method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey },
+      body: JSON.stringify(payload),
+    },
+  ),
+  structureRequest: (requestKey) => request(`/structure-requests/${encodeURIComponent(requestKey)}`),
   documents: ({ limit = 20, offset = 0, status = "", templateCode = "" } = {}) => {
     const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status) query.set("status", status);

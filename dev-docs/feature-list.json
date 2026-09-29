@@ -4235,7 +4235,7 @@
       ],
       "passes": false,
       "completed_at": null,
-      "notes": "2026-09-29 用户选择 B：含完整文字修改、拆分/合并、重排、父子关系与显式人工节点。Doclib 历史全文只读契约及业务 schema 19 的派生页版本/有限操作 API 已通过 Mac 测试；原生树、证据和确认成果仍不变。Web/自有 Skill 入口、结构导出与浏览器真实写入回读未完成，故本项保持 false。见 dev-docs/2026-09-24-structure-edit-scope.md 和 dev-docs/evidence/2026-09-29-structure-versioned-operations.md。"
+      "notes": "2026-09-29 用户选择 B：全文、类型/级别、拆分/合并、重排/父子、人工插入/删除。Doclib 历史全文、业务 schema 19 派生版本/有限操作 API、Web 七类编辑入口和自有 Skill 同 API 读写命令已通过 Mac 契约及离线浏览器写入/回读/冲突/未知结果验证；原生树、证据和确认成果不变。结构导出和真实样本人工质量验收仍未完成，保持 false。见 dev-docs/2026-09-24-structure-edit-scope.md、dev-docs/evidence/2026-09-29-structure-versioned-operations.md、dev-docs/evidence/2026-09-29-structure-web-skill.md。"
     },
     {
       "id": "FE-034",
