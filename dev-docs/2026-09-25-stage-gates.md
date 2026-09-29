@@ -2,6 +2,8 @@
 
 2026-09-27 补充：用户已明确目标麒麟＋NVIDIA 的**实际部署由另一团队完成**，开发侧负责可交付文档/工具与接收现场证据；见[部署交接单](2026-09-27-deployment-handoff.md)。工作区已有若干 PDF/图片可作冒烟候选，见[样本盘点](2026-09-27-existing-samples.md)，但尚无四类带人工标注的业务验收集。因此下表是 2026-09-25 基线，不把交接文档当作现场通过。
 
+2026-09-29 补充：`~/Downloads` 三份公开论文/白皮书/报纸 PDF 的 Mac 解析及其中两份的真实业务 API 联通见[测试记录](evidence/2026-09-29-downloads-sample-smoke.md)；它们增加了真实文件覆盖，但不改变四类人工标注或目标硬件门禁。
+
 核对日期：2026-09-25；fork `itsallsame/MinerU` `master` 提交 `9206a9dc`。本表把“代码已存在”“Mac 已验证”和“最终验收已完成”分开。`feature-list.json` 的 `passes` 是逐项最终声明，尤其 P1/P2/P3 的多数条目包含现场门槛；不能把 `false` 直接解读为代码尚未开发，也不能把 Mac 测试通过解读为麒麟上线就绪。本表不修改各项 `passes`。核对时复跑 `tests/business/test_doclib_contract.py` 与 `test_review_results.py`，当前 Mac 为 48 passed（2 条依赖警告）；这只是这两个文件的定向结果，不替代完整业务套件。
 
 | 阶段 | 当前可核验的交付物与证据 | 尚未完成的门禁 | 下一步 |

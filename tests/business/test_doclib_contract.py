@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import io
 import json
@@ -793,6 +794,63 @@ def test_repo_paper_pdf_round_trip_through_real_business_api_and_doclib(
         raise AssertionError(f"Duplicate task failed: {duplicate_task['error_code']}; batches={batch_states}")
     duplicate_revisions = client.get(f"/api/business/documents/{duplicate_doc['id']}/revisions").json()
     assert len(duplicate_revisions) == 1 and duplicate_revisions[0]["page_range"] == "1-13"
+
+
+@pytest.mark.skipif(not os.getenv("MINERU_LOCAL_SAMPLE_PDF"), reason="Set a local PDF path for opt-in private sample smoke")
+def test_local_pdf_through_real_business_api_and_doclib(live_doclib: tuple[DoclibClient, Path, Path]) -> None:
+    """Exercise an external local PDF without copying it into Git or asserting model quality."""
+    sample = Path(os.environ["MINERU_LOCAL_SAMPLE_PDF"]).resolve(strict=True)
+    assert sample.is_file() and sample.suffix.lower() == ".pdf"
+    doclib, root, _home = live_doclib
+    upload_root = root / "local-sample-uploads"
+    upload_root.mkdir()
+    uploads = ImmutableUploadStore(upload_root, max_bytes=25 * 1024 * 1024)
+    store = BusinessStore(root / "local-sample-business.sqlite3")
+    store.initialize()
+    workflow = DocumentWorkflow(
+        uploads=uploads,
+        store=store,
+        gateway=DoclibGateway(doclib, shared_root=upload_root),
+        doclib=doclib,
+        producer_version="4.0.6",
+    )
+    client = TestClient(
+        create_app(
+            workflow=workflow,
+            store=store,
+            uploads=uploads,
+            evidence_reader=EvidenceReader(store=store, doclib=doclib),
+            evidence_writer=EvidenceWriter(store=store, doclib=doclib),
+            discovery=BusinessDiscovery(store=store, doclib=doclib),
+        )
+    )
+    with sample.open("rb") as source:
+        uploaded = client.post(
+            "/api/business/documents",
+            files={"file": (sample.name, source, "application/pdf")},
+            data={"tier": "flash"},
+        )
+    assert uploaded.status_code == 202, uploaded.text
+    payload = uploaded.json()
+    task_id = payload["task"]["id"]
+    document_id = payload["document"]["id"]
+    assert payload["document"]["sha256"] == hashlib.sha256(sample.read_bytes()).hexdigest()
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        task = client.get(f"/api/business/tasks/{task_id}").json()
+        if task["status"] in ("done", "failed"):
+            break
+        time.sleep(0.2)
+    else:
+        raise AssertionError("Local PDF task did not reach a terminal state")
+    assert task["status"] == "done", (task.get("error_code"), task.get("error_message"))
+    revisions = client.get(f"/api/business/documents/{document_id}/revisions").json()
+    assert len(revisions) == 1 and revisions[0]["tier"] == "flash"
+    locator = f"doc:{revisions[0]['short_id']}/tier:flash/page:1"
+    historical = client.get(f"/api/business/revisions/{revisions[0]['id']}/content", params={"locator": locator})
+    assert historical.status_code == 200, historical.text
+    assert historical.json()["state"] == "historical_parse_unconfirmed"
+    assert historical.json()["content"].strip()
 
 
 @pytest.mark.parametrize("extension", ["docx", "pptx", "xlsx"])
