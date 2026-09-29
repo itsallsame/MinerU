@@ -851,6 +851,16 @@ def test_local_pdf_through_real_business_api_and_doclib(live_doclib: tuple[Docli
     assert historical.status_code == 200, historical.text
     assert historical.json()["state"] == "historical_parse_unconfirmed"
     assert historical.json()["content"].strip()
+    structure = client.get(
+        f"/api/business/revisions/{revisions[0]['id']}/structure", params={"page_no": 1}
+    )
+    assert structure.status_code == 200, structure.text
+    page = structure.json()
+    assert page["document_id"] == document_id
+    assert page["revision_id"] == revisions[0]["id"]
+    assert page["page_no"] == 1
+    assert page["blocks"]
+    assert all(block["state"] == "historical_parse_unconfirmed" for block in page["blocks"])
 
 
 @pytest.mark.parametrize("extension", ["docx", "pptx", "xlsx"])
