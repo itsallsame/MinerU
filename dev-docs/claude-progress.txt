@@ -1457,3 +1457,10 @@ Changes: Extended the opt-in real live browser smoke so a public PDF's native de
 Verification: First pre-extension live run 1 passed in 33.33s; extended run 1 passed in 24.52s; final exact-source rerun 1 passed in 24.82s. Real upload/parse/read, Office formats, Web human confirmation/JSON export and Skill result parity all pass without API mocks. No quality, GPU or Kylin claim.
 Evidence: dev-docs/evidence/2026-10-02-local-live-flow.md.
 Next: Keep FE-033 open for explicit human-edited structure export and real correction-quality acceptance; target-machine execution remains with deployment team.
+
+=== 2026-10-02 Session 167 (retire old port-8080 stack) ===
+Status: User-authorized old document-intelligence Compose stack retired; current fork preview on 8088 unaffected.
+New input: User explicitly requested deleting the old 8080 project's images, code, services and persistent storage.
+Changes: Removed the exact three old containers, their project network, two exclusive volumes and three image tags. Moved the old source directory with its pre-existing uncommitted changes to system Trash, rather than irreversibly erasing those code edits. Did not touch the current MinerU fork, other parent-workspace files or shared caches.
+Verification: Old source path absent and Trash copy present; old containers/images/volumes absent; 8080 unreachable; 8088 HTTP 200. Details and recovery boundary: dev-docs/evidence/2026-10-02-old-8080-retirement.md.
+Next: Continue current fork work on FE-033 export and real correction-quality validation when requested.
