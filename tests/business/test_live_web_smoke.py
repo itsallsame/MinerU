@@ -216,6 +216,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
             try:
                 _wait_for_api(api, origin, api_log)
                 web_result_receipt = home / "web-confirmed-result.json"
+                structure_receipt = home / "web-structure-result.json"
                 subprocess.run(
                     [
                         os.environ.get("MINERU_BROWSER_PYTHON", "python3"),
@@ -224,6 +225,7 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                         str(SAMPLE),
                         *(str(path) for path in office_files),
                         str(web_result_receipt),
+                        str(structure_receipt),
                     ],
                     check=True,
                     timeout=150,
@@ -235,6 +237,14 @@ def test_live_web_native_formats_through_business_api_and_doclib() -> None:
                 assert skill_results["items"][0] == web_result
                 skill_result = _skill(origin, "result", web_result["id"])
                 assert skill_result == {"state": "confirmed", "result": web_result}
+                structure_result = json.loads(structure_receipt.read_text(encoding="utf-8"))
+                skill_structure = _skill(
+                    origin, "structure-derived", structure_result["revision_id"], str(structure_result["page_no"]),
+                )
+                assert isinstance(skill_structure, dict)
+                assert skill_structure["version"] == structure_result["version"]
+                assert skill_structure["state"] == "human_edited_structure"
+                assert skill_structure["operation"]["node_id"] == structure_result["node_id"]
                 _verify_live_skill(origin)
             finally:
                 _stop(api)

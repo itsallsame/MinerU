@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: Path) -> None:
+def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: Path, structure_receipt: Path) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -32,6 +32,46 @@ def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: 
             content.wait_for(timeout=30000)
             assert "afforestation" in content.inner_text().lower()
             assert page.get_by_text("机器解析文本，未人工确认", exact=False).count() >= 1
+            documents = page.request.get(f"{base_url}/api/business/documents?limit=20&offset=0").json()["items"]
+            pdf_document = next(item["document"] for item in documents if item["document"]["original_name"] == sample.name)
+            revisions = page.request.get(f"{base_url}/api/business/documents/{pdf_document['id']}/revisions").json()
+            pdf_revision = revisions[0]
+            structure_url = f"{base_url}/api/business/revisions/{pdf_revision['id']}/structure/derived?page_no=1"
+            native_structure = page.request.get(structure_url).json()
+            assert native_structure["version"] == 0 and native_structure["state"] == "historical_parse_unconfirmed"
+            native_url = f"{base_url}/api/business/revisions/{pdf_revision['id']}/structure?page_no=1"
+            original_native_structure = page.request.get(native_url).json()
+
+            def walk(nodes: list[dict[str, object]]) -> list[dict[str, object]]:
+                return [node for item in nodes for node in [item, *walk(item["children"])]]
+
+            original_nodes = walk(native_structure["nodes"])
+            editable_node = next((node for node in original_nodes if node["origins"] and node["type"] != "text"), None)
+            assert editable_node is not None, "Public PDF must expose at least one non-text native structure node"
+            structure = page.locator(".review-section").filter(has=page.get_by_role("heading", name="文档块结构复核"))
+            structure.get_by_role("button", name="查看本页块").click()
+            structure.get_by_text("版本 v0").wait_for(timeout=30000)
+            row = structure.locator(".structure-block").filter(has_text=editable_node["node_id"])
+            row.get_by_role("button", name="选择编辑此节点").click()
+            structure.get_by_label("新类型").fill("text")
+            structure.get_by_label("段落标题级别（其他类型留空）").fill("")
+            structure.get_by_label("编辑原因").fill("本地链路冒烟，不评价解析质量")
+            structure.get_by_role("button", name="保存结构编辑").click()
+            structure.get_by_text("版本 v1").wait_for(timeout=30000)
+            derived_structure = page.request.get(structure_url).json()
+            assert derived_structure["version"] == 1
+            assert derived_structure["source"] == "web"
+            assert derived_structure["operation"]["node_id"] == editable_node["node_id"]
+            changed_node = next(
+                node for node in walk(derived_structure["nodes"])
+                if node["node_id"] == editable_node["node_id"]
+            )
+            assert changed_node["type"] == "text"
+            assert page.request.get(native_url).json() == original_native_structure
+            structure_receipt.write_text(json.dumps({
+                "revision_id": pdf_revision["id"], "page_no": 1, "version": 1,
+                "node_id": editable_node["node_id"],
+            }), encoding="utf-8")
 
             page.locator("#upload-template").select_option("paper")
             page.locator("#files").set_input_files([str(path) for path in office_files])
@@ -74,10 +114,10 @@ def main(base_url: str, sample: Path, office_files: list[Path], result_receipt: 
                     page.get_by_role("button", name=f"查看 {office.name}，已解析").click()
                     page.get_by_text("确认成果 v1", exact=True).wait_for(timeout=30000)
             assert not errors, errors
-            print("Live Web smoke passed: native formats, historical read, review, confirmation and JSON export")
+            print("Live Web smoke passed: native formats, structure edit, historical read, review and JSON export")
         finally:
             browser.close()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], Path(sys.argv[2]), [Path(path) for path in sys.argv[3:-1]], Path(sys.argv[-1]))
+    main(sys.argv[1], Path(sys.argv[2]), [Path(path) for path in sys.argv[3:-2]], Path(sys.argv[-2]), Path(sys.argv[-1]))

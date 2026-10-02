@@ -1449,3 +1449,11 @@ Changes: Web reads versioned derived pages and full native node text, offers sev
 Verification: Skill contract 21 passed, Web Node 13 passed, offline bundle built 8 assets. Playwright review workflow covers v0→v1, version re-read, 409 refresh, 503 receipt recovery and 503+404 reload followed by explicit same-key replay to v3. Final full 29 Chromium regressions passed; an earlier intermediate run had one unrelated review-request timing timeout, then targeted and full reruns passed. Skill validation, Ruff and diff checks passed. No new real gold or target Kylin claims.
 Evidence: dev-docs/evidence/2026-09-29-structure-web-skill.md.
 Next: Define/export explicitly versioned human-edited structure without replacing original Markdown or confirmed fields, then run real public PDF correction/re-read/conflict and further browser/Skill parity. Deployment team owns target Kylin/NVIDIA execution.
+
+=== 2026-10-02 Session 166 (Mac real-start flow acceptance, no quality scoring) ===
+Status: Current fork's temporary real local Web/API/Doclib/Skill flow passes on Mac, including newly added Web structure edit and Skill parity. Not a persistent Docker or target Kylin acceptance.
+New input: User asked whether local startup and the test flow have actually run, prioritizing flow over parse quality.
+Changes: Extended the opt-in real live browser smoke so a public PDF's native derived v0 can be edited in Web to v1, native structure remains JSON-equal through the API, and the own Skill reads that same v1/node. Recorded exact local runtime and separation from the older document-intelligence container on port 8080.
+Verification: First pre-extension live run 1 passed in 33.33s; extended run 1 passed in 24.52s; final exact-source rerun 1 passed in 24.82s. Real upload/parse/read, Office formats, Web human confirmation/JSON export and Skill result parity all pass without API mocks. No quality, GPU or Kylin claim.
+Evidence: dev-docs/evidence/2026-10-02-local-live-flow.md.
+Next: Keep FE-033 open for explicit human-edited structure export and real correction-quality acceptance; target-machine execution remains with deployment team.
