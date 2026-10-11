@@ -38,17 +38,24 @@ uv pip compile pyproject.toml docker/worker/build-requirements.in \
   --python "$(command -v python3)" --extra full --no-emit-package mineru --generate-hashes \
   --constraint "$MINERU_BASE_CONSTRAINTS" \
   --output-file "$stage/requirements.lock"
+docker run --rm --pull=never --network=none --read-only \
+  --entrypoint python3 "$MINERU_BASE_IMAGE_ID" \
+  -m pip list --format=json > "$stage/base-installed.json"
+python3 -m scripts.select_offline_wheels \
+  --lock "$stage/requirements.lock" --base-installed "$stage/base-installed.json" \
+  --output "$stage/download.lock"
 python3 -m pip download --require-hashes --only-binary=:all: \
-  --dest "$stage" --requirement "$stage/requirements.lock"
+  --dest "$stage" --requirement "$stage/download.lock"
 stage_absolute="$(pwd -P)/$stage"
 docker run --rm --pull=never --network=none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$stage_absolute,dst=/opt/mineru-wheelhouse,readonly" \
   --entrypoint python3 "$MINERU_BASE_IMAGE_ID" \
-  -m pip install --dry-run --ignore-installed --no-deps --no-input --disable-pip-version-check \
+  -m pip install --dry-run --no-input --disable-pip-version-check \
   --break-system-packages --no-index --no-cache-dir \
   --find-links=/opt/mineru-wheelhouse --require-hashes \
   -r /opt/mineru-wheelhouse/requirements.lock
+rm -f "$stage/base-installed.json" "$stage/download.lock"
 if [ -e wheelhouse ] || [ -L wheelhouse ]; then
   echo 'wheelhouse appeared during preparation; leaving the staged files untouched.' >&2
   exit 1
