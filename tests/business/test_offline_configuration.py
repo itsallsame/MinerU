@@ -178,6 +178,12 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "MINERU_DOCLIB_REMOTE_DISABLED=1" in dockerfile
 
 
+def test_business_build_installs_source_archives_without_network() -> None:
+    dockerfile = (ROOT / "docker" / "business-api" / "Dockerfile").read_text()
+    assert "--no-build-isolation --no-index --find-links=/opt/wheelhouse" in dockerfile
+    assert "--require-hashes -r /opt/wheelhouse/requirements.lock" in dockerfile
+
+
 def test_dockerignore_allows_hash_locked_source_archives_only_in_wheelhouse() -> None:
     patterns = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert patterns.index("**/*.tar.gz") < patterns.index("!wheelhouse/*.tar.gz")

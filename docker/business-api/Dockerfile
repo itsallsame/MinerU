@@ -14,7 +14,7 @@ LABEL io.mineru.business.web.manifest.sha256="${WEB_ASSET_MANIFEST_SHA256}"
 WORKDIR /opt/mineru
 COPY wheelhouse/ /opt/wheelhouse/
 COPY pyproject.toml README.md LICENSE.md /opt/mineru/
-RUN python3 -m pip install --break-system-packages --no-index --find-links=/opt/wheelhouse \
+RUN python3 -m pip install --break-system-packages --no-build-isolation --no-index --find-links=/opt/wheelhouse \
         --require-hashes -r /opt/wheelhouse/requirements.lock \
     && rm -rf /opt/wheelhouse
 COPY mineru/ /opt/mineru/mineru/
