@@ -27,4 +27,5 @@ ENV HF_HUB_OFFLINE=1 \
     HF_DATASETS_OFFLINE=1 \
     MINERU_BUSINESS_WEB_ROOT=/opt/mineru/business-web/dist
 
-CMD ["python3", "-m", "mineru.business.api.server"]
+# The NVIDIA/vLLM base image starts its own API by default; override it here.
+ENTRYPOINT ["python3", "-m", "mineru.business.api.server"]

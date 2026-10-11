@@ -95,6 +95,7 @@ def test_business_image_and_compose_keep_models_out_of_api() -> None:
     assert "COPY mineru/" in dockerfile
     assert "COPY business-web/dist/" in dockerfile
     assert "WEB_ASSET_MANIFEST_SHA256" in dockerfile
+    assert 'ENTRYPOINT ["python3", "-m", "mineru.business.api.server"]' in dockerfile
     assert "--no-index" in dockerfile
     assert "COPY models/" not in dockerfile
     assert "MINERU_MODELS_HOST_DIR" not in api_service
