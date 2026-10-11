@@ -170,6 +170,7 @@ def test_worker_build_uses_local_source_only() -> None:
     dockerfile = (ROOT / "docker" / "worker" / "Dockerfile").read_text()
     assert "--no-index" in dockerfile
     assert "--require-hashes -r /opt/wheelhouse/requirements.lock" in dockerfile
+    assert "--no-build-isolation --no-index --find-links=/opt/wheelhouse" in dockerfile
     assert "--no-deps --no-build-isolation /opt/mineru" in dockerfile
     assert "models download" not in dockerfile
     assert "COPY mineru/" in dockerfile
@@ -325,8 +326,10 @@ def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:
     assert '--python "$(command -v python3)"' in script
     assert "--generate-hashes" in script
     assert "python3 -m scripts.select_offline_wheels" in script
-    assert "--no-deps --require-hashes --only-binary=:all:" in script
+    assert "--no-deps --require-hashes" in script
+    assert "--only-binary=:all:" not in script
     assert "--pull=never --network=none --read-only" in script
     assert "--dry-run --no-input" in script
+    assert "--no-build-isolation --no-index --no-cache-dir" in script
     assert "--ignore-installed" not in script
     assert script.index("python3 -m pip download") < script.index('stage_absolute=') < script.index('mv "$stage" wheelhouse')

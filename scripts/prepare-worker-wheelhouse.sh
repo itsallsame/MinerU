@@ -44,7 +44,7 @@ docker run --rm --pull=never --network=none --read-only \
 python3 -m scripts.select_offline_wheels \
   --lock "$stage/requirements.lock" --base-installed "$stage/base-installed.json" \
   --output "$stage/download.lock"
-python3 -m pip download --no-deps --require-hashes --only-binary=:all: \
+python3 -m pip download --no-deps --require-hashes \
   --dest "$stage" --requirement "$stage/download.lock"
 stage_absolute="$(pwd -P)/$stage"
 docker run --rm --pull=never --network=none --read-only \
@@ -52,7 +52,7 @@ docker run --rm --pull=never --network=none --read-only \
   --mount "type=bind,src=$stage_absolute,dst=/opt/mineru-wheelhouse,readonly" \
   --entrypoint python3 "$MINERU_BASE_IMAGE_ID" \
   -m pip install --dry-run --no-input --disable-pip-version-check \
-  --break-system-packages --no-index --no-cache-dir \
+  --break-system-packages --no-build-isolation --no-index --no-cache-dir \
   --find-links=/opt/mineru-wheelhouse --require-hashes \
   -r /opt/mineru-wheelhouse/requirements.lock
 rm -f "$stage/base-installed.json" "$stage/download.lock"

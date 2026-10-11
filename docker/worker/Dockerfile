@@ -14,7 +14,7 @@ COPY wheelhouse/ /opt/wheelhouse/
 COPY pyproject.toml README.md LICENSE.md /opt/mineru/
 
 # Keep the large dependency layer stable when only fork source changes.
-RUN python3 -m pip install --break-system-packages --no-index --find-links=/opt/wheelhouse \
+RUN python3 -m pip install --break-system-packages --no-build-isolation --no-index --find-links=/opt/wheelhouse \
         --require-hashes -r /opt/wheelhouse/requirements.lock \
     && rm -rf /opt/wheelhouse
 COPY mineru/ /opt/mineru/mineru/
