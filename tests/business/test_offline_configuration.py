@@ -178,6 +178,12 @@ def test_worker_build_uses_local_source_only() -> None:
     assert "MINERU_DOCLIB_REMOTE_DISABLED=1" in dockerfile
 
 
+def test_dockerignore_allows_hash_locked_source_archives_only_in_wheelhouse() -> None:
+    patterns = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert patterns.index("**/*.tar.gz") < patterns.index("!wheelhouse/*.tar.gz")
+    assert patterns.index("**/*.zip") < patterns.index("!wheelhouse/*.zip")
+
+
 def test_dockerignore_excludes_model_metadata_from_allowed_source_tree() -> None:
     patterns = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     source_allow = patterns.index("!mineru/**")
