@@ -184,6 +184,12 @@ def test_business_build_installs_source_archives_without_network() -> None:
     assert "--require-hashes -r /opt/wheelhouse/requirements.lock" in dockerfile
 
 
+def test_code_revision_does_not_invalidate_dependency_layer() -> None:
+    for name in ("worker", "business-api"):
+        dockerfile = (ROOT / "docker" / name / "Dockerfile").read_text()
+        assert dockerfile.index("RUN python3 -m pip install --break-system-packages") < dockerfile.index("ARG SOURCE_REVISION")
+
+
 def test_dockerignore_allows_hash_locked_source_archives_only_in_wheelhouse() -> None:
     patterns = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert patterns.index("**/*.tar.gz") < patterns.index("!wheelhouse/*.tar.gz")

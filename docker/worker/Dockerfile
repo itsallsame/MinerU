@@ -2,11 +2,8 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
-ARG SOURCE_REVISION
 ARG BASE_IMAGE_ID
-RUN test -n "${SOURCE_REVISION}" && test -n "${BASE_IMAGE_ID}"
-LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
-LABEL org.opencontainers.image.source="https://github.com/itsallsame/MinerU"
+RUN test -n "${BASE_IMAGE_ID}"
 LABEL org.opencontainers.image.base.id="${BASE_IMAGE_ID}"
 
 WORKDIR /opt/mineru
@@ -17,6 +14,10 @@ COPY pyproject.toml README.md LICENSE.md /opt/mineru/
 RUN python3 -m pip install --break-system-packages --no-build-isolation --no-index --find-links=/opt/wheelhouse \
         --require-hashes -r /opt/wheelhouse/requirements.lock \
     && rm -rf /opt/wheelhouse
+ARG SOURCE_REVISION
+RUN test -n "${SOURCE_REVISION}"
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.source="https://github.com/itsallsame/MinerU"
 COPY mineru/ /opt/mineru/mineru/
 COPY scripts/offline_package.py /opt/mineru/scripts/offline_package.py
 COPY docker/worker/entrypoint.sh /opt/mineru/entrypoint.sh
