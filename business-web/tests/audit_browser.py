@@ -53,6 +53,11 @@ def main(base_url: str) -> None:
             payload = document
         elif base == f"/documents/{document['id']}/revisions":
             payload = [revision]
+        elif base == f"/revisions/{revision['id']}/content":
+            payload = {"document_id": document["id"], "revision_id": revision["id"],
+                       "locator": "doc:aaaa/tier:flash/page:1", "tier": "flash",
+                       "content": "解析文本", "truncated": False, "next_locator": None,
+                       "state": "historical_parse_unconfirmed"}
         elif base == f"/documents/{document['id']}/source":
             route.fulfill(status=200, content_type="application/octet-stream", body=b"source")
             return

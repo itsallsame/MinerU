@@ -73,3 +73,5 @@ htmlcov/
 # Offline dependency bundles and model weights are transported outside Git.
 wheelhouse/
 model-manifest.json
+# Local content-addressed runtime data; never ship in source bundles.
+/blobs/

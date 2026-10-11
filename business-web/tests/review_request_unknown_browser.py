@@ -34,6 +34,7 @@ def main(base_url: str) -> None:
     receipts: dict[str, dict[str, object]] = {}
     posts: list[tuple[str, str]] = []
     lookup_mode = {"resolution": "unavailable", "confirmation": "missing"}
+    conflict_next_confirmation = {"value": False}
 
     def reply(route: object, payload: object, status: int = 200) -> None:
         route.fulfill(status=status, content_type="application/json", body=json.dumps(payload, ensure_ascii=False))
@@ -66,6 +67,10 @@ def main(base_url: str) -> None:
             else:
                 action, target = "confirmation", "run-1"
                 body = json.loads(request.post_data)
+                if conflict_next_confirmation["value"]:
+                    conflict_next_confirmation["value"] = False
+                    reply(route, {"detail": "Review snapshot changed; reload before confirming"}, 409)
+                    return
                 if body["expected_decisions"] != {"title": decisions[-1]["id"]} or body["expected_issues"] != {
                     issue["id"]: issue["status"]
                 }:
@@ -107,6 +112,11 @@ def main(base_url: str) -> None:
             payload = {"items": [{"document": document, "task": task}], "total": 1, "limit": 20, "offset": 0}
         elif path == f"/documents/{document['id']}/revisions":
             payload = [revision]
+        elif path == "/revisions/rev-1/content":
+            payload = {"document_id": document["id"], "revision_id": revision["id"],
+                       "locator": "doc:bbbbbbb/tier:basic/page:1", "tier": "basic",
+                       "content": "解析文本", "truncated": False, "next_locator": None,
+                       "state": "historical_parse_unconfirmed"}
         elif path == "/revisions/rev-1/extractions":
             payload = [run]
         elif path == "/revisions/rev-1/evidence":
@@ -164,6 +174,7 @@ def main(base_url: str) -> None:
             assert len(posts) == 2
 
             decisions.append({**decisions[0], "id": "decision-2", "value": "并发修订标题", "created_at_ms": now + 1})
+            conflict_next_confirmation["value"] = True
             page.get_by_role("button", name="确认并生成不可变成果版本").click()
             page.get_by_text("已复核：并发修订标题", exact=False).wait_for()
             page.get_by_text("确认前复核状态已变化；页面已刷新", exact=False).wait_for()

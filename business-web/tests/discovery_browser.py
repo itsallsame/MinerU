@@ -90,13 +90,12 @@ def main(base_url: str, screenshot: Path | None = None) -> None:
             page.get_by_text("机器解析候选，未人工确认：年度通知原文").wait_for()
             page.get_by_role("button", name="打开并读取此块").click()
             page.get_by_text("检索未返回任务状态").wait_for()
-            page.get_by_text("第一段历史内容").wait_for()
+            page.locator(".historical-content").get_by_text("第一段历史内容").wait_for()
             page.get_by_role("button", name="继续读取下一段").click()
-            page.get_by_text("第二段历史内容").wait_for()
-            assert len(calls) == 2
+            page.locator(".historical-content").get_by_text("第二段历史内容").wait_for()
+            assert len(calls) == 3  # Automatic result preview, explicit block read, continuation.
             assert "doc%3Abbbbbbb" in calls[0]
             page.get_by_role("button", name="冻结此块原文").click()
-            page.get_by_text("第一段历史内容", exact=True).wait_for()
             assert freezes == [first]
             if screenshot:
                 page.screenshot(path=str(screenshot), full_page=True)

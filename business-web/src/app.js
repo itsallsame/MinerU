@@ -31,6 +31,8 @@ const state = {
   selectedReviewTarget: {},
   revisions: [],
   revisionsError: "",
+  resultPreview: null,
+  resultRequest: 0,
   selectionRequest: 0,
   listRequest: 0,
   workspaceRequest: 0,
@@ -582,7 +584,7 @@ function renderDocuments() {
     body.append(element("span", "document-meta", `${template?.name || "未分类"} · ${formatBytes(record.size)} · ${new Date(record.created_at_ms).toLocaleString("zh-CN")}`));
     const badge = element("span", `status ${task?.status || ""}`, task ? taskLabel(task.status) : "无任务");
     card.append(icon, body, badge);
-    card.addEventListener("click", () => selectDocument(record.id));
+    card.addEventListener("click", () => selectDocument(record.id, null, {}, { revealResult: true }));
     container.append(card);
   }
   if (focusedDocumentId) {
@@ -593,6 +595,108 @@ function renderDocuments() {
   byId("previous-page").disabled = state.page === 0;
   byId("next-page").disabled = (state.page + 1) * state.limit >= state.total;
   byId("page-label").textContent = `第 ${state.page + 1} 页`;
+}
+
+function renderParseResult() {
+  const root = byId("parse-result");
+  const preview = state.resultPreview;
+  root.replaceChildren();
+  root.hidden = !preview || preview.documentId !== state.selectedId;
+  if (root.hidden) return;
+
+  const heading = element("div", "parse-result-heading");
+  heading.append(element("h3", "", "解析结果"));
+  if (preview.revision) heading.append(element("span", "parse-result-tier", preview.revision.tier.toUpperCase()));
+  root.append(heading);
+  if (!preview.revision) {
+    const item = state.items.find((entry) => entry.document.id === preview.documentId);
+    root.append(element("p", "parse-result-note", state.revisionsError ? "修订记录暂不可用，无法展示解析结果。" : (item?.task?.status === "done"
+      ? "解析已完成，但暂时无法读取结果，请重选文档或刷新列表。"
+      : item?.task?.status === "failed" ? "解析失败，暂无结果。请查看任务错误并重试。"
+        : "解析进行中，完成后会在这里展示结果。")));
+    return;
+  }
+
+  root.append(element("p", "parse-result-note", `第 ${preview.pageNo} 页 · 解析范围 ${preview.revision.page_range} · 机器解析文本，尚未人工确认`));
+  const controls = element("form", "parse-result-controls");
+  const previous = element("button", "secondary-button", "← 上一页");
+  previous.type = "button";
+  previous.disabled = preview.loading || preview.pageNo <= 1;
+  previous.addEventListener("click", () => loadParseResultPage(preview.pageNo - 1));
+  const label = element("label", "", "页码");
+  const page = element("input");
+  page.type = "number";
+  page.min = "1";
+  page.value = String(preview.pageNo);
+  page.required = true;
+  page.setAttribute("aria-label", "解析结果页码");
+  label.append(page);
+  const go = element("button", "secondary-button", "查看该页");
+  go.type = "submit";
+  go.disabled = preview.loading;
+  const next = element("button", "secondary-button", "下一页 →");
+  next.type = "button";
+  const rangeEnd = /(?:^|-)\s*(\d+)$/.exec(preview.revision.page_range);
+  next.disabled = preview.loading || (rangeEnd && preview.pageNo >= Number(rangeEnd[1]));
+  next.addEventListener("click", () => loadParseResultPage(preview.pageNo + 1));
+  controls.append(previous, label, go, next);
+  controls.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const pageNo = Number(page.value);
+    if (Number.isInteger(pageNo) && pageNo >= 1) loadParseResultPage(pageNo);
+  });
+  root.append(controls);
+
+  if (preview.loading) root.append(element("p", "parse-result-note", "正在读取解析文本…"));
+  if (preview.error) {
+    root.append(element("p", "error-banner", `解析结果暂不可读：${preview.error}`));
+    const retry = element("button", "secondary-button", "重新读取这一页");
+    retry.type = "button";
+    retry.addEventListener("click", () => loadParseResultPage(preview.pageNo));
+    root.append(retry);
+  }
+  if (!preview.loading && !preview.error) {
+    root.append(element("pre", "parse-result-content", preview.content || "这一页没有可读取的文本。"));
+    if (preview.nextLocator) {
+      const more = element("button", "secondary-button parse-result-more", "继续读取后续内容");
+      more.type = "button";
+      more.addEventListener("click", () => loadParseResultPage(preview.pageNo, preview.nextLocator));
+      root.append(more);
+    }
+  }
+}
+
+async function loadParseResultPage(pageNo, nextLocator = null) {
+  const preview = state.resultPreview;
+  if (!preview?.revision || !Number.isInteger(pageNo) || pageNo < 1) return;
+  const requestNumber = ++state.resultRequest;
+  const revision = preview.revision;
+  const locator = nextLocator || `doc:${revision.short_id}/tier:${revision.tier}/page:${pageNo}`;
+  preview.pageNo = pageNo;
+  preview.loading = true;
+  preview.error = "";
+  if (!nextLocator) {
+    preview.content = "";
+    preview.nextLocator = null;
+  }
+  renderParseResult();
+  try {
+    const read = await businessApi.readRevision(revision.id, locator, 30000);
+    if (requestNumber !== state.resultRequest || state.resultPreview !== preview || state.selectedId !== preview.documentId) return;
+    if (read.document_id !== preview.documentId || read.revision_id !== revision.id) {
+      throw new Error("服务返回了其他文档的解析内容");
+    }
+    preview.content = nextLocator && preview.content ? `${preview.content}\n\n${read.content}` : read.content;
+    preview.nextLocator = read.next_locator;
+  } catch (error) {
+    if (requestNumber !== state.resultRequest || state.resultPreview !== preview || state.selectedId !== preview.documentId) return;
+    preview.error = error.message;
+  } finally {
+    if (requestNumber === state.resultRequest && state.resultPreview === preview && state.selectedId === preview.documentId) {
+      preview.loading = false;
+      renderParseResult();
+    }
+  }
 }
 
 async function refreshDocuments({ acceptedWriteMessage = "" } = {}) {
@@ -616,6 +720,9 @@ async function refreshDocuments({ acceptedWriteMessage = "" } = {}) {
       state.sourceStatus = "idle";
       state.revisions = [];
       state.revisionsError = "";
+      state.resultRequest += 1;
+      state.resultPreview = null;
+      renderParseResult();
       review.clear();
       const detail = byId("detail-content");
       detail.className = "detail-empty";
@@ -643,6 +750,9 @@ async function refreshDocuments({ acceptedWriteMessage = "" } = {}) {
     state.sourceStatus = "idle";
     state.revisionsError = "";
     state.revisions = [];
+    state.resultRequest += 1;
+    state.resultPreview = null;
+    renderParseResult();
     review.clear();
     byId("total-count").textContent = "文档数量未知";
     byId("previous-page").disabled = true;
@@ -1037,19 +1147,23 @@ function renderDetail() {
   }
 }
 
-async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
+async function selectDocument(id, searchDocument = null, reviewTarget = {}, { revealResult = false } = {}) {
   const requestNumber = ++state.selectionRequest;
+  state.resultRequest += 1;
   if (state.selectedId !== id) state.sourcePageNo = 1;
   state.selectedId = id;
   state.selectedSearchDocument = searchDocument;
   state.selectedReviewTarget = reviewTarget;
   state.revisions = [];
   state.revisionsError = "";
+  state.resultPreview = { documentId: id, revision: null, pageNo: 1, content: "", nextLocator: null, loading: true, error: "" };
   state.sourceStatus = "checking";
   state.sourceError = "";
   review.clear();
   renderDocuments();
   renderDetail();
+  renderParseResult();
+  if (revealResult) byId("parse-result").scrollIntoView({ behavior: "smooth", block: "start" });
   void checkSource(id);
   let revisions;
   try {
@@ -1058,11 +1172,20 @@ async function selectDocument(id, searchDocument = null, reviewTarget = {}) {
     if (requestNumber !== state.selectionRequest) return;
     state.revisionsError = `修订记录不可用：${error.message}`;
     renderDetail();
+    renderParseResult();
     return;
   }
   if (requestNumber !== state.selectionRequest) return;
   state.revisions = revisions;
   renderDetail();
+  const revision = revisions.find((entry) => entry.id === reviewTarget.revisionId) || revisions[0];
+  if (revision) {
+    state.resultPreview.revision = revision;
+    void loadParseResultPage(Number.parseInt(revision.page_range, 10) || 1);
+  } else {
+    state.resultPreview.loading = false;
+    renderParseResult();
+  }
   const item = state.items.find((entry) => entry.document.id === id)
     || (state.selectedSearchDocument ? { document: state.selectedSearchDocument, task: null } : null);
   if (!item) return;

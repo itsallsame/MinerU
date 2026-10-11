@@ -82,6 +82,11 @@ def main(base_url: str) -> None:
             for index, (document, revision, run) in enumerate(zip(documents, revisions, runs), 1):
                 if path == f"/documents/{document['id']}/revisions":
                     payload = [revision]
+                elif path == f"/revisions/rev-{index}/content":
+                    payload = {"document_id": document["id"], "revision_id": revision["id"],
+                               "locator": f"doc:{document['sha256'][:7]}/tier:basic/page:1",
+                               "tier": "basic", "content": "解析文本", "truncated": False,
+                               "next_locator": None, "state": "historical_parse_unconfirmed"}
                 elif path == f"/revisions/rev-{index}/extractions":
                     payload = [run]
                 elif path == f"/revisions/rev-{index}/evidence":

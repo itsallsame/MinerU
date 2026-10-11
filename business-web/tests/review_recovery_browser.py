@@ -66,6 +66,11 @@ def main(base_url: str) -> None:
             payload = {"items": [{"document": document, "task": task}], "total": 1, "limit": 20, "offset": 0}
         elif path == f"/documents/{document['id']}/revisions":
             payload = [revision]
+        elif path == "/revisions/rev-1/content":
+            payload = {"document_id": document["id"], "revision_id": revision["id"],
+                       "locator": "doc:bbbbbbb/tier:basic/page:1", "tier": "basic",
+                       "content": "解析文本", "truncated": False, "next_locator": None,
+                       "state": "historical_parse_unconfirmed"}
         elif path == "/revisions/rev-1/extractions":
             payload = [next_run, run] if extraction_writes["count"] else [run]
         elif path == "/revisions/rev-1/evidence":
