@@ -228,6 +228,23 @@ def test_release_record_rejects_incomplete_artifacts(tmp_path: Path) -> None:
         )
 
 
+def test_release_record_includes_hashed_source_archive(tmp_path: Path) -> None:
+    wheelhouse, model_manifest, web_dist, web_sha256 = _artifacts(tmp_path)
+    archive = wheelhouse / "jieba-0.42.1.tar.gz"
+    archive.write_bytes(b"source archive")
+    record = release_manifest.build_release_record(
+        revision=REVISION,
+        worker=_image(IMAGE_ID, revision=REVISION),
+        business=_image(BUSINESS_ID, revision=REVISION, web_sha256=web_sha256),
+        base=_image(BASE_ID),
+        wheelhouse=wheelhouse,
+        model_manifest=model_manifest,
+        model_source_lock=model_manifest.parent / ".mineru_source_lock.json",
+        web_dist=web_dist,
+    )
+    assert record["wheelhouse"]["files"][archive.name] == hashlib.sha256(archive.read_bytes()).hexdigest()
+
+
 @pytest.mark.parametrize("extra", ["notes.txt", "nested/old.whl", ".download.tmp"])
 def test_release_record_rejects_wheelhouse_files_excluded_from_docker_context(
     tmp_path: Path, extra: str,

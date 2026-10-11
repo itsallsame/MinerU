@@ -149,7 +149,16 @@ def build_release_record(
     wheel_files = sorted(wheelhouse.iterdir())
     if any(path.is_symlink() for path in wheel_files):
         raise ValueError("Wheelhouse must not contain symlinks")
-    if any(not path.is_file() or (path.name != "requirements.lock" and path.suffix != ".whl") for path in wheel_files):
+    if any(
+        not path.is_file()
+        or not (
+            path.name == "requirements.lock"
+            or path.suffix == ".whl"
+            or path.name.endswith(".tar.gz")
+            or path.suffix == ".zip"
+        )
+        for path in wheel_files
+    ):
         raise ValueError("Wheelhouse contains files excluded from Docker build context")
     if not wheel_files or not (wheelhouse / "requirements.lock").is_file():
         raise ValueError("Wheelhouse must contain requirements.lock and wheels")
