@@ -44,7 +44,7 @@ docker run --rm --pull=never --network=none --read-only \
 python3 -m scripts.select_offline_wheels \
   --lock "$stage/requirements.lock" --base-installed "$stage/base-installed.json" \
   --output "$stage/download.lock"
-python3 -m pip download --require-hashes --only-binary=:all: \
+python3 -m pip download --no-deps --require-hashes --only-binary=:all: \
   --dest "$stage" --requirement "$stage/download.lock"
 stage_absolute="$(pwd -P)/$stage"
 docker run --rm --pull=never --network=none --read-only \

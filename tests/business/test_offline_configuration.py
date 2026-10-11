@@ -324,7 +324,9 @@ def test_wheelhouse_preparation_requires_base_pins_and_hashes() -> None:
     assert script.index("python3 -m scripts.inspect_worker_base") < script.index("stage=$(mktemp")
     assert '--python "$(command -v python3)"' in script
     assert "--generate-hashes" in script
-    assert "--require-hashes --only-binary=:all:" in script
+    assert "python3 -m scripts.select_offline_wheels" in script
+    assert "--no-deps --require-hashes --only-binary=:all:" in script
     assert "--pull=never --network=none --read-only" in script
-    assert "--dry-run --ignore-installed --no-deps" in script
-    assert script.index("python3 -m pip download") < script.index("docker run --rm") < script.index('mv "$stage" wheelhouse')
+    assert "--dry-run --no-input" in script
+    assert "--ignore-installed" not in script
+    assert script.index("python3 -m pip download") < script.index('stage_absolute=') < script.index('mv "$stage" wheelhouse')
